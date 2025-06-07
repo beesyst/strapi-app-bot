@@ -1,5 +1,6 @@
 import copy
 import json
+import logging
 import os
 import re
 import subprocess
@@ -9,6 +10,38 @@ from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 
+# --- Logging setup ---
+LOGS_DIR = "logs"
+os.makedirs(LOGS_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOGS_DIR, "host.log")
+
+# Настройка логгера
+logging.basicConfig(
+    filename=LOG_FILE,
+    filemode="w",
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+
+# Быстрый доступ к разным уровням
+def log_info(msg):
+    logging.info(msg)
+
+
+def log_warning(msg):
+    logging.warning(msg)
+
+
+def log_critical(msg):
+    logging.critical(msg)
+
+
+def log_error(msg):
+    logging.error(msg)
+
+
 # Добавляем корень проекта в PYTHONPATH
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(ROOT_DIR)
@@ -17,19 +50,12 @@ from core.web_parser import SOCIAL_PATTERNS, extract_social_links
 
 CENTRAL_CONFIG_PATH = "config/config.json"
 TEMPLATE_PATH = "templates/main_template.json"
-LOGS_DIR = "logs"
 NODE_CORE_DIR = os.path.join(ROOT_DIR, "core")
 NODE_MODULES_PATH = os.path.join(NODE_CORE_DIR, "node_modules")
-os.makedirs(LOGS_DIR, exist_ok=True)
-
-# Чистим лог при запуске
-with open(os.path.join(LOGS_DIR, "host.log"), "w", encoding="utf-8") as f:
-    pass
 
 
 # Оставляет только https://www.youtube.com/@username
 def normalize_youtube(url):
-    # Находит "https://www.youtube.com/@username" в начале и отрезает всё после
     m = re.match(r"(https://www\.youtube\.com/@[\w\d\-_]+)", url)
     if m:
         return m.group(1)
@@ -39,12 +65,6 @@ def normalize_youtube(url):
     if "youtube.com/@" in url:
         return "https://www.youtube.com/@" + url.split("/@")[1].split("/")[0]
     return ""
-
-
-# Пишет сообщение в лог-файл
-def log(message):
-    with open(os.path.join(LOGS_DIR, "host.log"), "a", encoding="utf-8") as f:
-        f.write(message + "\n")
 
 
 # Загружает шаблон main.json
@@ -89,13 +109,19 @@ def normalize_socials(socials):
 # Получает HTML страницы с user-agent для обхода банов
 def fetch_url_html(url):
     headers = {"User-Agent": "Mozilla/5.0"}
-    return requests.get(url, headers=headers, timeout=10).text
+    try:
+        return requests.get(url, headers=headers, timeout=10).text
+    except Exception as e:
+        log_warning(f"Ошибка получения HTML {url}: {e}")
+        return ""
 
 
 # Запускает node-парсер X (twitter) c fingerprint
 def get_links_from_x_profile(profile_url):
     if not os.path.isdir(NODE_MODULES_PATH):
-        log("Устанавливаю npm-зависимости для Playwright + fingerprint-injector ...")
+        log_info(
+            "Устанавливаю npm-зависимости для Playwright + fingerprint-injector ..."
+        )
         try:
             subprocess.run(
                 ["npm", "install", "playwright", "fingerprint-injector"],
@@ -107,9 +133,9 @@ def get_links_from_x_profile(profile_url):
                 cwd=NODE_CORE_DIR,
                 check=True,
             )
-            log("npm-зависимости установлены.")
+            log_info("npm-зависимости установлены.")
         except Exception as e:
-            log(f"Ошибка npm install: {e}")
+            log_error(f"Ошибка npm install: {e}")
             return {"links": [], "avatar": ""}
 
     try:
@@ -124,15 +150,15 @@ def get_links_from_x_profile(profile_url):
             try:
                 return json.loads(result.stdout)
             except Exception as e:
-                log(
+                log_error(
                     f"Ошибка парсера twitter_parser.js (JSON): {e}, RAW: {result.stdout}"
                 )
                 return {"links": [], "avatar": ""}
         else:
-            log(f"Ошибка парсера twitter_parser.js: {result.stderr}")
+            log_error(f"Ошибка парсера twitter_parser.js: {result.stderr}")
             return {"links": [], "avatar": ""}
     except Exception as e:
-        log(f"Ошибка запуска twitter_parser.js: {e}")
+        log_critical(f"Ошибка запуска twitter_parser.js: {e}")
         return {"links": [], "avatar": ""}
 
 
@@ -155,7 +181,6 @@ def fetch_link_collection(link_collection_url, socials, social_keys_patterns):
                         pattern, url
                     ):
                         socials[k] = url
-        # Обрабатываем только после прохода всех ссылок!
         yt = ""
         for candidate in youtube_candidates:
             m = re.match(r"(https://www\.youtube\.com/@[\w\d\-_]+)", candidate)
@@ -173,9 +198,9 @@ def fetch_link_collection(link_collection_url, socials, social_keys_patterns):
         if not yt and youtube_candidates:
             yt = youtube_candidates[0]
         socials["youtubeURL"] = yt
-        log(f"Найдено на {link_collection_url}: {found_on_page}")
+        log_info(f"Найдено на {link_collection_url}: {found_on_page}")
     except Exception as e:
-        log(f"Ошибка парсинга коллекционной ссылки {link_collection_url}: {e}")
+        log_warning(f"Ошибка парсинга коллекционной ссылки {link_collection_url}: {e}")
     return socials
 
 
@@ -190,7 +215,7 @@ def main():
     for app in central_config["apps"]:
         app_config_path = f"config/apps/{app}.json"
         if not os.path.exists(app_config_path):
-            log(f"Конфиг {app_config_path} не найден, пропуск.")
+            log_warning(f"Конфиг {app_config_path} не найден, пропуск.")
             continue
 
         with open(app_config_path, "r") as f:
@@ -202,7 +227,7 @@ def main():
             main_json_path = os.path.join(storage_path, "main.json")
 
             if os.path.exists(main_json_path):
-                log(
+                log_info(
                     f"Папка {storage_path} уже есть, main.json найден. Пропускаем запись."
                 )
                 continue
@@ -210,15 +235,15 @@ def main():
             main_data = copy.deepcopy(main_template)
             found_socials = {}
 
-            log(f"Переходим по ссылке: {url}")
+            log_info(f"Переходим по ссылке: {url}")
             try:
                 html = fetch_url_html(url)
                 socials = extract_social_links(html, url)
                 found_socials.update({k: v for k, v in socials.items() if v})
-                log(f"Найдено соцсетей: {json.dumps(socials, ensure_ascii=False)}")
+                log_info(f"Найдено соцсетей: {json.dumps(socials, ensure_ascii=False)}")
 
                 internal_links = get_internal_links(html, url, max_links=10)
-                log(f"Внутренние ссылки: {internal_links}")
+                log_info(f"Внутренние ссылки: {internal_links}")
                 for link in internal_links:
                     try:
                         page_html = fetch_url_html(link)
@@ -227,43 +252,42 @@ def main():
                             if v and not found_socials.get(k):
                                 found_socials[k] = v
                     except Exception as e:
-                        log(f"Ошибка парсинга {link}: {e}")
+                        log_warning(f"Ошибка парсинга {link}: {e}")
 
                 found_socials = normalize_socials(found_socials)
 
                 # Docs-URL
                 if found_socials.get("documentURL"):
                     docs_url = found_socials["documentURL"]
-                    log(f"Переход на docs: {docs_url}")
+                    log_info(f"Переход на docs: {docs_url}")
                     try:
                         docs_html = fetch_url_html(docs_url)
                         docs_socials = extract_social_links(docs_html, docs_url)
-                        log(
+                        log_info(
                             f"Docs соцсети: {json.dumps(docs_socials, ensure_ascii=False)}"
                         )
                         for k, v in docs_socials.items():
                             if v and not found_socials.get(k):
                                 found_socials[k] = v
                     except Exception as e:
-                        log(f"Ошибка docs: {e}")
+                        log_warning(f"Ошибка docs: {e}")
 
                 # Парсинг X/Twitter через Playwright (fingerprint)
                 twitter_url = found_socials.get("twitterURL", "")
                 if twitter_url:
-                    log(
+                    log_info(
                         f"Переход на twitter через Playwright+fingerprint: {twitter_url}"
                     )
                     twitter_result = get_links_from_x_profile(twitter_url)
                     bio_links = twitter_result.get("links", [])
                     avatar_url = twitter_result.get("avatar", "")
-                    log(f"Ссылки из twitter: {bio_links}")
+                    log_info(f"Ссылки из twitter: {bio_links}")
                     if avatar_url:
                         try:
-                            # Подменяем любой размер на 400x400
                             avatar_url_400 = re.sub(
                                 r"_\d{2,4}x\d{2,4}\.jpg", "_400x400.jpg", avatar_url
                             )
-                            log(f"Ссылка на лого: {avatar_url_400}")
+                            log_info(f"Ссылка на лого: {avatar_url_400}")
                             logo_filename = f"{domain.lower()}.jpg"
                             avatar_path = os.path.join(storage_path, logo_filename)
                             avatar_data = requests.get(
@@ -271,10 +295,10 @@ def main():
                             ).content
                             with open(avatar_path, "wb") as imgf:
                                 imgf.write(avatar_data)
-                            log(f"Лого сохранен в {avatar_path}")
+                            log_info(f"Лого сохранен в {avatar_path}")
                             main_data["svgLogo"] = logo_filename
                         except Exception as e:
-                            log(f"Ошибка скачивания аватара: {e}")
+                            log_warning(f"Ошибка скачивания аватара: {e}")
                     for bio_url in bio_links:
                         for k, pattern in social_keys_patterns.items():
                             if not found_socials.get(k) or found_socials[k] == "":
@@ -283,7 +307,7 @@ def main():
                         if any(
                             col in urlparse(bio_url).netloc for col in link_collections
                         ):
-                            log(f"Переход на коллекционный сервис: {bio_url}")
+                            log_info(f"Переход на коллекционный сервис: {bio_url}")
                             found_socials = fetch_link_collection(
                                 bio_url, found_socials, social_keys_patterns
                             )
@@ -297,11 +321,9 @@ def main():
                 social_keys = list(main_template["socialLinks"].keys())
                 final_socials = {k: found_socials.get(k, "") for k in social_keys}
 
-                # Youtube: только https://www.youtube.com/@username (обрабатываем только через функцию)
                 yt = final_socials.get("youtubeURL", "")
                 final_socials["youtubeURL"] = normalize_youtube(yt)
 
-                # Medium: только https://medium.com/@...
                 if final_socials["mediumURL"] and not final_socials[
                     "mediumURL"
                 ].startswith("https://medium.com/@"):
@@ -312,10 +334,10 @@ def main():
 
                 with open(main_json_path, "w", encoding="utf-8") as f:
                     json.dump(main_data, f, ensure_ascii=False, indent=2)
-                log(f"Данные сохранены в {main_json_path}")
+                log_info(f"Данные сохранены в {main_json_path}")
 
             except Exception as e:
-                log(f"Ошибка парсинга {url}: {e}")
+                log_critical(f"Ошибка парсинга {url}: {e}")
 
     print("Готово!")
 

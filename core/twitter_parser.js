@@ -37,16 +37,16 @@ async function main() {
             }
         }
 
-        // 2. Ссылки под профилем (обычно t.co, но видно linktr.ee и т.п.)
+        // Ссылки под профилем (обычно t.co, но видно linktr.ee и т.п.)
         const linkBlock = document.querySelectorAll('[data-testid="UserProfileHeader_Items"] a, a[role="link"]');
         for (const a of linkBlock) {
             const href = a.getAttribute('href');
             if (!href) continue;
-            // Вариант 1: ссылка сразу нормальная (редко)
+            // Ссылка сразу нормальная
             if (href.startsWith('http') && !href.includes('x.com') && !href.includes('twitter.com')) {
                 links.push(href);
             }
-            // Вариант 2: t.co редирект, а текст содержит видимую ссылку
+            // t.co редирект, а текст содержит видимую ссылку
             if (href.startsWith('https://t.co/')) {
                 // Если внутри есть span — берем textContent у span
                 const span = a.querySelector('span');
@@ -65,7 +65,7 @@ async function main() {
         // Уникализируем ссылки
         links = Array.from(new Set(links));
 
-        //  Лого 
+        // Лого 
         let avatar = '';
         const imgs = Array.from(document.querySelectorAll('img'));
         for (const img of imgs) {
