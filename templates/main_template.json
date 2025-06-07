@@ -1,0 +1,36 @@
+{
+  "name": "",
+  "shortDescription": "",
+  "svgLogo": "",
+  "project_categories": [],
+  "socialLinks": {
+    "websiteURL": "",
+    "twitterURL": "",
+    "discordURL": "",
+    "githubURL": "",
+    "mediumURL": "",
+    "youtubeURL": "",
+    "telegramURL": "",
+    "documentURL": "",
+    "linkedinURL": "",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": { "coin": "" },
+  "seo": {
+    "metaTitle": "",
+    "metaDescription": "",
+    "metaImage": "",
+    "metaSocial": [
+      {
+        "socialNetwork": "",
+        "title": "",
+        "image": "",
+        "description": ""
+      }
+    ],
+    "keywords": "",
+    "metaRobots": ""
+  },
+  "contentMarkdown": ""
+}

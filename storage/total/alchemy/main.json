@@ -1,0 +1,38 @@
+{
+  "name": "Alchemy",
+  "shortDescription": "Alchemy is a Web3 dev platform offering tools and APIs to build wallets, apps, and manage blockchain transactions.",
+  "svgLogo": "alchemy.png",
+  "project_categories": ["Infra", "Tools", "NodeFi"],
+  "socialLinks": {
+    "websiteURL": "https://www.alchemy.com/",
+    "twitterURL": "https://x.com/Alchemy",
+    "discordURL": "https://discord.com/invite/9GnAcXQYZ6",
+    "githubURL": "",
+    "mediumURL": "",
+    "youtubeURL": "https://www.youtube.com/@AlchemyPlatform",
+    "telegramURL": "",
+    "documentURL": "https://docs.alchemy.com/",
+    "linkedinURL": "https://www.linkedin.com/company/alchemyinc/",
+    "redditURL": ""
+  },
+  "videoSlider": ["https://www.youtube.com/watch?v=0YuGTIs1c1s"],
+  "coinData": {
+    "coin": "alchemy-pay"
+  },
+  "seo": {
+    "metaTitle": "Alchemy",
+    "metaDescription": "Alchemy is a Web3 dev platform offering tools and APIs to build wallets, apps, and manage blockchain transactions.",
+    "metaImage": "alchemy.png",
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "Alchemy",
+        "image": "alchemy.png",
+        "description": "Web3 dev platform for blockchain."
+      }
+    ],
+    "keywords": "web3 wallet tools, blockchain app management, build with alchemy",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "# Overview\n\nAlchemy is a leading Web3 development platform that provides developers with the tools and infrastructure needed to build decentralized applications (dApps) across multiple blockchains, including Ethereum, Polygon, Arbitrum, and Optimism. Founded in 2017 by Nikil Viswanathan and Joe Lau, the company has quickly become a key player in the Web3 ecosystem, serving millions of users in 197 countries worldwide. Its clientele includes major companies such as Meta, Adobe, OpenSea, Dapper Labs, and dYdX.\n\nAlchemy’s mission is to simplify blockchain development by offering developers the fundamental building blocks for creating future technologies. The platform delivers a comprehensive suite of APIs and tools—including Alchemy Supernode, Build, Notify, Transact, and Monitor—that together form a reliable and scalable infrastructure for Web3 applications.\n\n# Functionality\n\nAlchemy equips developers with a powerful toolkit for interacting with blockchains. At the heart of the platform is Alchemy Supernode—a high-performance API that provides reliable access to blockchain data with low latency and high accuracy. This enables developers to build scalable and resilient dApps without managing their own nodes.\n\nThe platform also includes tools for real-time monitoring and debugging, such as Alchemy Build, which helps developers quickly identify and fix issues to improve app performance and stability.\n\nAdditionally, Alchemy supports the creation and management of smart wallets without requiring seed phrases or gas fees, streamlining user onboarding and enhancing security.\n\n# Features\n\n- **Alchemy Supernode:**\n  - High-performance API for interacting with blockchains, ensuring reliable, low-latency data access.\n  - Supports multiple chains, including Ethereum, Polygon, Arbitrum, and Optimism.\n  - Enables scalability and resilience without the need to manage nodes.\n\n- **Alchemy Build:**\n  - A suite of real-time debugging and monitoring tools.\n  - Includes Explorer for request analysis, Mempool Visualizer for tracking transactions, and other features for improving app performance.\n\n- **Notify:**\n  - Notification system that alerts developers to blockchain events such as transaction confirmations or balance changes.\n  - Enhances responsiveness and user engagement.\n\n- **Transact:**\n  - Transaction management tool for reliable execution and monitoring.\n  - Allows developers to track transaction status and receive completion notifications.\n\n- **Monitor:**\n  - Tool for tracking app performance and system health.\n  - Provides metrics and analytics for optimization and rapid issue detection.\n\n- **Alchemy SDK:**\n  - Toolkit for simplifying Web3 app development.\n  - Offers APIs and resources for fast and efficient dApp creation.\n\n- **Smart Wallet Support:**\n  - Enables wallet creation and management without seed phrases or gas fees.\n  - Streamlines onboarding and boosts security.\n\n- **Tiered Subscription Model:**\n  - Offers multiple plans, including a free tier with core features and premium tiers with advanced capabilities.\n  - Helps developers choose the right plan for their project’s needs.\n\n- **Multi-Chain Support:**\n  - Supports development on Ethereum, Polygon, Arbitrum, Optimism, and more.\n  - Ensures flexibility and scalability for applications.\n\n- **Extensive Documentation and Community Support:**\n  - Provides detailed documentation, tutorials, and an active developer community.\n  - Enables quick onboarding and efficient troubleshooting.\n"
+}

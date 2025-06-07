@@ -1,0 +1,38 @@
+{
+  "name": "Altlayer",
+  "shortDescription": "",
+  "svgLogo": "altlayer.jpg",
+  "project_categories": [],
+  "socialLinks": {
+    "websiteURL": "https://www.altlayer.io/",
+    "twitterURL": "https://x.com/alt_layer",
+    "discordURL": "https://discord.com/invite/altlayer",
+    "githubURL": "https://github.com/alt-research",
+    "mediumURL": "",
+    "youtubeURL": "https://www.youtube.com/@altlayer7257",
+    "telegramURL": "https://t.me/altlayer",
+    "documentURL": "https://docs.altlayer.io/",
+    "linkedinURL": "",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": ""
+  },
+  "seo": {
+    "metaTitle": "",
+    "metaDescription": "",
+    "metaImage": "",
+    "metaSocial": [
+      {
+        "socialNetwork": "",
+        "title": "",
+        "image": "",
+        "description": ""
+      }
+    ],
+    "keywords": "",
+    "metaRobots": ""
+  },
+  "contentMarkdown": ""
+}

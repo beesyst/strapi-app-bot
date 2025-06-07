@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "fingerprint-injector": "^2.1.66",
+    "playwright": "^1.52.0"
+  }
+}
