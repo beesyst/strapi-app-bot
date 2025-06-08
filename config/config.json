@@ -1,4 +1,15 @@
 {
-  "apps": ["babylon"],
+  "apps": [
+    {
+      "app": "babylon",
+      "api_url": "https://superapp-babylon-prod.noders.services/api/projects",
+      "api_token": "Bearer <babylon_token>"
+    },
+    {
+      "app": "solana",
+      "api_url": "...",
+      "api_token": "Bearer <solana_token>"
+    }
+  ],
   "link_collections": ["linktr.ee"]
 }

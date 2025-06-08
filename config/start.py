@@ -7,10 +7,14 @@ import subprocess
 import sys
 from urllib.parse import urljoin, urlparse
 
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(ROOT_DIR)
+
 import requests
 from bs4 import BeautifulSoup
+from core.web_parser import SOCIAL_PATTERNS, extract_social_links
 
-# --- Logging setup ---
+# Logging setup
 LOGS_DIR = "logs"
 os.makedirs(LOGS_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOGS_DIR, "host.log")
@@ -46,7 +50,6 @@ def log_error(msg):
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(ROOT_DIR)
 
-from core.web_parser import SOCIAL_PATTERNS, extract_social_links
 
 CENTRAL_CONFIG_PATH = "config/config.json"
 TEMPLATE_PATH = "templates/main_template.json"
@@ -213,7 +216,8 @@ def main():
     social_keys_patterns = SOCIAL_PATTERNS
 
     for app in central_config["apps"]:
-        app_config_path = f"config/apps/{app}.json"
+        app_name = app["app"]  # вот оно!
+        app_config_path = f"config/apps/{app_name}.json"
         if not os.path.exists(app_config_path):
             log_warning(f"Конфиг {app_config_path} не найден, пропуск.")
             continue

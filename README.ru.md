@@ -79,6 +79,8 @@ strapiprojectsbot/
    - Сохранение в `storage/total/{project}/main.json`.
 4. Формируется и сохраняется итоговый отчет по проекту.
 
+Собрал данные → сохранил main.json → запустил publish-скрипт → всё залилось в Strapi через API.
+
 ## Установка и запуск
 
 ```bash

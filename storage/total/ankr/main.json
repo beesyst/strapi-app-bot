@@ -1,0 +1,38 @@
+{
+  "name": "Ankr",
+  "shortDescription": "",
+  "svgLogo": "ankr.jpg",
+  "project_categories": [],
+  "socialLinks": {
+    "websiteURL": "https://www.ankr.com/",
+    "twitterURL": "https://x.com/ankr",
+    "discordURL": "https://discord.gg/hs2SK9pBXP",
+    "githubURL": "https://github.com/Ankr-network",
+    "mediumURL": "",
+    "youtubeURL": "",
+    "telegramURL": "https://t.me/ankrnetwork",
+    "documentURL": "https://www.ankr.com/docs/",
+    "linkedinURL": "https://www.linkedin.com/company/ankr/",
+    "redditURL": "https://www.reddit.com/r/Ankrofficial/"
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": ""
+  },
+  "seo": {
+    "metaTitle": "",
+    "metaDescription": "",
+    "metaImage": "",
+    "metaSocial": [
+      {
+        "socialNetwork": "",
+        "title": "",
+        "image": "",
+        "description": ""
+      }
+    ],
+    "keywords": "",
+    "metaRobots": ""
+  },
+  "contentMarkdown": ""
+}
