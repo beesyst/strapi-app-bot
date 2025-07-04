@@ -1,30 +1,5 @@
-Requirement already satisfied: requests in ./venv/lib/python3.12/site-packages (from -r /home/bee/Projects/strapiprojectsbot/requirements.txt (line 1)) (2.32.3)
-Requirement already satisfied: beautifulsoup4 in ./venv/lib/python3.12/site-packages (from -r /home/bee/Projects/strapiprojectsbot/requirements.txt (line 2)) (4.13.4)
-Requirement already satisfied: charset-normalizer<4,>=2 in ./venv/lib/python3.12/site-packages (from requests->-r /home/bee/Projects/strapiprojectsbot/requirements.txt (line 1)) (3.4.2)
-Requirement already satisfied: idna<4,>=2.5 in ./venv/lib/python3.12/site-packages (from requests->-r /home/bee/Projects/strapiprojectsbot/requirements.txt (line 1)) (3.10)
-Requirement already satisfied: urllib3<3,>=1.21.1 in ./venv/lib/python3.12/site-packages (from requests->-r /home/bee/Projects/strapiprojectsbot/requirements.txt (line 1)) (2.4.0)
-Requirement already satisfied: certifi>=2017.4.17 in ./venv/lib/python3.12/site-packages (from requests->-r /home/bee/Projects/strapiprojectsbot/requirements.txt (line 1)) (2025.4.26)
-Requirement already satisfied: soupsieve>1.2 in ./venv/lib/python3.12/site-packages (from beautifulsoup4->-r /home/bee/Projects/strapiprojectsbot/requirements.txt (line 2)) (2.7)
-Requirement already satisfied: typing-extensions>=4.0.0 in ./venv/lib/python3.12/site-packages (from beautifulsoup4->-r /home/bee/Projects/strapiprojectsbot/requirements.txt (line 2)) (4.14.0)
-Playwright Host validation warning: 
-╔══════════════════════════════════════════════════════╗
-║ Host system is missing dependencies to run browsers. ║
-║ Please install them with the following command:      ║
-║                                                      ║
-║     sudo npx playwright install-deps                 ║
-║                                                      ║
-║ Alternatively, use apt:                              ║
-║     sudo apt-get install libavif16                   ║
-║                                                      ║
-║ <3 Playwright Team                                   ║
-╚══════════════════════════════════════════════════════╝
-    at validateDependenciesLinux (/home/bee/Projects/strapiprojectsbot/core/node_modules/playwright-core/lib/server/registry/dependencies.js:269:9)
-    at async Registry._validateHostRequirements (/home/bee/Projects/strapiprojectsbot/core/node_modules/playwright-core/lib/server/registry/index.js:927:14)
-    at async Registry._validateHostRequirementsForExecutableIfNeeded (/home/bee/Projects/strapiprojectsbot/core/node_modules/playwright-core/lib/server/registry/index.js:1047:7)
-    at async Registry.validateHostRequirementsForExecutablesIfNeeded (/home/bee/Projects/strapiprojectsbot/core/node_modules/playwright-core/lib/server/registry/index.js:1036:7)
-    at async t.<anonymous> (/home/bee/Projects/strapiprojectsbot/core/node_modules/playwright-core/lib/cli/program.js:160:7)
-[install] Устанавливаю Python зависимости ...
-[install] Устанавливаю браузеры Playwright ...
+2025-07-04 20:44:41 [INFO] setup.log started
+
 Requirement already satisfied: requests in ./venv/lib/python3.12/site-packages (from -r /home/bee/Projects/strapiprojectsbot/requirements.txt (line 1)) (2.32.3)
 Requirement already satisfied: beautifulsoup4 in ./venv/lib/python3.12/site-packages (from -r /home/bee/Projects/strapiprojectsbot/requirements.txt (line 2)) (4.13.4)
 Requirement already satisfied: charset-normalizer<4,>=2 in ./venv/lib/python3.12/site-packages (from requests->-r /home/bee/Projects/strapiprojectsbot/requirements.txt (line 1)) (3.4.2)

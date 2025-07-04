@@ -3,6 +3,7 @@ import subprocess
 import sys
 import threading
 import time
+from datetime import datetime
 
 # Корень
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -13,6 +14,11 @@ LOGS_DIR = os.path.join(ROOT_DIR, "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
 SETUP_LOG = os.path.join(LOGS_DIR, "setup.log")
 LOG_FILE = os.path.join(LOGS_DIR, "host.log")
+
+with open(SETUP_LOG, "w", encoding="utf-8") as f:
+    f.write(
+        f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} [INFO] setup.log started\n\n"
+    )
 
 VENV_PATH = os.path.join(ROOT_DIR, "venv")
 INSTALL_PATH = os.path.join(ROOT_DIR, "core", "install.py")
