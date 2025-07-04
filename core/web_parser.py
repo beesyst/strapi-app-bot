@@ -21,7 +21,7 @@ SOCIAL_PATTERNS = {
 
 
 def find_best_docs_link(soup, base_url):
-    # Приведём все ссылки к списку [(a.text, href)]
+    # Приведем все ссылки к списку [(a.text, href)]
     candidates = []
     for a in soup.find_all("a", href=True):
         href = a["href"]
@@ -75,7 +75,7 @@ def find_best_docs_link(soup, base_url):
         if re.match(r".*/docs/?$", parsed.path) or parsed.netloc.startswith("docs."):
             return href
 
-    # если вообще ничего — вернём ""
+    # если вообще ничего - вернем ""
     return ""
 
 

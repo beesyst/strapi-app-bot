@@ -1,26 +1,26 @@
-2025-07-04 16:54:05 [INFO] - Переходим по ссылке: https://www.altlayer.io/
-2025-07-04 16:54:06 [INFO] - Найдено соцсетей: {"twitterURL": "https://twitter.com/alt_layer", "discordURL": "", "telegramURL": "", "youtubeURL": "", "linkedinURL": "", "redditURL": "", "mediumURL": "", "githubURL": "", "websiteURL": "https://www.altlayer.io/", "documentURL": "https://docs.altlayer.io/"}
-2025-07-04 16:54:06 [INFO] - Внутренние ссылки: ['https://www.altlayer.io/updates', 'https://www.altlayer.io/restaked-rollups', 'https://www.altlayer.io/#section-ecosystem', 'https://www.altlayer.io/', 'https://www.altlayer.io/raas']
-2025-07-04 16:54:08 [INFO] - Переход на docs: https://docs.altlayer.io/
-2025-07-04 16:54:09 [INFO] - Docs соцсети: {"twitterURL": "", "discordURL": "", "telegramURL": "", "youtubeURL": "", "linkedinURL": "", "redditURL": "", "mediumURL": "", "githubURL": "", "websiteURL": "https://docs.altlayer.io/", "documentURL": "https://docs.altlayer.io/altlayer-documentation"}
-2025-07-04 16:54:09 [INFO] - Переход на twitter через Playwright+fingerprint: https://x.com/alt_layer
-2025-07-04 16:54:15 [INFO] - Ссылки из twitter: ['https://t.co/J0OkxmvJFL', 'https://linktr.ee/altlayer', 'https://t.co/ajrmDUkKRv']
-2025-07-04 16:54:15 [INFO] - Ссылка на лого: https://pbs.twimg.com/profile_images/1787391034957144064/183kLjsg_400x400.jpg
-2025-07-04 16:54:16 [INFO] - Лого сохранен в storage/total/altlayer/altlayer.jpg
-2025-07-04 16:54:16 [INFO] - Переход на коллекционный сервис: https://linktr.ee/altlayer
-2025-07-04 16:54:17 [INFO] - Найдено на https://linktr.ee/altlayer: ['https://altlayer.io/', 'https://blog.altlayer.io/', 'https://stake.altlayer.io/stake', 'https://wizard.altlayer.io/', 'https://docs.altlayer.io/altlayer-documentation/welcome/overview', 'https://www.youtube.com/@altlayer7257/featured', 'https://x.com/alt_layer', 'https://discord.com/invite/altlayer', 'https://t.me/altlayer', 'https://github.com/alt-research']
-2025-07-04 16:54:17 [INFO] - Данные сохранены в storage/total/altlayer/main.json
-2025-07-04 16:54:17 [INFO] - Переходим по ссылке: https://www.ankr.com/
-2025-07-04 16:54:18 [INFO] - Найдено соцсетей: {"twitterURL": "https://twitter.com/ankr", "discordURL": "", "telegramURL": "https://t.me/ankrnetwork", "youtubeURL": "", "linkedinURL": "", "redditURL": "https://www.reddit.com/r/Ankrofficial/", "mediumURL": "", "githubURL": "https://github.com/Ankr-network", "websiteURL": "https://www.ankr.com/", "documentURL": "https://www.ankr.com/docs/"}
-2025-07-04 16:54:18 [INFO] - Внутренние ссылки: ['https://www.ankr.com/docs/', 'https://www.ankr.com/', 'https://www.ankr.com/rpc/', 'https://www.ankr.com/verify/consumer/', 'https://www.ankr.com/verifying/vendor', 'https://www.ankr.com/staking-crypto', 'https://www.ankr.com/rollup-as-a-service-raas', 'https://www.ankr.com/web3-api', 'https://www.ankr.com/staking/dashboard/', 'https://www.ankr.com/bitcoin-secured-infrastructure']
-2025-07-04 16:54:19 [INFO] - Пробуем получить https://www.ankr.com/rpc/ через Fingerprint Suite (browser_fetch.js)
-2025-07-04 16:54:25 [INFO] - Пробуем получить https://www.ankr.com/verify/consumer/ через Fingerprint Suite (browser_fetch.js)
-2025-07-04 16:54:36 [INFO] - Пробуем получить https://www.ankr.com/staking/dashboard/ через Fingerprint Suite (browser_fetch.js)
-2025-07-04 16:54:42 [INFO] - Переход на docs: https://www.ankr.com/docs/
-2025-07-04 16:54:43 [INFO] - Docs соцсети: {"twitterURL": "https://twitter.com/ankr", "discordURL": "", "telegramURL": "https://t.me/ankrnetwork", "youtubeURL": "https://www.youtube.com/c/AnkrOfficial", "linkedinURL": "https://www.linkedin.com/company/ankr/", "redditURL": "https://www.reddit.com/r/Ankrofficial/", "mediumURL": "https://medium.com/ankr-network", "githubURL": "https://github.com/Ankr-network", "websiteURL": "https://www.ankr.com/docs/", "documentURL": "https://www.ankr.com/docs/"}
-2025-07-04 16:54:43 [INFO] - Переход на twitter через Playwright+fingerprint: https://x.com/ankr
-2025-07-04 16:54:49 [INFO] - Ссылки из twitter: ['https://t.co/BuXjO0VkHB', 'https://t.co/Dv047eLS8K']
-2025-07-04 16:54:49 [INFO] - Ссылка на лого: https://pbs.twimg.com/profile_images/1920109379304460289/D8_aOPph_400x400.jpg
-2025-07-04 16:54:50 [INFO] - Лого сохранен в storage/total/ankr/ankr.jpg
-2025-07-04 16:54:50 [INFO] - Данные сохранены в storage/total/ankr/main.json
-2025-07-04 16:54:50 [WARNING] - Конфиг config/apps/solana.json не найден, пропуск.
+2025-07-04 18:45:11 [INFO] - Переходим по ссылке: https://www.altlayer.io/
+2025-07-04 18:45:12 [INFO] - Найдено соцсетей: {"twitterURL": "https://twitter.com/alt_layer", "discordURL": "", "telegramURL": "", "youtubeURL": "", "linkedinURL": "", "redditURL": "", "mediumURL": "", "githubURL": "", "websiteURL": "https://www.altlayer.io/", "documentURL": "https://docs.altlayer.io/"}
+2025-07-04 18:45:12 [INFO] - Внутренние ссылки: ['https://www.altlayer.io/raas', 'https://www.altlayer.io/updates', 'https://www.altlayer.io/', 'https://www.altlayer.io/#section-ecosystem', 'https://www.altlayer.io/restaked-rollups']
+2025-07-04 18:45:19 [INFO] - Переход на docs: https://docs.altlayer.io/
+2025-07-04 18:45:19 [INFO] - Docs соцсети: {"twitterURL": "", "discordURL": "", "telegramURL": "", "youtubeURL": "", "linkedinURL": "", "redditURL": "", "mediumURL": "", "githubURL": "", "websiteURL": "https://docs.altlayer.io/", "documentURL": "https://docs.altlayer.io/altlayer-documentation"}
+2025-07-04 18:45:19 [INFO] - Переход на twitter через Playwright+fingerprint: https://x.com/alt_layer
+2025-07-04 18:45:26 [INFO] - Ссылки из twitter: ['https://t.co/J0OkxmvJFL', 'https://linktr.ee/altlayer', 'https://t.co/ajrmDUkKRv']
+2025-07-04 18:45:26 [INFO] - Ссылка на лого: https://pbs.twimg.com/profile_images/1787391034957144064/183kLjsg_400x400.jpg
+2025-07-04 18:45:26 [INFO] - Лого сохранен в storage/total/altlayer/altlayer.jpg
+2025-07-04 18:45:26 [INFO] - Переход на коллекционный сервис: https://linktr.ee/altlayer
+2025-07-04 18:45:26 [INFO] - Найдено на https://linktr.ee/altlayer: ['https://altlayer.io/', 'https://blog.altlayer.io/', 'https://stake.altlayer.io/stake', 'https://wizard.altlayer.io/', 'https://docs.altlayer.io/altlayer-documentation/welcome/overview', 'https://www.youtube.com/@altlayer7257/featured', 'https://x.com/alt_layer', 'https://discord.com/invite/altlayer', 'https://t.me/altlayer', 'https://github.com/alt-research']
+2025-07-04 18:45:26 [INFO] - Данные сохранены в storage/total/altlayer/main.json
+2025-07-04 18:45:26 [INFO] - Переходим по ссылке: https://www.ankr.com/
+2025-07-04 18:45:28 [INFO] - Найдено соцсетей: {"twitterURL": "https://twitter.com/ankr", "discordURL": "", "telegramURL": "https://t.me/ankrnetwork", "youtubeURL": "", "linkedinURL": "", "redditURL": "https://www.reddit.com/r/Ankrofficial/", "mediumURL": "", "githubURL": "https://github.com/Ankr-network", "websiteURL": "https://www.ankr.com/", "documentURL": "https://www.ankr.com/docs/"}
+2025-07-04 18:45:28 [INFO] - Внутренние ссылки: ['https://www.ankr.com/verify/consumer/', 'https://www.ankr.com/staking/dashboard/', 'https://www.ankr.com/', 'https://www.ankr.com/web3-api', 'https://www.ankr.com/verifying/vendor', 'https://www.ankr.com/docs/', 'https://www.ankr.com/rollup-as-a-service-raas', 'https://www.ankr.com/staking-crypto', 'https://www.ankr.com/rpc/', 'https://www.ankr.com/bitcoin-secured-infrastructure']
+2025-07-04 18:45:29 [INFO] - Пробуем получить https://www.ankr.com/verify/consumer/ через Fingerprint Suite (browser_fetch.js)
+2025-07-04 18:45:40 [INFO] - Пробуем получить https://www.ankr.com/staking/dashboard/ через Fingerprint Suite (browser_fetch.js)
+2025-07-04 18:46:06 [INFO] - Пробуем получить https://www.ankr.com/rpc/ через Fingerprint Suite (browser_fetch.js)
+2025-07-04 18:46:15 [INFO] - Переход на docs: https://www.ankr.com/docs/
+2025-07-04 18:46:15 [INFO] - Docs соцсети: {"twitterURL": "https://twitter.com/ankr", "discordURL": "", "telegramURL": "https://t.me/ankrnetwork", "youtubeURL": "https://www.youtube.com/c/AnkrOfficial", "linkedinURL": "https://www.linkedin.com/company/ankr/", "redditURL": "https://www.reddit.com/r/Ankrofficial/", "mediumURL": "https://medium.com/ankr-network", "githubURL": "https://github.com/Ankr-network", "websiteURL": "https://www.ankr.com/docs/", "documentURL": "https://www.ankr.com/docs/"}
+2025-07-04 18:46:15 [INFO] - Переход на twitter через Playwright+fingerprint: https://x.com/ankr
+2025-07-04 18:46:22 [INFO] - Ссылки из twitter: ['https://t.co/BuXjO0VkHB', 'https://t.co/Dv047eLS8K']
+2025-07-04 18:46:22 [INFO] - Ссылка на лого: https://pbs.twimg.com/profile_images/1920109379304460289/D8_aOPph_400x400.jpg
+2025-07-04 18:46:22 [INFO] - Лого сохранен в storage/total/ankr/ankr.jpg
+2025-07-04 18:46:22 [INFO] - Данные сохранены в storage/total/ankr/main.json
+2025-07-04 18:46:22 [WARNING] - Конфиг config/apps/solana.json не найден, пропуск.

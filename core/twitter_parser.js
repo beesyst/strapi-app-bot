@@ -20,7 +20,7 @@ async function main() {
 
     try {
         await page.goto(url, { timeout: 45000, waitUntil: 'domcontentloaded' });
-        // Ждём динамику X
+        // Ждем динамику X
         await page.waitForTimeout(3500);
 
         const result = await page.evaluate(() => {

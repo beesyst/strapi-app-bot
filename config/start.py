@@ -1,11 +1,18 @@
 import os
 import subprocess
 import sys
+import threading
+import time
 
 # Корень
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
+
+LOGS_DIR = os.path.join(ROOT_DIR, "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+SETUP_LOG = os.path.join(LOGS_DIR, "setup.log")
+LOG_FILE = os.path.join(LOGS_DIR, "host.log")
 
 VENV_PATH = os.path.join(ROOT_DIR, "venv")
 INSTALL_PATH = os.path.join(ROOT_DIR, "core", "install.py")
@@ -21,10 +28,11 @@ if sys.prefix == sys.base_prefix:
         py_in_venv = os.path.join(VENV_PATH, "Scripts", "python.exe")
     os.execv(py_in_venv, [py_in_venv] + sys.argv)
 
-# Уже внутри venv - установить зависимости через install.py
-subprocess.run([sys.executable, INSTALL_PATH], check=True)
+# Уже внутри venv - установить зависимости через install.py (вывод в setup.log)
+with open(SETUP_LOG, "a") as logf:
+    subprocess.run([sys.executable, INSTALL_PATH], check=True, stdout=logf, stderr=logf)
 
-# Теперь можно делать импорты (всё уже установлено)
+# Импорты после установки зависимостей
 import copy
 import json
 import logging
@@ -35,10 +43,7 @@ import requests
 from bs4 import BeautifulSoup
 from core.web_parser import SOCIAL_PATTERNS, extract_social_links
 
-# Логирование
-LOGS_DIR = "logs"
-os.makedirs(LOGS_DIR, exist_ok=True)
-LOG_FILE = os.path.join(LOGS_DIR, "host.log")
+# Логирование в host.log
 logging.basicConfig(
     filename=LOG_FILE,
     filemode="w",
@@ -64,12 +69,36 @@ def log_error(msg):
     logging.error(msg)
 
 
-# Пути
+# Пути к конфигам и шаблонам
 CENTRAL_CONFIG_PATH = "config/config.json"
 TEMPLATE_PATH = "templates/main_template.json"
 
+# Спиннер
+spinner_frames = ["/", "-", "\\", "|"]
+spinner_running = False
 
-# Fingerprint Suite fetch (Playwright+browser_fetch.js)
+
+def spinner_task(text, stop_event):
+    idx = 0
+    while not stop_event.is_set():
+        spin = spinner_frames[idx % len(spinner_frames)]
+        sys.stdout.write(f"\r[{spin}] {text} ")
+        sys.stdout.flush()
+        idx += 1
+        time.sleep(0.13)
+    sys.stdout.write("\r" + " " * (len(text) + 10) + "\r")
+
+
+def print_ok(text):
+    sys.stdout.write(f"\r[ok] {text}      \n")
+    sys.stdout.flush()
+
+
+def print_no(text):
+    sys.stdout.write(f"\r[no] {text}      \n")
+    sys.stdout.flush()
+
+
 def fetch_url_html_browser(url):
     NODE_CORE_DIR = os.path.join(ROOT_DIR, "core")
     script_path = os.path.join(NODE_CORE_DIR, "browser_fetch.js")
@@ -91,7 +120,6 @@ def fetch_url_html_browser(url):
         return ""
 
 
-# Requests/bs4, fallback на Fingerprint Suite если Cloudflare/блок
 def fetch_url_html_pipeline(url):
     html = fetch_url_html(url)
     if (
@@ -106,7 +134,6 @@ def fetch_url_html_pipeline(url):
     return html
 
 
-# Утилиты
 def normalize_youtube(url):
     m = re.match(r"(https://www\.youtube\.com/@[\w\d\-_]+)", url)
     if m:
@@ -162,7 +189,6 @@ def fetch_url_html(url):
         return ""
 
 
-# Твиттер/X — всегда через playwright+fingerprint-injector
 def get_links_from_x_profile(profile_url):
     NODE_CORE_DIR = os.path.join(ROOT_DIR, "core")
     NODE_MODULES_PATH = os.path.join(NODE_CORE_DIR, "node_modules")
@@ -175,11 +201,15 @@ def get_links_from_x_profile(profile_url):
                 ["npm", "install", "playwright", "fingerprint-injector"],
                 cwd=NODE_CORE_DIR,
                 check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             subprocess.run(
                 ["npx", "playwright", "install", "chromium"],
                 cwd=NODE_CORE_DIR,
                 check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             log_info("npm-зависимости установлены.")
         except Exception as e:
@@ -209,7 +239,6 @@ def get_links_from_x_profile(profile_url):
         return {"links": [], "avatar": ""}
 
 
-# Коллекционные сервисы (через пайплайн)
 def fetch_link_collection(link_collection_url, socials, social_keys_patterns):
     html = fetch_url_html_pipeline(link_collection_url)
     try:
@@ -251,7 +280,7 @@ def fetch_link_collection(link_collection_url, socials, social_keys_patterns):
     return socials
 
 
-# Основной пайплайн
+# Основной пайплайн со спиннером
 def main():
     main_template = load_main_template()
     with open(CENTRAL_CONFIG_PATH, "r") as f:
@@ -261,6 +290,7 @@ def main():
 
     for app in central_config["apps"]:
         app_name = app["app"]
+        print(f"[ok] Проект {app_name}")
         app_config_path = f"config/apps/{app_name}.json"
         if not os.path.exists(app_config_path):
             log_warning(f"Конфиг {app_config_path} не найден, пропуск.")
@@ -275,6 +305,7 @@ def main():
             main_json_path = os.path.join(storage_path, "main.json")
 
             if os.path.exists(main_json_path):
+                print_ok(f"{app_name} - {url}")
                 log_info(
                     f"Папка {storage_path} уже есть, main.json найден. Пропускаем запись."
                 )
@@ -283,15 +314,22 @@ def main():
             main_data = copy.deepcopy(main_template)
             found_socials = {}
 
-            log_info(f"Переходим по ссылке: {url}")
+            # Запуск спиннера в отдельном потоке
+            stop_event = threading.Event()
+            spinner_text = f"{app_name} - {url}"
+            spinner_thread = threading.Thread(
+                target=spinner_task, args=(spinner_text, stop_event)
+            )
+            spinner_thread.start()
+            status = None
+
             try:
-                # Пайплайн: сначала requests/bs4, если fail → Fingerprint Suite
+                log_info(f"Переходим по ссылке: {url}")
                 html = fetch_url_html_pipeline(url)
                 socials = extract_social_links(html, url)
                 found_socials.update({k: v for k, v in socials.items() if v})
                 log_info(f"Найдено соцсетей: {json.dumps(socials, ensure_ascii=False)}")
 
-                # То же для внутренних ссылок
                 internal_links = get_internal_links(html, url, max_links=10)
                 log_info(f"Внутренние ссылки: {internal_links}")
                 for link in internal_links:
@@ -322,7 +360,6 @@ def main():
                     except Exception as e:
                         log_warning(f"Ошибка docs: {e}")
 
-                # Twitter/X — всегда через playwright+fingerprint-injector
                 twitter_url = found_socials.get("twitterURL", "")
                 if twitter_url:
                     log_info(
@@ -370,10 +407,8 @@ def main():
                 # Формируем итоговые соцсети
                 social_keys = list(main_template["socialLinks"].keys())
                 final_socials = {k: found_socials.get(k, "") for k in social_keys}
-
                 yt = final_socials.get("youtubeURL", "")
                 final_socials["youtubeURL"] = normalize_youtube(yt)
-
                 if final_socials["mediumURL"] and not final_socials[
                     "mediumURL"
                 ].startswith("https://medium.com/@"):
@@ -385,9 +420,18 @@ def main():
                 with open(main_json_path, "w", encoding="utf-8") as f:
                     json.dump(main_data, f, ensure_ascii=False, indent=2)
                 log_info(f"Данные сохранены в {main_json_path}")
-
+                status = "ok"
             except Exception as e:
                 log_critical(f"Ошибка парсинга {url}: {e}")
+                status = "no"
+
+            # Остановить спиннер и вывести статус
+            stop_event.set()
+            spinner_thread.join()
+            if status == "ok":
+                print_ok(f"{app_name} - {url}")
+            else:
+                print_no(f"{app_name} - {url}")
 
     print("Готово!")
 
