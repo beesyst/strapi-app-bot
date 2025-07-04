@@ -7,9 +7,9 @@
     },
     {
       "app": "solana",
-      "api_url": "...",
-      "api_token": "Bearer <solana_token>"
+      "api_url": "",
+      "api_token": ""
     }
   ],
-  "link_collections": ["linktr.ee"]
+  "link_collections": ["linktr.ee", "link3.to"]
 }

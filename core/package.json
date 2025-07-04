@@ -1,6 +1,11 @@
 {
+  "name": "strapiprojectsbot-core",
+  "version": "1.0.0",
   "dependencies": {
-    "fingerprint-injector": "^2.1.66",
-    "playwright": "^1.52.0"
+    "playwright": "^1.53.2",
+    "fingerprint-injector": "^2.1.69"
+  },
+  "scripts": {
+    "postinstall": "playwright install"
   }
 }

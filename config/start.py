@@ -1,25 +1,44 @@
+import os
+import subprocess
+import sys
+
+# Корень
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+VENV_PATH = os.path.join(ROOT_DIR, "venv")
+INSTALL_PATH = os.path.join(ROOT_DIR, "core", "install.py")
+
+# Если не в venv - создать и перейти
+if sys.prefix == sys.base_prefix:
+    if not os.path.isdir(VENV_PATH):
+        print("[start] Виртуальное окружение не найдено, создаю venv ...")
+        subprocess.run(["python3", "-m", "venv", VENV_PATH], check=True)
+    # Запустить текущий скрипт через python из venv
+    py_in_venv = os.path.join(VENV_PATH, "bin", "python")
+    if not os.path.exists(py_in_venv):
+        py_in_venv = os.path.join(VENV_PATH, "Scripts", "python.exe")
+    os.execv(py_in_venv, [py_in_venv] + sys.argv)
+
+# Уже внутри venv - установить зависимости через install.py
+subprocess.run([sys.executable, INSTALL_PATH], check=True)
+
+# Теперь можно делать импорты (всё уже установлено)
 import copy
 import json
 import logging
-import os
 import re
-import subprocess
-import sys
 from urllib.parse import urljoin, urlparse
-
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(ROOT_DIR)
 
 import requests
 from bs4 import BeautifulSoup
 from core.web_parser import SOCIAL_PATTERNS, extract_social_links
 
-# Logging setup
+# Логирование
 LOGS_DIR = "logs"
 os.makedirs(LOGS_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOGS_DIR, "host.log")
-
-# Настройка логгера
 logging.basicConfig(
     filename=LOG_FILE,
     filemode="w",
@@ -29,7 +48,6 @@ logging.basicConfig(
 )
 
 
-# Быстрый доступ к разным уровням
 def log_info(msg):
     logging.info(msg)
 
@@ -46,18 +64,49 @@ def log_error(msg):
     logging.error(msg)
 
 
-# Добавляем корень проекта в PYTHONPATH
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(ROOT_DIR)
-
-
+# Пути
 CENTRAL_CONFIG_PATH = "config/config.json"
 TEMPLATE_PATH = "templates/main_template.json"
-NODE_CORE_DIR = os.path.join(ROOT_DIR, "core")
-NODE_MODULES_PATH = os.path.join(NODE_CORE_DIR, "node_modules")
 
 
-# Оставляет только https://www.youtube.com/@username
+# Fingerprint Suite fetch (Playwright+browser_fetch.js)
+def fetch_url_html_browser(url):
+    NODE_CORE_DIR = os.path.join(ROOT_DIR, "core")
+    script_path = os.path.join(NODE_CORE_DIR, "browser_fetch.js")
+    try:
+        result = subprocess.run(
+            ["node", script_path, url],
+            cwd=NODE_CORE_DIR,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode == 0:
+            return result.stdout
+        else:
+            log_warning(f"browser_fetch.js error: {result.stderr}")
+            return ""
+    except Exception as e:
+        log_warning(f"Ошибка browser_fetch.js: {e}")
+        return ""
+
+
+# Requests/bs4, fallback на Fingerprint Suite если Cloudflare/блок
+def fetch_url_html_pipeline(url):
+    html = fetch_url_html(url)
+    if (
+        not html
+        or "cf-browser-verification" in html
+        or "enable JavaScript" in html
+        or "Checking your browser" in html
+        or "<title>Access denied</title>" in html
+    ):
+        log_info(f"Пробуем получить {url} через Fingerprint Suite (browser_fetch.js)")
+        html = fetch_url_html_browser(url)
+    return html
+
+
+# Утилиты
 def normalize_youtube(url):
     m = re.match(r"(https://www\.youtube\.com/@[\w\d\-_]+)", url)
     if m:
@@ -70,26 +119,22 @@ def normalize_youtube(url):
     return ""
 
 
-# Загружает шаблон main.json
 def load_main_template():
     with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-# Получает имя домена без www и зоны
 def get_domain_name(url):
     domain = urlparse(url).netloc
     return domain.replace("www.", "").split(".")[0]
 
 
-# Создает папку для хранения данных проекта
 def create_project_folder(domain):
     storage_path = f"storage/total/{domain}"
     os.makedirs(storage_path, exist_ok=True)
     return storage_path
 
 
-# Находит до max_links внутренних ссылок на сайте
 def get_internal_links(html, base_url, max_links=10):
     soup = BeautifulSoup(html, "html.parser")
     found = set()
@@ -102,14 +147,12 @@ def get_internal_links(html, base_url, max_links=10):
     return list(found)
 
 
-# Меняет twitter.com на x.com для twitterURL
 def normalize_socials(socials):
     if socials.get("twitterURL"):
         socials["twitterURL"] = socials["twitterURL"].replace("twitter.com", "x.com")
     return socials
 
 
-# Получает HTML страницы с user-agent для обхода банов
 def fetch_url_html(url):
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
@@ -119,8 +162,10 @@ def fetch_url_html(url):
         return ""
 
 
-# Запускает node-парсер X (twitter) c fingerprint
+# Твиттер/X — всегда через playwright+fingerprint-injector
 def get_links_from_x_profile(profile_url):
+    NODE_CORE_DIR = os.path.join(ROOT_DIR, "core")
+    NODE_MODULES_PATH = os.path.join(NODE_CORE_DIR, "node_modules")
     if not os.path.isdir(NODE_MODULES_PATH):
         log_info(
             "Устанавливаю npm-зависимости для Playwright + fingerprint-injector ..."
@@ -140,7 +185,6 @@ def get_links_from_x_profile(profile_url):
         except Exception as e:
             log_error(f"Ошибка npm install: {e}")
             return {"links": [], "avatar": ""}
-
     try:
         result = subprocess.run(
             ["node", "twitter_parser.js", profile_url],
@@ -165,10 +209,10 @@ def get_links_from_x_profile(profile_url):
         return {"links": [], "avatar": ""}
 
 
-# Парсит страницу-коллекцию ссылок (например, linktr.ee), режет ютуб-ссылки
+# Коллекционные сервисы (через пайплайн)
 def fetch_link_collection(link_collection_url, socials, social_keys_patterns):
+    html = fetch_url_html_pipeline(link_collection_url)
     try:
-        html = fetch_url_html(link_collection_url)
         soup = BeautifulSoup(html, "html.parser")
         found_on_page = []
         youtube_candidates = []
@@ -216,7 +260,7 @@ def main():
     social_keys_patterns = SOCIAL_PATTERNS
 
     for app in central_config["apps"]:
-        app_name = app["app"]  # вот оно!
+        app_name = app["app"]
         app_config_path = f"config/apps/{app_name}.json"
         if not os.path.exists(app_config_path):
             log_warning(f"Конфиг {app_config_path} не найден, пропуск.")
@@ -241,16 +285,18 @@ def main():
 
             log_info(f"Переходим по ссылке: {url}")
             try:
-                html = fetch_url_html(url)
+                # Пайплайн: сначала requests/bs4, если fail → Fingerprint Suite
+                html = fetch_url_html_pipeline(url)
                 socials = extract_social_links(html, url)
                 found_socials.update({k: v for k, v in socials.items() if v})
                 log_info(f"Найдено соцсетей: {json.dumps(socials, ensure_ascii=False)}")
 
+                # То же для внутренних ссылок
                 internal_links = get_internal_links(html, url, max_links=10)
                 log_info(f"Внутренние ссылки: {internal_links}")
                 for link in internal_links:
                     try:
-                        page_html = fetch_url_html(link)
+                        page_html = fetch_url_html_pipeline(link)
                         page_socials = extract_social_links(page_html, link)
                         for k, v in page_socials.items():
                             if v and not found_socials.get(k):
@@ -265,7 +311,7 @@ def main():
                     docs_url = found_socials["documentURL"]
                     log_info(f"Переход на docs: {docs_url}")
                     try:
-                        docs_html = fetch_url_html(docs_url)
+                        docs_html = fetch_url_html_pipeline(docs_url)
                         docs_socials = extract_social_links(docs_html, docs_url)
                         log_info(
                             f"Docs соцсети: {json.dumps(docs_socials, ensure_ascii=False)}"
@@ -276,7 +322,7 @@ def main():
                     except Exception as e:
                         log_warning(f"Ошибка docs: {e}")
 
-                # Парсинг X/Twitter через Playwright (fingerprint)
+                # Twitter/X — всегда через playwright+fingerprint-injector
                 twitter_url = found_socials.get("twitterURL", "")
                 if twitter_url:
                     log_info(
