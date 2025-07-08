@@ -1,7 +1,12 @@
 {
+  "openai": {
+    "api_key": "",
+    "api_url": "https://api.openai.com/v1/chat/completions",
+    "model": "gpt-4.1-nano"
+  },
   "apps": [
     {
-      "app": "test",
+      "app": "celestia",
       "enabled": true,
       "api_url": "https://superapp-staging-prod.noders.services/api/projects",
       "api_token": "Bearer "

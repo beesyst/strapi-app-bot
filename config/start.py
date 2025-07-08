@@ -427,14 +427,29 @@ def main(app_name):
 if __name__ == "__main__":
     with open(CENTRAL_CONFIG_PATH, "r") as f:
         central_config = json.load(f)
+    # Сначала собираем данные по каждому app
     for app in central_config["apps"]:
         if not app.get("enabled", True):
-            print(f"Проект {app['app']} отключен (enabled = false)")
             continue
         app_name = app["app"]
         print(f"Проект {app_name} - сбор данных")
         main(app_name)
-        print(f"Проект {app_name} -  отправка в Strapi")
+
+    # Затем AI-обработка
+    try:
+        api_ai_path = os.path.join(ROOT_DIR, "core", "api_ai.py")
+        spec_ai = importlib.util.spec_from_file_location("api_ai", api_ai_path)
+        api_ai = importlib.util.module_from_spec(spec_ai)
+        spec_ai.loader.exec_module(api_ai)
+        api_ai.process_all_projects()
+    except Exception as e:
+        print(f"[ERROR] Ошибка запуска AI генерации: {e}")
+
+    # Только после этого отправляем всё в Strapi
+    for app in central_config["apps"]:
+        if not app.get("enabled", True):
+            continue
+        print(f"Проект {app['app']} - отправка в Strapi")
         try:
             api_strapi_path = os.path.join(ROOT_DIR, "core", "api_strapi.py")
             spec = importlib.util.spec_from_file_location("api_strapi", api_strapi_path)
