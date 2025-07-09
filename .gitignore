@@ -3,3 +3,4 @@ core/__pycache__/
 core/node_modules/
 logs/*
 !logs/.gitkeep
+config/config.json
