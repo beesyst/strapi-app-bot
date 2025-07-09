@@ -9,7 +9,7 @@
       "app": "celestia",
       "enabled": true,
       "api_url": "https://superapp-staging-prod.noders.services/api/projects",
-      "api_token": "Bearer "
+      "api_token": "Bearer"
     },
     {
       "app": "solana",

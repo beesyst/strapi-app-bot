@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 
+import markdown
 import requests
 
 LOGS_DIR = "logs"
@@ -20,6 +21,10 @@ def strapi_log(msg):
         f.write(f"{now} {msg}\n")
 
 
+def markdown_to_html(md_text):
+    return markdown.markdown(md_text, extensions=["extra"])
+
+
 # Создание проекта и возврат его ID (если успешно)
 def create_project(api_url, api_token, data):
     payload = {
@@ -27,7 +32,7 @@ def create_project(api_url, api_token, data):
             "name": data.get("name", ""),
             "shortDescription": data.get("shortDescription", ""),
             "socialLinks": data.get("socialLinks", {}),
-            "contentMarkdown": data.get("contentMarkdown", ""),
+            "contentMarkdown": markdown_to_html(data.get("contentMarkdown", "")),
         }
     }
     headers = {
@@ -83,14 +88,15 @@ def sync_projects(config_path, only_app=None):
             continue
         if not app.get("enabled", True):
             continue
+        app_name = app["app"]
         api_url = app["api_url"]
         api_token = app["api_token"]
         if not api_url or not api_token:
-            strapi_log(f"[skip] {app['app']}: no api_url or api_token")
+            strapi_log(f"[skip] {app_name}: no api_url or api_token")
             continue
-        partners_path = os.path.join("config", "apps", f"{app['app']}.json")
+        partners_path = os.path.join("config", "apps", f"{app_name}.json")
         if not os.path.exists(partners_path):
-            strapi_log(f"[skip] {app['app']}: no partners config")
+            strapi_log(f"[skip] {app_name}: no partners config")
             continue
         with open(partners_path, "r", encoding="utf-8") as f:
             partners_data = json.load(f)
@@ -102,16 +108,22 @@ def sync_projects(config_path, only_app=None):
             )
             if not domain:
                 strapi_log(
-                    f"[{app['app']}] пустой domain для partner: {partner}, пропуск."
+                    f"[{app_name}] пустой domain для partner: {partner}, пропуск."
                 )
                 continue
-            json_path = os.path.join("storage", "total", domain, "main.json")
-            image_path = os.path.join("storage", "total", domain, f"{domain}.jpg")
+            json_path = os.path.join("storage", "apps", app_name, domain, "main.json")
+            image_path = os.path.join(
+                "storage", "apps", app_name, domain, f"{domain}.jpg"
+            )
             if not os.path.exists(json_path):
-                strapi_log(f"[{app['app']}] {domain}: main.json not found, skip.")
+                strapi_log(f"[{app_name}] {domain}: main.json not found, skip.")
                 continue
-            with open(json_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception as e:
+                strapi_log(f"[{app_name}] {domain}: main.json not loaded: {e}")
+                continue
             project_id = create_project(api_url, api_token, data)
             if not project_id:
                 continue

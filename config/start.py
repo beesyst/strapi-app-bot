@@ -163,8 +163,8 @@ def get_domain_name(url):
     return domain.replace("www.", "").split(".")[0]
 
 
-def create_project_folder(domain):
-    storage_path = f"storage/total/{domain}"
+def create_project_folder(app_name, domain):
+    storage_path = f"storage/apps/{app_name}/{domain}"
     os.makedirs(storage_path, exist_ok=True)
     return storage_path
 
@@ -301,7 +301,7 @@ def main(app_name):
 
     for url in config["partners"]:
         domain = get_domain_name(url)
-        storage_path = create_project_folder(domain)
+        storage_path = create_project_folder(app_name, domain)
         main_json_path = os.path.join(storage_path, "main.json")
 
         if os.path.exists(main_json_path):

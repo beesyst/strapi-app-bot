@@ -8,6 +8,10 @@ LOGS_DIR = "logs"
 os.makedirs(LOGS_DIR, exist_ok=True)
 AI_LOG = os.path.join(LOGS_DIR, "ai.log")
 
+# Очищаем ai.log при каждом запуске
+with open(AI_LOG, "w", encoding="utf-8") as f:
+    f.write("")
+
 
 # Логирование
 def ai_log(msg):
@@ -84,79 +88,92 @@ def enrich_main_json(json_path, content):
 def process_all_projects():
     openai_cfg = load_openai_config()
     prompts = load_prompts()
-    base_dir = os.path.join("storage", "total")
-    projects = [
-        p for p in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, p))
-    ]
-    # Получаем список name/website по всем проектам (для связок)
-    project_data = {}
-    for p in projects:
-        json_path = os.path.join(base_dir, p, "main.json")
-        if os.path.exists(json_path):
+    base_dir = os.path.join("storage", "apps")
+
+    # Для каждого приложения (например, celestia, solana и т.д.)
+    for app_name in os.listdir(base_dir):
+        app_path = os.path.join(base_dir, app_name)
+        if not os.path.isdir(app_path):
+            continue
+
+        # Для каждого партнера внутри приложения
+        for domain in os.listdir(app_path):
+            partner_path = os.path.join(app_path, domain)
+            if not os.path.isdir(partner_path):
+                continue
+
+            json_path = os.path.join(partner_path, "main.json")
+            if not os.path.exists(json_path):
+                continue
+
             with open(json_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            project_data[p] = {
-                "name": data.get("name", p),
+            if data.get("contentMarkdown"):
+                ai_log(f"[SKIP] {app_name}/{domain}: contentMarkdown уже есть")
+                continue
+
+            # Генерируем основной обзор
+            context1 = {
+                "name": data.get("name", domain),
                 "website": data.get("socialLinks", {}).get("websiteURL", ""),
             }
-
-    for p in projects:
-        json_path = os.path.join(base_dir, p, "main.json")
-        if not os.path.exists(json_path):
-            continue
-        with open(json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if data.get("contentMarkdown"):
-            ai_log(f"[SKIP] {p}: contentMarkdown уже есть")
-            continue
-        # Генерируем основной обзор
-        context1 = {
-            "name": data.get("name", p),
-            "website": data.get("socialLinks", {}).get("websiteURL", ""),
-        }
-        prompt1 = render_prompt(prompts["review_full"], context1)
-        content1 = call_openai_api(
-            prompt1, openai_cfg["api_key"], openai_cfg["api_url"], openai_cfg["model"]
-        )
-
-        # Если есть второй проект — генерация связи
-        other_key = None
-        for k in project_data:
-            if k != p:
-                other_key = k
-                break
-        content2 = ""
-        if other_key:
-            context2 = {
-                "name1": context1["name"],
-                "website1": context1["website"],
-                "name2": project_data[other_key]["name"],
-                "website2": project_data[other_key]["website"],
-            }
-            prompt2 = render_prompt(prompts["connection"], context2)
-            content2 = call_openai_api(
-                prompt2,
+            prompt1 = render_prompt(prompts["review_full"], context1)
+            content1 = call_openai_api(
+                prompt1,
                 openai_cfg["api_key"],
                 openai_cfg["api_url"],
                 openai_cfg["model"],
             )
-        # Финализация — комбинируем, форматируем
-        all_content = content1
-        if content2:
-            all_content = f"{content1}\n\n## {context2['name2']} x {context1['name']}\n\n{content2}"
 
-        context3 = {"connection_with": context2["name2"] if other_key else ""}
-        prompt3 = render_prompt(prompts["finalize"], context3)
-        final_content = call_openai_api(
-            f"{all_content}\n\n{prompt3}",
-            openai_cfg["api_key"],
-            openai_cfg["api_url"],
-            openai_cfg["model"],
-        )
-        if final_content:
-            enrich_main_json(json_path, final_content)
-        else:
-            ai_log(f"[FAIL] Не удалось сгенерировать финальный контент для {p}")
+            # Связь с главным проектом (например, Celestia x Astria)
+            main_app_config_path = os.path.join("config", "apps", f"{app_name}.json")
+            if os.path.exists(main_app_config_path):
+                with open(main_app_config_path, "r", encoding="utf-8") as f:
+                    main_app_cfg = json.load(f)
+                main_name = main_app_cfg.get("name", app_name.capitalize())
+                main_url = main_app_cfg.get("url", "")
+            else:
+                main_name = app_name.capitalize()
+                main_url = ""
+
+            # Если имя партнера совпадает с основным, не делаем связку
+            content2 = ""
+            if domain.lower() != main_name.lower():
+                context2 = {
+                    "name1": main_name,
+                    "website1": main_url,
+                    "name2": context1["name"],
+                    "website2": context1["website"],
+                }
+                prompt2 = render_prompt(prompts["connection"], context2)
+                content2 = call_openai_api(
+                    prompt2,
+                    openai_cfg["api_key"],
+                    openai_cfg["api_url"],
+                    openai_cfg["model"],
+                )
+
+            # Финализация — форматируем и переводим
+            all_content = content1
+            if content2:
+                all_content = (
+                    f"{content1}\n\n## {main_name} x {context1['name']}\n\n{content2}"
+                )
+
+            context3 = {"connection_with": main_name if content2 else ""}
+            prompt3 = render_prompt(prompts["finalize"], context3)
+            final_content = call_openai_api(
+                f"{all_content}\n\n{prompt3}",
+                openai_cfg["api_key"],
+                openai_cfg["api_url"],
+                openai_cfg["model"],
+            )
+            if final_content:
+                enrich_main_json(json_path, final_content)
+            else:
+                ai_log(
+                    f"[FAIL] Не удалось сгенерировать финальный контент для {app_name}/{domain}"
+                )
 
 
 if __name__ == "__main__":
