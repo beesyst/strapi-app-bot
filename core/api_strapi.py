@@ -5,16 +5,10 @@ import os
 import markdown
 import requests
 
-LOGS_DIR = "logs"
-os.makedirs(LOGS_DIR, exist_ok=True)
-STRAPI_LOG = os.path.join(LOGS_DIR, "strapi.log")
-
-# Очищаем strapi.log при каждом запуске
-with open(STRAPI_LOG, "w", encoding="utf-8") as f:
-    f.write("")
+STRAPI_LOG = "logs/strapi.log"
 
 
-# Логгирование в файл
+# Лог
 def strapi_log(msg):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(STRAPI_LOG, "a", encoding="utf-8") as f:

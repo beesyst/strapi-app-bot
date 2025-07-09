@@ -4,13 +4,13 @@ import os
 
 import requests
 
-LOGS_DIR = "logs"
-os.makedirs(LOGS_DIR, exist_ok=True)
-AI_LOG = os.path.join(LOGS_DIR, "ai.log")
+AI_LOG = "logs/ai.log"
 
-# Очищаем ai.log при каждом запуске
-with open(AI_LOG, "w", encoding="utf-8") as f:
-    f.write("")
+
+def ai_log(msg):
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(AI_LOG, "a", encoding="utf-8") as f:
+        f.write(f"{now} {msg}\n")
 
 
 # Логирование

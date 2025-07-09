@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -16,20 +17,41 @@ os.makedirs(LOGS_DIR, exist_ok=True)
 SETUP_LOG = os.path.join(LOGS_DIR, "setup.log")
 LOG_FILE = os.path.join(LOGS_DIR, "host.log")
 
+
+# Очищает все .log-файлы в logs_dir, добавляя отметку времени очистки
+def clear_all_logs(logs_dir="logs"):
+    for fname in os.listdir(logs_dir):
+        fpath = os.path.join(logs_dir, fname)
+        if os.path.isfile(fpath) and fname.endswith(".log"):
+            with open(fpath, "w", encoding="utf-8") as f:
+                f.write(
+                    f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} [INFO] Log file cleared\n"
+                )
+
+
+# Загружаем config до любых логик
+CONFIG_PATH = os.path.join(ROOT_DIR, "config", "config.json")
+with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+    config = json.load(f)
+
+# Очищаем логи, если это указано в конфиге
+if config.get("clear_logs", False):
+    clear_all_logs(LOGS_DIR)
+
+# setup.log всегда очищается в любом случае
 with open(SETUP_LOG, "w", encoding="utf-8") as f:
     f.write(
         f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} [INFO] setup.log started\n\n"
     )
 
+# venv и запуск через окружение
 VENV_PATH = os.path.join(ROOT_DIR, "venv")
 INSTALL_PATH = os.path.join(ROOT_DIR, "core", "install.py")
 
-# Если не в venv - создать и перейти
 if sys.prefix == sys.base_prefix:
     if not os.path.isdir(VENV_PATH):
         print("[start] Виртуальное окружение не найдено, создаю venv ...")
         subprocess.run(["python3", "-m", "venv", VENV_PATH], check=True)
-    # Запустить текущий скрипт через python из venv
     py_in_venv = os.path.join(VENV_PATH, "bin", "python")
     if not os.path.exists(py_in_venv):
         py_in_venv = os.path.join(VENV_PATH, "Scripts", "python.exe")
@@ -39,9 +61,8 @@ if sys.prefix == sys.base_prefix:
 with open(SETUP_LOG, "a") as logf:
     subprocess.run([sys.executable, INSTALL_PATH], check=True, stdout=logf, stderr=logf)
 
-# Импорты после установки зависимостей
+# Дальнейшие импорты - после установки зависимостей
 import copy
-import json
 import logging
 import re
 from urllib.parse import urljoin, urlparse
