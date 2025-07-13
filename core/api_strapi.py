@@ -38,16 +38,12 @@ def create_project(api_url, api_token, data):
         f"[CREATE] {data.get('name', '')}: {resp.status_code}, {resp.text[:200]}"
     )
     if resp.status_code in (200, 201):
-        print(f"[ok] Created project: {data.get('name', '')}")
-        return resp.json()["data"]["id"]  # Вернем id для дальнейшей привязки картинки
+        return resp.json()["data"]["id"]
     else:
-        print(
-            f"[error] Create project: {data.get('name', '')} [{resp.status_code}]: {resp.text}"
-        )
         return None
 
 
-# Загрузка файла (лого) и привязка его к проекту через поле svgLogo
+# Загрузка лого и привязка его к проекту через svgLogo
 def upload_logo(api_url, api_token, project_id, image_path):
     if not os.path.exists(image_path):
         strapi_log(f"[no image]: {image_path}")
@@ -67,9 +63,6 @@ def upload_logo(api_url, api_token, project_id, image_path):
         if resp.status_code in (200, 201):
             return resp.json()[0]
         else:
-            print(
-                f"[error] Upload logo: {image_path} [{resp.status_code}]: {resp.text}"
-            )
             return None
 
 

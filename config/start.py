@@ -18,7 +18,7 @@ SETUP_LOG = os.path.join(LOGS_DIR, "setup.log")
 LOG_FILE = os.path.join(LOGS_DIR, "host.log")
 
 
-# Очищает все .log-файлы в logs_dir, добавляя отметку времени очистки
+# Очищает все .log-файлы в logs_dir
 def clear_all_logs(logs_dir="logs"):
     for fname in os.listdir(logs_dir):
         fpath = os.path.join(logs_dir, fname)
@@ -117,13 +117,14 @@ def spinner_task(text, stop_event):
     sys.stdout.write("\r" + " " * (len(text) + 10) + "\r")
 
 
-def print_ok(text):
-    sys.stdout.write(f"\r[ok] {text}      \n")
-    sys.stdout.flush()
+# Статус: add, update, skip, error
+STATUSES = ("add", "update", "skip", "error")
 
 
-def print_no(text):
-    sys.stdout.write(f"\r[no] {text}      \n")
+def terminal_status(status, app_name, url):
+    if status not in STATUSES:
+        status = "error"
+    sys.stdout.write(f"\r[{status}] {app_name} - {url}\n")
     sys.stdout.flush()
 
 
@@ -308,6 +309,109 @@ def fetch_link_collection(link_collection_url, socials, social_keys_patterns):
     return socials
 
 
+# Сбор свежих данных по проекту
+def collect_project_data(app_name, domain, url, main_template):
+    try:
+        storage_path = create_project_folder(app_name, domain)
+        main_data = copy.deepcopy(main_template)
+        found_socials = {}
+
+        log_info(f"Переходим по ссылке: {url}")
+        html = fetch_url_html_pipeline(url)
+        socials = extract_social_links(html, url)
+        found_socials.update({k: v for k, v in socials.items() if v})
+        log_info(f"Найдено соцсетей: {json.dumps(socials, ensure_ascii=False)}")
+
+        internal_links = get_internal_links(html, url, max_links=10)
+        log_info(f"Внутренние ссылки: {internal_links}")
+        for link in internal_links:
+            try:
+                page_html = fetch_url_html_pipeline(link)
+                page_socials = extract_social_links(page_html, link)
+                for k, v in page_socials.items():
+                    if v and not found_socials.get(k):
+                        found_socials[k] = v
+            except Exception as e:
+                log_warning(f"Ошибка парсинга {link}: {e}")
+
+        found_socials = normalize_socials(found_socials)
+
+        # Docs-URL
+        if found_socials.get("documentURL"):
+            docs_url = found_socials["documentURL"]
+            log_info(f"Переход на docs: {docs_url}")
+            try:
+                docs_html = fetch_url_html_pipeline(docs_url)
+                docs_socials = extract_social_links(docs_html, docs_url)
+                log_info(
+                    f"Docs соцсети: {json.dumps(docs_socials, ensure_ascii=False)}"
+                )
+                for k, v in docs_socials.items():
+                    if v and not found_socials.get(k):
+                        found_socials[k] = v
+            except Exception as e:
+                log_warning(f"Ошибка docs: {e}")
+
+        twitter_url = found_socials.get("twitterURL", "")
+        if twitter_url:
+            log_info(f"Переход на twitter через Playwright+fingerprint: {twitter_url}")
+            twitter_result = get_links_from_x_profile(twitter_url)
+            bio_links = twitter_result.get("links", [])
+            avatar_url = twitter_result.get("avatar", "")
+            log_info(f"Ссылки из twitter: {bio_links}")
+            if avatar_url:
+                try:
+                    avatar_url_400 = re.sub(
+                        r"_\d{2,4}x\d{2,4}\.jpg", "_400x400.jpg", avatar_url
+                    )
+                    log_info(f"Ссылка на лого: {avatar_url_400}")
+                    logo_filename = f"{domain.lower()}.jpg"
+                    avatar_path = os.path.join(storage_path, logo_filename)
+                    avatar_data = requests.get(avatar_url_400, timeout=10).content
+                    with open(avatar_path, "wb") as imgf:
+                        imgf.write(avatar_data)
+                    log_info(f"Лого сохранен в {avatar_path}")
+                    main_data["svgLogo"] = logo_filename
+                except Exception as e:
+                    log_warning(f"Ошибка скачивания аватара: {e}")
+            for bio_url in bio_links:
+                for k, pattern in SOCIAL_PATTERNS.items():
+                    if not found_socials.get(k) or found_socials[k] == "":
+                        if re.search(pattern, bio_url):
+                            found_socials[k] = bio_url
+        if "youtubeURL" in found_socials and found_socials["youtubeURL"]:
+            found_socials["youtubeURL"] = normalize_youtube(found_socials["youtubeURL"])
+
+        # Формируем итоговые соцсети
+        social_keys = list(main_template["socialLinks"].keys())
+        final_socials = {k: found_socials.get(k, "") for k in social_keys}
+        yt = final_socials.get("youtubeURL", "")
+        final_socials["youtubeURL"] = normalize_youtube(yt)
+        if final_socials["mediumURL"] and not final_socials["mediumURL"].startswith(
+            "https://medium.com/@"
+        ):
+            final_socials["mediumURL"] = ""
+        main_data["socialLinks"] = final_socials
+        main_data["name"] = domain.capitalize()
+
+        return main_data, "ok", ""
+    except Exception as e:
+        log_critical(f"Ошибка парсинга {domain}: {e}")
+        return None, "error", str(e)
+
+
+# Возвращает True, если содержимое main.json отличается от new_data
+def compare_main_json(json_path, new_data):
+    if not os.path.exists(json_path):
+        return True
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            old_data = json.load(f)
+        return old_data != new_data
+    except Exception:
+        return True
+
+
 # Основной пайплайн со спиннером
 def main(app_name):
     main_template = load_main_template()
@@ -325,16 +429,6 @@ def main(app_name):
         storage_path = create_project_folder(app_name, domain)
         main_json_path = os.path.join(storage_path, "main.json")
 
-        if os.path.exists(main_json_path):
-            print_ok(f"{app_name} - {url}")
-            log_info(
-                f"Папка {storage_path} уже есть, main.json найден. Пропускаем запись."
-            )
-            continue
-
-        main_data = copy.deepcopy(main_template)
-        found_socials = {}
-
         # Запуск спиннера в отдельном потоке
         stop_event = threading.Event()
         spinner_text = f"{app_name} - {url}"
@@ -342,107 +436,35 @@ def main(app_name):
             target=spinner_task, args=(spinner_text, stop_event)
         )
         spinner_thread.start()
-        status = None
 
         try:
-            log_info(f"Переходим по ссылке: {url}")
-            html = fetch_url_html_pipeline(url)
-            socials = extract_social_links(html, url)
-            found_socials.update({k: v for k, v in socials.items() if v})
-            log_info(f"Найдено соцсетей: {json.dumps(socials, ensure_ascii=False)}")
-
-            internal_links = get_internal_links(html, url, max_links=10)
-            log_info(f"Внутренние ссылки: {internal_links}")
-            for link in internal_links:
-                try:
-                    page_html = fetch_url_html_pipeline(link)
-                    page_socials = extract_social_links(page_html, link)
-                    for k, v in page_socials.items():
-                        if v and not found_socials.get(k):
-                            found_socials[k] = v
-                except Exception as e:
-                    log_warning(f"Ошибка парсинга {link}: {e}")
-
-            found_socials = normalize_socials(found_socials)
-
-            # Docs-URL
-            if found_socials.get("documentURL"):
-                docs_url = found_socials["documentURL"]
-                log_info(f"Переход на docs: {docs_url}")
-                try:
-                    docs_html = fetch_url_html_pipeline(docs_url)
-                    docs_socials = extract_social_links(docs_html, docs_url)
-                    log_info(
-                        f"Docs соцсети: {json.dumps(docs_socials, ensure_ascii=False)}"
-                    )
-                    for k, v in docs_socials.items():
-                        if v and not found_socials.get(k):
-                            found_socials[k] = v
-                except Exception as e:
-                    log_warning(f"Ошибка docs: {e}")
-
-            twitter_url = found_socials.get("twitterURL", "")
-            if twitter_url:
-                log_info(
-                    f"Переход на twitter через Playwright+fingerprint: {twitter_url}"
-                )
-                twitter_result = get_links_from_x_profile(twitter_url)
-                bio_links = twitter_result.get("links", [])
-                avatar_url = twitter_result.get("avatar", "")
-                log_info(f"Ссылки из twitter: {bio_links}")
-                if avatar_url:
-                    try:
-                        avatar_url_400 = re.sub(
-                            r"_\d{2,4}x\d{2,4}\.jpg", "_400x400.jpg", avatar_url
-                        )
-                        log_info(f"Ссылка на лого: {avatar_url_400}")
-                        logo_filename = f"{domain.lower()}.jpg"
-                        avatar_path = os.path.join(storage_path, logo_filename)
-                        avatar_data = requests.get(avatar_url_400, timeout=10).content
-                        with open(avatar_path, "wb") as imgf:
-                            imgf.write(avatar_data)
-                        log_info(f"Лого сохранен в {avatar_path}")
-                        main_data["svgLogo"] = logo_filename
-                    except Exception as e:
-                        log_warning(f"Ошибка скачивания аватара: {e}")
-                for bio_url in bio_links:
-                    for k, pattern in SOCIAL_PATTERNS.items():
-                        if not found_socials.get(k) or found_socials[k] == "":
-                            if re.search(pattern, bio_url):
-                                found_socials[k] = bio_url
-            if "youtubeURL" in found_socials and found_socials["youtubeURL"]:
-                found_socials["youtubeURL"] = normalize_youtube(
-                    found_socials["youtubeURL"]
-                )
-
-            # Формируем итоговые соцсети
-            social_keys = list(main_template["socialLinks"].keys())
-            final_socials = {k: found_socials.get(k, "") for k in social_keys}
-            yt = final_socials.get("youtubeURL", "")
-            final_socials["youtubeURL"] = normalize_youtube(yt)
-            if final_socials["mediumURL"] and not final_socials["mediumURL"].startswith(
-                "https://medium.com/@"
-            ):
-                final_socials["mediumURL"] = ""
-
-            main_data["socialLinks"] = final_socials
-            main_data["name"] = domain.capitalize()
-
-            with open(main_json_path, "w", encoding="utf-8") as f:
-                json.dump(main_data, f, ensure_ascii=False, indent=2)
-            log_info(f"Данные сохранены в {main_json_path}")
-            status = "ok"
+            main_data, parse_status, error_msg = collect_project_data(
+                app_name, domain, url, main_template
+            )
+            if parse_status == "error":
+                status = "error"
+            else:
+                if not os.path.exists(main_json_path):
+                    # Не было main.json — новый проект
+                    with open(main_json_path, "w", encoding="utf-8") as f:
+                        json.dump(main_data, f, ensure_ascii=False, indent=2)
+                    status = "add"
+                else:
+                    # Был main.json — сравнить
+                    if compare_main_json(main_json_path, main_data):
+                        with open(main_json_path, "w", encoding="utf-8") as f:
+                            json.dump(main_data, f, ensure_ascii=False, indent=2)
+                        status = "update"
+                    else:
+                        status = "skip"
         except Exception as e:
-            log_critical(f"Ошибка парсинга {url}: {e}")
-            status = "no"
+            log_critical(f"Ошибка обработки {url}: {e}")
+            status = "error"
 
         # Остановить спиннер и вывести статус
         stop_event.set()
         spinner_thread.join()
-        if status == "ok":
-            print_ok(f"{app_name} - {url}")
-        else:
-            print_no(f"{app_name} - {url}")
+        terminal_status(status, app_name, url)
 
 
 if __name__ == "__main__":
@@ -453,7 +475,7 @@ if __name__ == "__main__":
         if not app.get("enabled", True):
             continue
         app_name = app["app"]
-        print(f"Проект {app_name} - сбор данных")
+        print(f"[app] {app_name}")
         main(app_name)
 
     # Затем AI-обработка
@@ -466,16 +488,12 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"[ERROR] Ошибка запуска AI генерации: {e}")
 
-    # Только после этого отправляем всё в Strapi
-    for app in central_config["apps"]:
-        if not app.get("enabled", True):
-            continue
-        print(f"Проект {app['app']} - отправка в Strapi")
-        try:
-            api_strapi_path = os.path.join(ROOT_DIR, "core", "api_strapi.py")
-            spec = importlib.util.spec_from_file_location("api_strapi", api_strapi_path)
-            api_strapi = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(api_strapi)
-            api_strapi.sync_projects(os.path.join(ROOT_DIR, "config", "config.json"))
-        except Exception as e:
-            print(f"[ERROR] Ошибка запуска sync_projects: {e}")
+    # После всего отправляем в Strapi
+    try:
+        api_strapi_path = os.path.join(ROOT_DIR, "core", "api_strapi.py")
+        spec = importlib.util.spec_from_file_location("api_strapi", api_strapi_path)
+        api_strapi = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(api_strapi)
+        api_strapi.sync_projects(os.path.join(ROOT_DIR, "config", "config.json"))
+    except Exception as e:
+        print(f"[ERROR] Ошибка запуска sync_projects: {e}")
