@@ -38,6 +38,20 @@ def log_critical(msg):
     logging.critical(msg)
 
 
+# AI-лог: всегда только в ai.log
+def ai_log(msg):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(AI_LOG, "a", encoding="utf-8") as f:
+        f.write(f"{now} {msg}\n")
+
+
+# Strapi-лог: только в strapi.log
+def strapi_log(msg):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(STRAPI_LOG, "a", encoding="utf-8") as f:
+        f.write(f"{now} {msg}\n")
+
+
 # Очистка всех лог-файлов (по умолчанию — в LOGS_DIR)
 def clear_all_logs(logs_dir=LOGS_DIR):
     for fname in os.listdir(logs_dir):
