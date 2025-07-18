@@ -1,9 +1,5 @@
 {
   "name": "Celestia",
   "url": "https://celestia.org/",
-  "partners": [
-    "https://www.astria.org/",
-    "https://www.eclipse.xyz/",
-    "https://lightlink.io/"
-  ]
+  "partners": ["https://www.astria.org/", "https://www.eclipse.xyz/"]
 }

@@ -7,12 +7,6 @@ import requests
 AI_LOG = "logs/ai.log"
 
 
-def ai_log(msg):
-    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(AI_LOG, "a", encoding="utf-8") as f:
-        f.write(f"{now} {msg}\n")
-
-
 # Логирование
 def ai_log(msg):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -70,7 +64,7 @@ def call_openai_api(prompt, api_key, api_url, model):
         return ""
 
 
-# Сохраняет сгенерированный текст в contentMarkdown main.json
+# Сгенерированный текст в contentMarkdown main.json
 def enrich_main_json(json_path, content):
     if not os.path.exists(json_path):
         ai_log(f"[ERROR] main.json not found: {json_path}")
@@ -81,6 +75,20 @@ def enrich_main_json(json_path, content):
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     ai_log(f"[OK] contentMarkdown обновлён для {json_path}")
+    return True
+
+
+# Короткое описание в shortDescription main.json
+def enrich_short_description(json_path, short_desc):
+    if not os.path.exists(json_path):
+        ai_log(f"[ERROR] main.json не найден: {json_path}")
+        return False
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    data["shortDescription"] = short_desc.strip()
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    ai_log(f"[OK] shortDescription обновлен для {json_path}")
     return True
 
 
@@ -111,6 +119,26 @@ def process_all_projects():
             if data.get("contentMarkdown"):
                 ai_log(f"[SKIP] {app_name}/{domain}: contentMarkdown уже есть")
                 continue
+
+            # Генерируем короткое описание
+            if not data.get("shortDescription"):
+                short_ctx = {
+                    "name2": data.get("name", domain),
+                    "website2": data.get("socialLinks", {}).get("websiteURL", ""),
+                }
+                short_prompt = render_prompt(prompts["short_description"], short_ctx)
+                short_desc = call_openai_api(
+                    short_prompt,
+                    openai_cfg["api_key"],
+                    openai_cfg["api_url"],
+                    openai_cfg["model"],
+                )
+                if short_desc:
+                    enrich_short_description(json_path, short_desc)
+                else:
+                    ai_log(
+                        f"[FAIL] Не удалось сгенерировать shortDescription для {app_name}/{domain}"
+                    )
 
             # Генерируем основной обзор
             context1 = {

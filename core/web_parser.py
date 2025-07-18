@@ -20,8 +20,8 @@ SOCIAL_PATTERNS = {
 }
 
 
+# Приведем все ссылки к списку [(a.text, href)]
 def find_best_docs_link(soup, base_url):
-    # Приведем все ссылки к списку [(a.text, href)]
     candidates = []
     for a in soup.find_all("a", href=True):
         href = a["href"]
@@ -83,18 +83,18 @@ def extract_social_links(html, base_url):
     soup = BeautifulSoup(html, "html.parser")
     links = {k: "" for k in SOCIAL_PATTERNS if k != "documentURL"}
 
-    # Собираем все соц-ссылки (как и было)
+    # Собираем все соц-ссылки
     for a in soup.find_all("a", href=True):
         href = a["href"]
         for key, pattern in SOCIAL_PATTERNS.items():
             if key == "documentURL":
-                continue  # docs теперь отдельный этап
+                continue
             if pattern.search(href):
                 links[key] = href
 
-    links["websiteURL"] = base_url  # Всегда проставляем
+    links["websiteURL"] = base_url
 
-    # Теперь ищем документалку специальным методом
+    # Ищем док специальным методом
     document_url = find_best_docs_link(soup, base_url)
     if document_url:
         links["documentURL"] = document_url
