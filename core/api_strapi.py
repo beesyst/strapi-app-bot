@@ -19,6 +19,7 @@ def create_project(api_url, api_token, data):
             "shortDescription": data.get("shortDescription", ""),
             "socialLinks": data.get("socialLinks", {}),
             "contentMarkdown": markdown_to_html(data.get("contentMarkdown", "")),
+            "coinData": data.get("coinData", {}),
         }
     }
     headers = {

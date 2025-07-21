@@ -9,6 +9,11 @@ from bs4 import BeautifulSoup
 # Логирование в host.log
 from core.log_utils import log_info, log_warning
 
+# Глобальные сеты для защиты от повторного парсинга
+FETCHED_HTML_CACHE = {}
+PARSED_SOCIALS_CACHE = {}
+PARSED_INTERNALS_CACHE = {}
+
 # Регулярки для соцсетей
 SOCIAL_PATTERNS = {
     "twitterURL": re.compile(r"twitter\.com|x\.com", re.I),
@@ -29,29 +34,36 @@ SOCIAL_PATTERNS = {
 
 # Получение html по url (user-agent для обхода блокировок)
 def fetch_url_html(url):
+    if url in FETCHED_HTML_CACHE:
+        return FETCHED_HTML_CACHE[url]
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
         html = requests.get(url, headers=headers, timeout=10).text
+        FETCHED_HTML_CACHE[url] = html
         log_info(f"[web_parser] HTML успешно получен: {url}")
         return html
     except Exception as e:
         log_warning(f"[web_parser] Ошибка получения HTML {url}: {e}")
+        FETCHED_HTML_CACHE[url] = ""
         return ""
 
 
 # Поиск внутренних ссылок
 def get_internal_links(html, base_url, max_links=10):
+    if base_url in PARSED_INTERNALS_CACHE:
+        return PARSED_INTERNALS_CACHE[base_url]
     soup = BeautifulSoup(html, "html.parser")
     found = set()
     for a in soup.find_all("a", href=True):
         href = urljoin(base_url, a["href"])
-        # Только ссылки внутри этого сайта
         if href.startswith(base_url) and href not in found:
             found.add(href)
             if len(found) >= max_links:
                 break
-    log_info(f"[web_parser] Внутренние ссылки для {base_url}: {list(found)}")
-    return list(found)
+    links_list = list(found)
+    PARSED_INTERNALS_CACHE[base_url] = links_list
+    log_info(f"[web_parser] Внутренние ссылки для {base_url}: {links_list}")
+    return links_list
 
 
 # Нормализация ссылок (например, twitter.com → x.com)
@@ -166,9 +178,10 @@ def find_best_docs_link(soup, base_url):
 
 # Основная функция: вытащить соц.ссылки и docs из html
 def extract_social_links(html, base_url):
+    if base_url in PARSED_SOCIALS_CACHE:
+        return PARSED_SOCIALS_CACHE[base_url]
     soup = BeautifulSoup(html, "html.parser")
     links = {k: "" for k in SOCIAL_PATTERNS if k != "documentURL"}
-    # Находим все соцсети
     for a in soup.find_all("a", href=True):
         href = a["href"]
         for key, pattern in SOCIAL_PATTERNS.items():
@@ -177,11 +190,11 @@ def extract_social_links(html, base_url):
             if pattern.search(href):
                 links[key] = href
     links["websiteURL"] = base_url
-    # docs-ссылка отдельным методом
     document_url = find_best_docs_link(soup, base_url)
     if document_url:
         links["documentURL"] = document_url
     else:
         links["documentURL"] = ""
+    PARSED_SOCIALS_CACHE[base_url] = links
     log_info(f"[web_parser] Соцсети и docs для {base_url}: {links}")
     return links
