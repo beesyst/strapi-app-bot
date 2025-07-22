@@ -45,9 +45,9 @@ def run_orchestrator():
 
 
 if __name__ == "__main__":
-    print("[strapi-proj-bot] Go-go-go")
+    print("[start] Go-go-go")
     try:
         run_orchestrator()
-        print("[strapi-proj-bot] Success")
+        print("[finish] Success")
     except Exception as e:
         print(f"[strapi-proj-bot] Error: {e}")

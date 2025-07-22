@@ -117,7 +117,7 @@ def sync_projects(config_path, only_app=None):
                 strapi_log(f"[NO_IMAGE or NO_svgLogo]: {image_path}")
 
 
-# Функция для синхронизации с выводом статусов в терминал (для orchestrator)
+# Функция для синхронизации с Strapi без вывода в терминал
 def sync_projects_with_terminal_status(config_path):
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
@@ -125,15 +125,12 @@ def sync_projects_with_terminal_status(config_path):
         if not app.get("enabled", True):
             continue
         app_name = app["app"]
-        print(f"[app] {app_name} start")
         api_url = app.get("api_url", "")
         api_token = app.get("api_token", "")
         if not api_url or not api_token:
-            print(f"[error] {app_name}: нет api_url или api_token")
             continue
         partners_path = os.path.join("config", "apps", f"{app_name}.json")
         if not os.path.exists(partners_path):
-            print(f"[error] {app_name}: нет partners config")
             continue
         with open(partners_path, "r", encoding="utf-8") as f2:
             partners_data = json.load(f2)
@@ -148,28 +145,16 @@ def sync_projects_with_terminal_status(config_path):
                 "storage", "apps", app_name, domain, f"{domain}.jpg"
             )
             if not os.path.exists(json_path):
-                print(f"[error] {app_name} - {partner}")
                 continue
             try:
                 with open(json_path, "r", encoding="utf-8") as f3:
                     data = json.load(f3)
                 project_id = create_project(api_url, api_token, data)
                 if project_id:
-                    logo_uploaded = True
                     if data.get("svgLogo") and os.path.exists(image_path):
-                        logo_result = upload_logo(
-                            api_url, api_token, project_id, image_path
-                        )
-                        logo_uploaded = logo_result is not None
-                    if logo_uploaded:
-                        print(f"[add] {app_name} - {partner}")
-                    else:
-                        print(f"[error] {app_name} - {partner} (logo upload failed)")
-                else:
-                    print(f"[error] {app_name} - {partner}")
-            except Exception as e:
-                print(f"[error] {app_name} - {partner}: {e}")
-        print(f"[app] {app_name} done")
+                        upload_logo(api_url, api_token, project_id, image_path)
+            except Exception:
+                continue
 
 
 if __name__ == "__main__":

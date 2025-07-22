@@ -25,6 +25,30 @@ async function main() {
 
         const result = await page.evaluate(() => {
             let links = [];
+            let name = "";
+
+            // Имя профиля (display name)
+            const nameEl =
+                document.querySelector('[data-testid="UserName"] span') ||
+                document.querySelector('h2[role="heading"] > div > span');
+            if (nameEl && nameEl.textContent) {
+                name = nameEl.textContent.trim();
+            }
+
+            // Если не нашли, fallback — из <title>
+            if (!name) {
+                const titleEl = document.querySelector('title');
+                if (titleEl && titleEl.textContent) {
+                    // Берем до первой скобки или " / "
+                    let t = titleEl.textContent.trim();
+                    let match = t.match(/^(.+?)\s*\(/) || t.match(/^(.+?)\s*\/\s/);
+                    if (match && match[1]) {
+                        name = match[1].trim();
+                    } else {
+                        name = t;
+                    }
+                }
+            }
 
             // BIO (https:// и "linktr.ee/xxx"-стайл)
             const bio = document.querySelector('[data-testid="UserDescription"]');
@@ -78,7 +102,8 @@ async function main() {
                 }
             }
 
-            return { links, avatar };
+            // Возвращаем ссылки, аватар и имя (name)
+            return { links, avatar, name };
         });
 
         // Выводим результат в stdout

@@ -125,6 +125,23 @@ def get_coin_id_best(name, website_url):
     return coin_id
 
 
+def enrich_with_coin_id(main_data):
+    from core.log_utils import log_info
+
+    name = main_data.get("name", "")
+    website_url = ""
+    if "socialLinks" in main_data:
+        website_url = main_data["socialLinks"].get("websiteURL", "")
+    coin_id = get_coin_id_best(name, website_url)
+    if coin_id:
+        main_data["coinData"] = {"coin": coin_id}
+        log_info(f"[coingecko] CoinGecko ID найден для {name}: {coin_id}")
+    else:
+        main_data["coinData"] = {"coin": ""}
+        log_info(f"[coingecko] CoinGecko ID не найден для {name}")
+    return main_data
+
+
 # Тестовый пример
 if __name__ == "__main__":
     print(get_coin_id_best("Eclipse", "https://www.eclipse.xyz/"))

@@ -1,5 +1,4 @@
 import asyncio
-import copy
 import json
 import os
 import threading
@@ -12,17 +11,10 @@ from core.api_ai import (
     load_openai_config,
     load_prompts,
 )
-from core.coingecko_parser import get_coin_id_best
 from core.log_utils import log_critical, log_info, log_warning
-
-# Выносим get_links_from_x_profile в web_parser
 from core.web_parser import (
-    extract_social_links,
-    fetch_url_html,
+    collect_all_socials,
     get_domain_name,
-    get_internal_links,
-    get_links_from_x_profile,
-    normalize_socials,
 )
 
 TEMPLATE_PATH = "templates/main_template.json"
@@ -33,17 +25,20 @@ STORAGE_DIR = "storage/apps"
 spinner_frames = ["/", "-", "\\", "|"]
 
 
+# Загрузка шаблона main.json
 def load_main_template():
     with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
+# Создает папку проекта если ее нет
 def create_project_folder(app_name, domain):
     storage_path = os.path.join(STORAGE_DIR, app_name, domain)
     os.makedirs(storage_path, exist_ok=True)
     return storage_path
 
 
+# Сохраняет main.json
 def save_main_json(storage_path, data):
     json_path = os.path.join(storage_path, "main.json")
     with open(json_path, "w", encoding="utf-8") as f:
@@ -52,6 +47,7 @@ def save_main_json(storage_path, data):
     return json_path
 
 
+# Сравнивает новый и старый main.json
 def compare_main_json(json_path, new_data):
     if not os.path.exists(json_path):
         return "add"
@@ -67,6 +63,7 @@ def compare_main_json(json_path, new_data):
         return "add"
 
 
+# Крутит спиннер, пока stop_event не set
 def spinner_task(text, stop_event):
     idx = 0
     while not stop_event.is_set():
@@ -77,102 +74,15 @@ def spinner_task(text, stop_event):
     print("\r" + " " * (len(text) + 10) + "\r", end="", flush=True)
 
 
-# Сбор данных по проекту (только orchestration, все парсинг-функции - импорт)
-async def collect_project_data(app_name, domain, url, main_template, executor):
-    def sync_collect():
-        storage_path = create_project_folder(app_name, domain)
-        main_data = copy.deepcopy(main_template)
-        found_socials = {}
-        log_info(f"Переходим по ссылке: {url}")
-
-        # Основная страница
-        html = fetch_url_html(url)
-        socials = extract_social_links(html, url)
-        found_socials.update({k: v for k, v in socials.items() if v})
-        log_info(f"Найдено соцсетей: {json.dumps(socials, ensure_ascii=False)}")
-
-        # Внутренние ссылки
-        internal_links = get_internal_links(html, url, max_links=10)
-        log_info(f"Внутренние ссылки: {internal_links}")
-        for link in internal_links:
-            try:
-                page_html = fetch_url_html(link)
-                page_socials = extract_social_links(page_html, link)
-                for k, v in page_socials.items():
-                    if v and not found_socials.get(k):
-                        found_socials[k] = v
-            except Exception as e:
-                log_warning(f"Ошибка парсинга {link}: {e}")
-
-        found_socials = normalize_socials(found_socials)
-
-        # Docs
-        if found_socials.get("documentURL"):
-            docs_url = found_socials["documentURL"]
-            log_info(f"Переход на docs: {docs_url}")
-            try:
-                docs_html = fetch_url_html(docs_url)
-                docs_socials = extract_social_links(docs_html, docs_url)
-                log_info(
-                    f"Docs соцсети: {json.dumps(docs_socials, ensure_ascii=False)}"
-                )
-                for k, v in docs_socials.items():
-                    if v and not found_socials.get(k):
-                        found_socials[k] = v
-            except Exception as e:
-                log_warning(f"Ошибка docs: {e}")
-
-        # Twitter/X (Node.js parser)
-        if found_socials.get("twitterURL"):
-            twitter_result = get_links_from_x_profile(found_socials["twitterURL"])
-            bio_links = twitter_result.get("links", [])
-            avatar_url = twitter_result.get("avatar", "")
-            log_info(f"[twitter] Avatar url: {avatar_url}")
-            # Качаем аватар
-            if avatar_url:
-                logo_filename = f"{domain.lower()}.jpg"
-                avatar_path = os.path.join(storage_path, logo_filename)
-                try:
-                    import requests
-
-                    avatar_data = requests.get(avatar_url, timeout=10).content
-                    with open(avatar_path, "wb") as imgf:
-                        imgf.write(avatar_data)
-                    main_data["svgLogo"] = logo_filename
-                except Exception as e:
-                    log_warning(f"Ошибка скачивания аватара: {e}")
-            # bio-ссылки
-            for bio_url in bio_links:
-                for k in main_template["socialLinks"].keys():
-                    if k.endswith("URL") and not found_socials.get(k):
-                        if bio_url.lower().startswith(k.replace("URL", "").lower()):
-                            found_socials[k] = bio_url
-
-        # Собираем итоговые соц.сети
-        social_keys = list(main_template["socialLinks"].keys())
-        final_socials = {k: found_socials.get(k, "") for k in social_keys}
-        main_data["socialLinks"] = final_socials
-        main_data["name"] = domain.capitalize()
-
-        # CoinGecko: поиск и вставка coinId
-        coin_name = main_data.get("name") or domain.capitalize()
-        website_url = main_data["socialLinks"].get("websiteURL", "")
-        coin_id = get_coin_id_best(coin_name, website_url)
-        if coin_id:
-            main_data["coinData"] = {"coin": coin_id}
-            log_info(f"[coingecko] CoinGecko ID найден для {coin_name}: {coin_id}")
-        else:
-            # Не включаем coinData если не найден
-            main_data.pop("coinData", None)
-            log_info(f"[coingecko] CoinGecko ID не найден для {coin_name}")
-
-        return main_data, storage_path
-
+# Асинхронно обертка для enrich_with_coin_id (он блокирующий)
+async def enrich_coin_async(main_data, executor):
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, sync_collect)
+    from core.coingecko_parser import enrich_with_coin_id
+
+    return await loop.run_in_executor(executor, enrich_with_coin_id, main_data)
 
 
-# Парсим и AI для одного партнера
+# Асинхронно генерируем и сохраняем проект
 async def process_partner(
     app_name, domain, url, main_template, prompts, openai_cfg, executor
 ):
@@ -184,17 +94,11 @@ async def process_partner(
     spinner_thread.start()
     status = "error"
     try:
-        # Ограничение времени
-        try:
-            main_data, storage_path = await asyncio.wait_for(
-                collect_project_data(app_name, domain, url, main_template, executor),
-                timeout=120,
-            )
-        except asyncio.TimeoutError:
-            log_warning(f"[TIMEOUT] Превышено время на сбор {app_name} {url}, пропуск!")
-            status = "error"
-            return status
-
+        storage_path = create_project_folder(app_name, domain)
+        # Сбор соцсетей, docs, аватара
+        main_data, avatar_path = collect_all_socials(url, main_template, storage_path)
+        # CoinGecko enrichment
+        main_data = await enrich_coin_async(main_data, executor)
         main_json_path = os.path.join(storage_path, "main.json")
         status = compare_main_json(main_json_path, main_data)
         # AI генерация
@@ -225,7 +129,7 @@ async def process_partner(
     return status
 
 
-# Главный асинхронный пайплайн по всем проектам
+# Главный асинхронный пайплайн - проекты идут по очереди
 async def orchestrate_all():
     with open(CENTRAL_CONFIG_PATH, "r", encoding="utf-8") as f:
         central_config = json.load(f)
@@ -233,11 +137,11 @@ async def orchestrate_all():
     prompts = load_prompts()
     openai_cfg = load_openai_config()
     executor = ThreadPoolExecutor(max_workers=8)
-    tasks = []
     for app in central_config["apps"]:
         if not app.get("enabled", True):
             continue
         app_name = app["app"]
+        print(f"[app] {app_name} start")
         app_config_path = os.path.join(APPS_CONFIG_DIR, f"{app_name}.json")
         if not os.path.exists(app_config_path):
             log_warning(f"Config for app {app_name} not found, skipping")
@@ -246,21 +150,31 @@ async def orchestrate_all():
             app_config = json.load(f)
         for url in app_config["partners"]:
             domain = get_domain_name(url)
-            tasks.append(
-                process_partner(
-                    app_name, domain, url, main_template, prompts, openai_cfg, executor
-                )
+            start_time = time.time()
+            status = await process_partner(
+                app_name, domain, url, main_template, prompts, openai_cfg, executor
             )
-    await asyncio.gather(*tasks)
+            elapsed = int(time.time() - start_time)
+            # Финальный вывод статуса
+            if status == "add":
+                print(f"[add] {app_name} - {url} - {elapsed} sec")
+            elif status == "update":
+                print(f"[update] {app_name} - {url} - {elapsed} sec")
+            elif status == "skip":
+                print(f"[skip] {app_name} - {url} - {elapsed} sec")
+            else:
+                print(f"[error] {app_name} - {url} - {elapsed} sec")
+        print(f"[app] {app_name} done")
 
 
-# Синхронизация с Strapi и терминальный вывод статусов
+# Синхронизация с Strapi
 def sync_projects_with_terminal_status(config_path):
     from core.api_strapi import sync_projects_with_terminal_status as strapi_sync
 
     strapi_sync(config_path)
 
 
+# Главная точка запуска пайплайна
 def run_pipeline():
     asyncio.run(orchestrate_all())
     sync_projects_with_terminal_status(
