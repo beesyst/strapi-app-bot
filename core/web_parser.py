@@ -33,10 +33,12 @@ SOCIAL_PATTERNS = {
 }
 
 
+# Очистка имени проекта (убирает мусор и скобки)
 def clean_project_name(name):
     name = re.sub(r"\s*[\(\[\{].*?[\)\]\}]", "", name)
     name = re.sub(r"[^A-Za-zА-Яа-я0-9\- ]", "", name)
     name = re.sub(r"\s+", " ", name)
+    name = name.strip(" ,.")
     return name.strip()
 
 
@@ -56,7 +58,7 @@ def fetch_url_html(url):
         return ""
 
 
-# Поиск внутренних ссылок
+# Поиск внутренних ссылок (до max_links)
 def get_internal_links(html, base_url, max_links=10):
     if base_url in PARSED_INTERNALS_CACHE:
         return PARSED_INTERNALS_CACHE[base_url]
@@ -117,7 +119,7 @@ def get_links_from_x_profile(profile_url):
         return {"links": [], "avatar": "", "name": ""}
 
 
-# Helper для безопасной загрузки json
+# Безопасная загрузка JSON
 def safe_json_loads(data):
     import json
 
@@ -128,7 +130,7 @@ def safe_json_loads(data):
         return {}
 
 
-# Вспомогательная: поиск лучшей docs-ссылки на странице
+# Поиск лучшей docs-ссылки на странице
 def find_best_docs_link(soup, base_url):
     candidates = []
     for a in soup.find_all("a", href=True):
@@ -184,18 +186,16 @@ def find_best_docs_link(soup, base_url):
             ):
                 doc_url = href
                 break
-
     if doc_url:
         # log only once per docs_url
         if doc_url not in PARSED_DOCS_LINKS_LOGGED:
             log_info(f"[web_parser] Лучшая docs-ссылка найдена: {doc_url}")
             PARSED_DOCS_LINKS_LOGGED.add(doc_url)
         return doc_url
-
     return ""
 
 
-# Основная функция: вытащить соц.ссылки и docs из html
+# Вытащить соц.ссылки и docs из html
 def extract_social_links(html, base_url, is_main_page=False):
     if base_url in PARSED_SOCIALS_CACHE:
         return PARSED_SOCIALS_CACHE[base_url]
@@ -220,13 +220,81 @@ def extract_social_links(html, base_url, is_main_page=False):
     return links
 
 
-# Сбор всех соцсетей, docs и названия проекта
+# Только соцсети/docs/имя (без аватара) - для async сбора
+def collect_social_links_main(url, main_template, storage_path=None):
+
+    found_socials = {}
+    html = fetch_url_html(url)
+    socials = extract_social_links(html, url, is_main_page=True)
+    found_socials.update({k: v for k, v in socials.items() if v})
+
+    internal_links = get_internal_links(html, url, max_links=10)
+    for link in internal_links:
+        try:
+            page_html = fetch_url_html(link)
+            page_socials = extract_social_links(page_html, link)
+            for k, v in page_socials.items():
+                if v and not found_socials.get(k):
+                    found_socials[k] = v
+        except Exception as e:
+            log_warning(f"[web_parser] Ошибка парсинга {link}: {e}")
+
+    found_socials = normalize_socials(found_socials)
+    if found_socials.get("documentURL"):
+        docs_url = found_socials["documentURL"]
+        try:
+            docs_html = fetch_url_html(docs_url)
+            docs_socials = extract_social_links(docs_html, docs_url)
+            for k, v in docs_socials.items():
+                if v and not found_socials.get(k):
+                    found_socials[k] = v
+        except Exception as e:
+            log_warning(f"[web_parser] Ошибка docs: {e}")
+
+    # Имя проекта: twitter даст имя позже, если есть, иначе <title>
+    project_name = ""
+    if not found_socials.get("twitterURL"):
+        soup = BeautifulSoup(html, "html.parser")
+        title = soup.title.string.strip() if soup.title and soup.title.string else ""
+        m = re.match(r"^(.+?)\s*[\(/]", title)
+        if m and m.group(1):
+            project_name = m.group(1).strip()
+        elif title:
+            project_name = title
+        else:
+            project_name = get_domain_name(url).capitalize()
+    clean_name = clean_project_name(project_name)
+    if not clean_name:
+        clean_name = get_domain_name(url).capitalize()
+    return found_socials, clean_name
+
+
+# Получить аватар и имя из твиттера (sync)
+def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name):
+    twitter_result = get_links_from_x_profile(twitter_url)
+    avatar_url = twitter_result.get("avatar", "")
+    raw_name = twitter_result.get("name", "") or base_name
+    name = clean_project_name(raw_name)
+    logo_filename = f"{name.lower().replace(' ', '')}.jpg"
+    avatar_path = ""
+    if avatar_url and storage_path:
+        avatar_path = os.path.join(storage_path, logo_filename)
+        try:
+            avatar_data = requests.get(avatar_url, timeout=10).content
+            with open(avatar_path, "wb") as imgf:
+                imgf.write(avatar_data)
+            return logo_filename, name
+        except Exception as e:
+            log_warning(f"[web_parser] Ошибка скачивания аватара: {e}")
+    return "", name
+
+
+# Сбор всех соцсетей + docs + имя + аватар
 def collect_all_socials(url, main_template, storage_path=None, max_internal_links=10):
     import copy
 
     main_data = copy.deepcopy(main_template)
     found_socials = {}
-
     html = fetch_url_html(url)
     socials = extract_social_links(html, url, is_main_page=True)
     found_socials.update({k: v for k, v in socials.items() if v})
@@ -243,7 +311,6 @@ def collect_all_socials(url, main_template, storage_path=None, max_internal_link
             log_warning(f"[web_parser] Ошибка парсинга {link}: {e}")
 
     found_socials = normalize_socials(found_socials)
-
     if found_socials.get("documentURL"):
         docs_url = found_socials["documentURL"]
         try:
@@ -257,8 +324,8 @@ def collect_all_socials(url, main_template, storage_path=None, max_internal_link
 
     avatar_path = ""
     project_name = ""
-
-    # Извлекаем имя из твиттера ---
+    avatar_url = ""
+    # Извлекаем имя и аватар из твиттера, а также bio-ссылки
     if found_socials.get("twitterURL"):
         twitter_result = get_links_from_x_profile(found_socials["twitterURL"])
         bio_links = twitter_result.get("links", [])
@@ -272,20 +339,27 @@ def collect_all_socials(url, main_template, storage_path=None, max_internal_link
                     if bio_url.lower().startswith(k.replace("URL", "").lower()):
                         found_socials[k] = bio_url
 
-    # Fallback — <title> страницы
-    if not project_name:
+    # Проверка: плохое ли имя (короткое, X, мусор)
+    def is_bad_name(name):
+        name = (name or "").strip()
+        return not name or len(name) < 3 or name.lower() in {"x", "twitter", "profile"}
+
+    # Fallback - <title> страницы, если имя плохое
+    if is_bad_name(project_name):
         soup = BeautifulSoup(html, "html.parser")
         title = soup.title.string.strip() if soup.title and soup.title.string else ""
         m = re.match(r"^(.+?)\s*[\(/]", title)
-        if m and m.group(1):
+        if m and m.group(1) and not is_bad_name(m.group(1)):
             project_name = m.group(1).strip()
-        elif title:
+        elif title and not is_bad_name(title):
             project_name = title
         else:
             project_name = get_domain_name(url).capitalize()
-
     # Очистка имени
     clean_name = clean_project_name(project_name)
+    if not clean_name:
+        clean_name = get_domain_name(url).capitalize()
+    log_info(f"[web_parser] Итоговое имя проекта: '{clean_name}'")
 
     # Формируем svgLogo из чистого имени
     logo_filename = f"{clean_name.lower().replace(' ', '')}.jpg"
@@ -300,13 +374,13 @@ def collect_all_socials(url, main_template, storage_path=None, max_internal_link
             log_warning(f"[web_parser] Ошибка скачивания аватара: {e}")
     else:
         main_data["svgLogo"] = logo_filename
-
+    log_info(
+        f"[web_parser] Итоговый svgLogo: {main_data['svgLogo']} (avatar_url: {avatar_url})"
+    )
     # Собираем итоговые соцсети
     social_keys = list(main_template["socialLinks"].keys())
     final_socials = {k: found_socials.get(k, "") for k in social_keys}
     main_data["socialLinks"] = final_socials
-
     # Имя только чистое
     main_data["name"] = clean_name
-
     return main_data, avatar_path

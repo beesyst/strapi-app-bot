@@ -59,7 +59,7 @@ def clear_all_logs(logs_dir=LOGS_DIR):
         if os.path.isfile(fpath) and fname.endswith(".log"):
             with open(fpath, "w", encoding="utf-8") as f:
                 f.write(
-                    f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} [INFO] Log file cleared\n"
+                    f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} [INFO] - Log file cleared\n"
                 )
 
 

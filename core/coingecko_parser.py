@@ -1,5 +1,3 @@
-# core/coingecko_parser.py
-
 import time
 
 import requests
@@ -8,7 +6,7 @@ from core.log_utils import log_info, log_warning
 COINGECKO_API_BASE = "https://api.coingecko.com/api/v3"
 
 
-# Быстрый поиск coin id на Coingecko по названию или тикеру.
+# Быстрый поиск coin id на Coingecko по названию или тикеру
 def search_coin_id(query, retries=3):
     for attempt in range(retries):
         try:

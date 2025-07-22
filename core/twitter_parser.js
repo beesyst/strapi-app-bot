@@ -1,4 +1,3 @@
-// core/twitter_parser.js
 const { chromium } = require('playwright');
 const { newInjectedContext } = require('fingerprint-injector');
 

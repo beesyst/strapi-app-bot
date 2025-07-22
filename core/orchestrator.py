@@ -12,9 +12,11 @@ from core.api_ai import (
     load_prompts,
 )
 from core.api_strapi import sync_projects_with_terminal_status as strapi_sync
+from core.coingecko_parser import enrich_with_coin_id
 from core.log_utils import log_critical, log_info, log_warning
 from core.web_parser import (
-    collect_all_socials,
+    collect_social_links_main,
+    fetch_twitter_avatar_and_name,
     get_domain_name,
 )
 
@@ -75,15 +77,7 @@ def spinner_task(text, stop_event):
     print("\r" + " " * (len(text) + 10) + "\r", end="", flush=True)
 
 
-# Асинхронное обогащение main_data CoinGecko coin_id
-async def enrich_coin_async(main_data, executor):
-    loop = asyncio.get_event_loop()
-    from core.coingecko_parser import enrich_with_coin_id
-
-    return await loop.run_in_executor(executor, enrich_with_coin_id, main_data)
-
-
-# Асинхронный сбор и генерация по одному партнеру
+# Асинхронный процесс для одного партнера (SOCIALS, TWITTER, COINGECKO, AI — всё параллельно)
 async def process_partner(
     app_name, domain, url, main_template, prompts, openai_cfg, executor
 ):
@@ -96,56 +90,84 @@ async def process_partner(
     status = "error"
     try:
         storage_path = create_project_folder(app_name, domain)
-        log_info(f"START COLLECT {app_name} - {url}")
 
-        # Сбор соцсетей
-        collect_socials_future = asyncio.get_event_loop().run_in_executor(
-            executor, collect_all_socials, url, main_template, storage_path
+        log_info(f"Старт создания main.json - {app_name} - {url}")
+        log_info(f"Сбор соц линков - {app_name} - {url}")
+        log_info(f"ИИ-генерация - {app_name} - {url}")
+        log_info(f"Поиск API ID в Coingecko - {app_name} - {url}")
+
+        loop = asyncio.get_event_loop()
+        # Сбор соц. линков (sync, executor)
+        socials_future = loop.run_in_executor(
+            executor, collect_social_links_main, url, main_template, storage_path
         )
-        # Промпты для ИИ
-        ai_prompts_future = asyncio.get_event_loop().run_in_executor(
-            executor, lambda: prompts
+        # AI и CoinGecko (async)
+        main_data_for_ai = dict(main_template)
+        main_data_for_ai["name"] = domain.capitalize()
+        main_data_for_ai["socialLinks"]["websiteURL"] = url
+
+        ai_short_future = asyncio.create_task(
+            ai_generate_short_desc(main_data_for_ai, prompts, openai_cfg, executor)
+        )
+        ai_content_future = asyncio.create_task(
+            ai_generate_content_markdown(
+                main_data_for_ai, app_name, domain, prompts, openai_cfg, executor
+            )
+        )
+        coin_future = asyncio.create_task(enrich_coin_async(main_data_for_ai, executor))
+
+        # Получаем соцлинки и clean_name
+        found_socials, clean_name = await socials_future
+
+        # Если есть twitter - сразу парсим аватар/имя параллельно (async executor)
+        if found_socials.get("twitterURL"):
+            twitter_future = loop.run_in_executor(
+                executor,
+                fetch_twitter_avatar_and_name,
+                found_socials["twitterURL"],
+                storage_path,
+                clean_name,
+            )
+        else:
+            twitter_future = None
+
+        # Собираем остальные результаты параллельно
+        coin_result, short_desc, content_md = await asyncio.gather(
+            coin_future, ai_short_future, ai_content_future
         )
 
-        # Ждем сбора соцсетей
-        main_data, avatar_path = await collect_socials_future
-        log_info(f"COLLECTED SOCIALS for {app_name} - {url}")
+        # Если был twitter - ждем результат
+        if twitter_future:
+            logo_filename, real_name = await twitter_future
+        else:
+            logo_filename, real_name = None, None
 
-        # Параллельно ищем coinId и готовим ИИ генерацию
-        coin_future = enrich_coin_async(main_data, executor)
-        ai_prompts = await ai_prompts_future
-
-        main_data = await coin_future
-        log_info(f"COINGECKO ENRICHED for {app_name} - {url}")
+        # Формируем main_data
+        social_keys = list(main_template["socialLinks"].keys())
+        final_socials = {k: found_socials.get(k, "") for k in social_keys}
+        main_data = dict(main_template)
+        main_data["socialLinks"] = final_socials
+        main_data["name"] = (
+            real_name if real_name and len(real_name) > 2 else clean_name
+        )
+        main_data["svgLogo"] = (
+            logo_filename or f"{clean_name.lower().replace(' ', '')}.jpg"
+        )
+        if coin_result and "coinData" in coin_result:
+            main_data["coinData"] = coin_result["coinData"]
+        if short_desc:
+            main_data["shortDescription"] = short_desc.strip()
+        if content_md:
+            main_data["contentMarkdown"] = content_md.strip()
 
         main_json_path = os.path.join(storage_path, "main.json")
         status = compare_main_json(main_json_path, main_data)
-        # Генерим AI только если add/update
         if status in ("add", "update"):
-            log_info(f"AI GENERATION started for {app_name} - {url}")
-
-            # AI генерация short и content параллельно
-            ai_short_task = asyncio.create_task(
-                ai_generate_short_desc(main_data, ai_prompts, openai_cfg, executor)
-            )
-            ai_content_task = asyncio.create_task(
-                ai_generate_content_markdown(
-                    main_data, app_name, domain, ai_prompts, openai_cfg, executor
-                )
-            )
-            short_desc, content_md = await asyncio.gather(
-                ai_short_task, ai_content_task
-            )
-            if short_desc:
-                main_data["shortDescription"] = short_desc.strip()
-            if content_md:
-                main_data["contentMarkdown"] = content_md.strip()
             save_main_json(storage_path, main_data)
-            log_info(f"AI GENERATED and SAVED for {app_name} - {url}")
+            log_info(f"ГОТОВО - {app_name} - {url}")
         else:
-            log_info(f"SKIP AI GENERATION for {app_name} - {url}")
+            log_info(f"[SKIP] - {app_name} - {url}")
 
-        log_info(f"{status.upper()} {app_name} - {url}")
     except Exception as e:
         log_critical(f"Ошибка обработки {url}: {e}")
         status = "error"
@@ -155,7 +177,13 @@ async def process_partner(
     return status
 
 
-# Асинхронный запуск всех задач по проектам
+# Асинхронный CoinGecko enrichment
+async def enrich_coin_async(main_data, executor):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, enrich_with_coin_id, main_data)
+
+
+# Асинхронный запуск по всем проектам
 async def orchestrate_all():
     with open(CENTRAL_CONFIG_PATH, "r", encoding="utf-8") as f:
         central_config = json.load(f)
@@ -177,7 +205,6 @@ async def orchestrate_all():
         for url in app_config["partners"]:
             domain = get_domain_name(url)
             start_time = time.time()
-            # На каждый проект лимит по времени (например 120 сек)
             try:
                 status = await asyncio.wait_for(
                     process_partner(
@@ -197,7 +224,6 @@ async def orchestrate_all():
                     f"[TIMEOUT] Превышено время на сбор {app_name} {url}, пропуск!"
                 )
             elapsed = int(time.time() - start_time)
-            # Финальный вывод статуса
             if status == "add":
                 print(f"[add] {app_name} - {url} - {elapsed} sec")
             elif status == "update":
@@ -207,7 +233,6 @@ async def orchestrate_all():
             else:
                 print(f"[error] {app_name} - {url} - {elapsed} sec")
 
-            # Строго один вызов Strapi на add/update
             if status in ("add", "update"):
                 strapi_sync(
                     os.path.join(
@@ -219,7 +244,7 @@ async def orchestrate_all():
         print(f"[app] {app_name} done")
 
 
-# Точка входа: запускает пайплайн
+# Точка входа: запуск пайплайна
 def run_pipeline():
     asyncio.run(orchestrate_all())
 
