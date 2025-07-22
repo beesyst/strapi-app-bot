@@ -91,10 +91,10 @@ async def process_partner(
     try:
         storage_path = create_project_folder(app_name, domain)
 
-        log_info(f"Старт создания main.json - {app_name} - {url}")
-        log_info(f"Сбор соц линков - {app_name} - {url}")
-        log_info(f"ИИ-генерация - {app_name} - {url}")
-        log_info(f"Поиск API ID в Coingecko - {app_name} - {url}")
+        log_info(f"[orchestrator] Создание main.json - {app_name} - {url}")
+        log_info(f"[web_parser] Сбор соц линков - {app_name} - {url}")
+        log_info(f"[ai] ИИ-генерация - {app_name} - {url}")
+        log_info(f"[coingecko_parser] Поиск API ID в Coingecko - {app_name} - {url}")
 
         loop = asyncio.get_event_loop()
         # Сбор соц. линков (sync, executor)
@@ -164,7 +164,7 @@ async def process_partner(
         status = compare_main_json(main_json_path, main_data)
         if status in ("add", "update"):
             save_main_json(storage_path, main_data)
-            log_info(f"ГОТОВО - {app_name} - {url}")
+            log_info(f"[orchestrator] Готово - {app_name} - {url}")
         else:
             log_info(f"[SKIP] - {app_name} - {url}")
 

@@ -283,9 +283,11 @@ def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name):
             avatar_data = requests.get(avatar_url, timeout=10).content
             with open(avatar_path, "wb") as imgf:
                 imgf.write(avatar_data)
+            log_info(f"[web_parser] Скачан: {avatar_url} → {avatar_path}")
             return logo_filename, name
         except Exception as e:
             log_warning(f"[web_parser] Ошибка скачивания аватара: {e}")
+            return "", name
     return "", name
 
 
