@@ -50,35 +50,39 @@
 
 ### Структура проекта
 
+```
 strapi-proj-bot/
 ├── config/
 │   ├── apps/
-│   │   └── {project}.json
-│   └── config.json
+│   │   └── {project}.json         # Конфиг отдельного приложения
+│   ├── config.json                # Центральная конфигурация (все проекты, параметры)
+│   └── start.py                   # Главный скрипт пайплайна (точка входа)
 ├── core/
-│   ├── api_ai.py               # Интеграция с AI
-│   ├── api_strapi.py           # Интеграция с API Strapi
-│   ├── browser_fetch.js        # Парсер сайтов через браузер
-│   ├── install.py              # Автоустановка зависимостей
-│   ├── log_utils.py            # Логирование
-│   ├── orchestrator.py         # Оркестрация (main async pipeline)
-│   ├── twitter_parser.js       # Парсер X профилей (Node)
-│   └── web_parser.py           # Парсинг и нормализация ссылок
+│   ├── api_ai.py                  # Интеграция с AI
+│   ├── api_strapi.py              # Интеграция с API Strapi
+│   ├── browser_fetch.js           # Парсер сайтов через браузер
+│   ├── install.py                 # Скрипт автоустановки зависимостей
+│   ├── log_utils.py               # Логирование
+│   ├── orchestrator.py            # Оркестрация (main async pipeline)
+│   ├── package.json               # Зависимости парсеров (Node)
+│   ├── package-lock.json          # Лок-файл зависимостей
+│   ├── twitter_parser.js          # Парсер X профилей (Node)
+│   └── web_parser.py              # Модуль парсинга ссылок
 ├── logs/
-│   ├── ai.log                  # Лог AI
-│   ├── host.log                # Хостовой лог пайплайна
-│   ├── setup.log               # Лог установки зависимостей
-│   └── strapi.log              # Лог отправки в Strapi
+│   ├── ai.log                     # Лог AI
+│   ├── host.log                   # Хостовой лог пайплайна
+│   ├── setup.log                  # Лог установки зависимостей
+│   └── strapi.log                 # Лог отправки в Strapi
 ├── storage/
 │   └── apps/
 │       └── {project}/
-│           └── main.json       # Результаты парсинга по проекту
+│           └── main.json          # Результаты парсинга по проекту
 ├── templates/
-│   └── main_template.json      # Шаблон структуры main.json
-├── requirements.txt            # Python зависимости
-├── README.md                   # Документация
-├── start.py                    # Главный скрипт пайплайна
-└── start.sh                    # Bash-скрипт быстрого запуска пайплайна
+│   └── main_template.json         # Шаблон структуры main.json
+├── requirements.txt               # Python зависимости
+├── README.md                      # Документация
+└── start.sh                       # Bash-скрипт быстрого запуска пайплайна
+```
 
 ## Pipeline: Как это работает?
 
