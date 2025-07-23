@@ -1,6 +1,7 @@
 import os
 import re
 import subprocess
+import time
 from urllib.parse import urljoin, urlparse
 
 import requests
@@ -31,6 +32,7 @@ SOCIAL_PATTERNS = {
     ),
     "documentURL": re.compile(r"docs\.", re.I),
 }
+BAD_NAMES = {"", "x", "profile", "new to x"}
 
 
 # Очистка имени проекта (убирает мусор и скобки)
@@ -259,10 +261,13 @@ def collect_social_links_main(url, main_template, storage_path=None):
         m = re.match(r"^(.+?)\s*[\(/]", title)
         if m and m.group(1):
             project_name = m.group(1).strip()
+            log_info(f"[web_parser] Имя проекта по <title> (pattern): '{project_name}'")
         elif title:
             project_name = title
+            log_info(f"[web_parser] Имя проекта по <title>: '{project_name}'")
         else:
             project_name = get_domain_name(url).capitalize()
+            log_info(f"[web_parser] Имя проекта по домену: '{project_name}'")
     clean_name = clean_project_name(project_name)
     if not clean_name:
         clean_name = get_domain_name(url).capitalize()
@@ -270,24 +275,54 @@ def collect_social_links_main(url, main_template, storage_path=None):
 
 
 # Получить аватар и имя из твиттера (sync)
-def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name):
-    twitter_result = get_links_from_x_profile(twitter_url)
-    avatar_url = twitter_result.get("avatar", "")
-    raw_name = twitter_result.get("name", "") or base_name
+def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retries=3):
+    twitter_result = None
+    avatar_url = ""
+    raw_name = ""
+    for attempt in range(max_retries):
+        twitter_result = get_links_from_x_profile(twitter_url)
+        avatar_url = twitter_result.get("avatar", "")
+        raw_name = twitter_result.get("name", "") or base_name
+        log_info(
+            f"[web_parser] twitter_parser.js вернул имя: '{raw_name}' (попытка {attempt+1})"
+        )
+        if (
+            not raw_name
+            or len(raw_name.strip()) < 3
+            or raw_name.strip().lower() in BAD_NAMES
+        ):
+            log_warning(
+                f"[web_parser] Имя из twitter_parser.js ('{raw_name}') невалидно, fallback на base_name ('{base_name}')"
+            )
+            raw_name = base_name
+        if avatar_url or attempt == max_retries - 1:
+            break
+        time.sleep(2)  # retry delay
+
     name = clean_project_name(raw_name)
+    if not name or len(name) < 3:
+        log_warning(
+            f"[web_parser] Имя после clean_project_name ('{name}') короткое, fallback на base_name ('{base_name}')"
+        )
+        name = clean_project_name(base_name)
+
     logo_filename = f"{name.lower().replace(' ', '')}.jpg"
     avatar_path = ""
     if avatar_url and storage_path:
-        avatar_path = os.path.join(storage_path, logo_filename)
-        try:
-            avatar_data = requests.get(avatar_url, timeout=10).content
-            with open(avatar_path, "wb") as imgf:
-                imgf.write(avatar_data)
-            log_info(f"[web_parser] Скачан: {avatar_url} → {avatar_path}")
-            return logo_filename, name
-        except Exception as e:
-            log_warning(f"[web_parser] Ошибка скачивания аватара: {e}")
-            return "", name
+        for attempt in range(max_retries):
+            try:
+                avatar_data = requests.get(avatar_url, timeout=10).content
+                avatar_path = os.path.join(storage_path, logo_filename)
+                with open(avatar_path, "wb") as imgf:
+                    imgf.write(avatar_data)
+                log_info(f"[web_parser] Скачан: {avatar_url} → {avatar_path}")
+                return logo_filename, name
+            except Exception as e:
+                log_warning(
+                    f"[web_parser] Ошибка скачивания аватара (попытка {attempt+1}): {e}"
+                )
+                time.sleep(1)
+        return "", name
     return "", name
 
 
@@ -344,7 +379,12 @@ def collect_all_socials(url, main_template, storage_path=None, max_internal_link
     # Проверка: плохое ли имя (короткое, X, мусор)
     def is_bad_name(name):
         name = (name or "").strip()
-        return not name or len(name) < 3 or name.lower() in {"x", "twitter", "profile"}
+        return (
+            not name
+            or len(name) < 3
+            or name.lower() in BAD_NAMES
+            or name.lower() == "twitter"
+        )
 
     # Fallback - <title> страницы, если имя плохое
     if is_bad_name(project_name):

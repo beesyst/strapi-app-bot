@@ -147,12 +147,9 @@ async def process_partner(
         final_socials = {k: found_socials.get(k, "") for k in social_keys}
         main_data = dict(main_template)
         main_data["socialLinks"] = final_socials
-        main_data["name"] = (
-            real_name if real_name and len(real_name) > 2 else clean_name
-        )
-        main_data["svgLogo"] = (
-            logo_filename or f"{clean_name.lower().replace(' ', '')}.jpg"
-        )
+        main_data["name"] = real_name
+        log_info(f"[orchestrator] Итоговое имя проекта: '{main_data['name']}'")
+        main_data["svgLogo"] = logo_filename
         if coin_result and "coinData" in coin_result:
             main_data["coinData"] = coin_result["coinData"]
         if short_desc:
