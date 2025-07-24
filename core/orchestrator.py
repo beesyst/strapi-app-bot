@@ -15,6 +15,14 @@ from core.api_strapi import create_project
 from core.coingecko_parser import enrich_with_coin_id
 from core.log_utils import log_critical, log_info, log_warning
 from core.seo_utils import build_seo_section
+from core.status import (
+    ADD,
+    ERROR,
+    SKIP,
+    UPDATE,
+    check_mainjson_status,
+    log_mainjson_status,
+)
 from core.web_parser import (
     collect_social_links_main,
     fetch_twitter_avatar_and_name,
@@ -51,22 +59,6 @@ def save_main_json(storage_path, data):
     return json_path
 
 
-# Сравнение main.json
-def compare_main_json(json_path, new_data):
-    if not os.path.exists(json_path):
-        return "add"
-    try:
-        with open(json_path, "r", encoding="utf-8") as f:
-            old_data = json.load(f)
-        if old_data != new_data:
-            return "update"
-        else:
-            return "skip"
-    except Exception as e:
-        log_warning(f"Ошибка сравнения main.json: {e}")
-        return "add"
-
-
 # Анимация спиннера для терминала
 def spinner_task(text, stop_event):
     idx = 0
@@ -78,7 +70,7 @@ def spinner_task(text, stop_event):
     print("\r" + " " * (len(text) + 10) + "\r", end="", flush=True)
 
 
-# Асинхронный процесс для одного партнера (SOCIALS, TWITTER, COINGECKO, AI — всё параллельно)
+# Асинхронный процесс для одного партнера
 async def process_partner(
     app_name, domain, url, main_template, prompts, openai_cfg, executor
 ):
@@ -88,7 +80,7 @@ async def process_partner(
         target=spinner_task, args=(spinner_text, stop_event)
     )
     spinner_thread.start()
-    status = "error"
+    status = ERROR
     try:
         storage_path = create_project_folder(app_name, domain)
 
@@ -160,17 +152,37 @@ async def process_partner(
         main_data["seo"] = await build_seo_section(
             main_data, prompts, openai_cfg, executor
         )
+
         main_json_path = os.path.join(storage_path, "main.json")
-        status = compare_main_json(main_json_path, main_data)
-        if status in ("add", "update"):
-            save_main_json(storage_path, main_data)
-            log_info(f"[orchestrator] Готово - {app_name} - {url}")
+
+        if not os.path.exists(main_json_path):
+            status = ADD
         else:
+            try:
+                with open(main_json_path, "r", encoding="utf-8") as f:
+                    old_data = json.load(f)
+                status = check_mainjson_status(old_data, main_data)
+            except Exception as e:
+                log_warning(f"Ошибка сравнения main.json: {e}")
+                status = ADD
+
+        # Логирование и сохранение статуса main.json
+        if status in (ADD, UPDATE):
+            save_main_json(storage_path, main_data)
+            log_mainjson_status(status, app_name, domain, url)
+            log_info(f"[orchestrator] Готово - {app_name} - {url}")
+        elif status == SKIP:
+            log_mainjson_status(status, app_name, domain, url)
             log_info(f"[SKIP] - {app_name} - {url}")
+        else:
+            log_mainjson_status(
+                ERROR, app_name, domain, url, error_msg="Неизвестный статус"
+            )
 
     except Exception as e:
         log_critical(f"Ошибка обработки {url}: {e}")
-        status = "error"
+        status = ERROR
+        log_mainjson_status(ERROR, app_name, domain, url, error_msg=str(e))
     finally:
         stop_event.set()
         spinner_thread.join()
@@ -219,14 +231,14 @@ async def orchestrate_all():
                     timeout=120,
                 )
             except asyncio.TimeoutError:
-                status = "error"
+                status = ERROR
                 log_warning(
                     f"[TIMEOUT] Превышено время на сбор {app_name} {url}, пропуск!"
                 )
             elapsed = int(time.time() - start_time)
 
-            # Отправляем в Strapi по add/update
-            if status in ("add", "update"):
+            # Отправляем в Strapi по add/update, иначе логируем
+            if status in (ADD, UPDATE):
                 json_path = os.path.join(STORAGE_DIR, app_name, domain, "main.json")
                 try:
                     with open(json_path, "r", encoding="utf-8") as fjson:
@@ -238,7 +250,7 @@ async def orchestrate_all():
                         if project_id:
                             print(f"[{status}] {app_name} - {url} - {elapsed} sec")
                         else:
-                            status = "error"
+                            status = ERROR
                             print(
                                 f"[error] {app_name} - {url} - {elapsed} sec [Strapi Create Failed]"
                             )
@@ -246,15 +258,15 @@ async def orchestrate_all():
                                 f"[STRAPI_ERROR] {app_name} {url}: project_id not returned"
                             )
                     else:
-                        status = "error"
+                        status = ERROR
                         print(f"[error] {app_name} - {url} - {elapsed} sec")
                 except Exception as e:
-                    status = "error"
+                    status = ERROR
                     print(f"[error] {app_name} - {url} - {elapsed} sec")
                     log_critical(f"[STRAPI_ERROR] {app_name} {url}: {e}")
-            elif status == "skip":
+            elif status == SKIP:
                 print(f"[skip] {app_name} - {url} - {elapsed} sec")
-            else:
+            else:  # ERROR
                 print(f"[error] {app_name} - {url} - {elapsed} sec")
 
         print(f"[app] {app_name} done")
