@@ -195,6 +195,28 @@ async def enrich_coin_async(main_data, executor):
     return await loop.run_in_executor(executor, enrich_with_coin_id, main_data)
 
 
+# Загрузка лого в Strapi
+def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
+    from core.log_utils import strapi_log
+
+    if main_data.get("svgLogo"):
+        image_path = os.path.join(storage_path, main_data["svgLogo"])
+        if os.path.exists(image_path):
+            from core.api_strapi import upload_logo
+
+            result = upload_logo(api_url, api_token, project_id, image_path)
+            if result:
+                strapi_log(f"[UPLOAD] {image_path} to project_id={project_id}: OK")
+            else:
+                strapi_log(f"[UPLOAD_FAIL] {image_path} to project_id={project_id}")
+            return result
+        else:
+            strapi_log(f"[NO_IMAGE_FILE] {image_path}")
+    else:
+        strapi_log(f"[NO_svgLogo_FIELD] for project_id={project_id}")
+    return None
+
+
 # Асинхронный запуск по всем проектам
 async def orchestrate_all():
     with open(CENTRAL_CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -237,9 +259,9 @@ async def orchestrate_all():
                 )
             elapsed = int(time.time() - start_time)
 
-            # Отправляем в Strapi по add/update, иначе логируем
             if status in (ADD, UPDATE):
-                json_path = os.path.join(STORAGE_DIR, app_name, domain, "main.json")
+                storage_path = os.path.join(STORAGE_DIR, app_name, domain)
+                json_path = os.path.join(storage_path, "main.json")
                 try:
                     with open(json_path, "r", encoding="utf-8") as fjson:
                         main_data = json.load(fjson)
@@ -249,6 +271,9 @@ async def orchestrate_all():
                         project_id = create_project(api_url, api_token, main_data)
                         if project_id:
                             print(f"[{status}] {app_name} - {url} - {elapsed} sec")
+                            try_upload_logo(
+                                main_data, storage_path, api_url, api_token, project_id
+                            )
                         else:
                             status = ERROR
                             print(

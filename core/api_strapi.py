@@ -59,7 +59,7 @@ def create_project(api_url, api_token, data, app_name=None, domain=None, url=Non
             "socialLinks": data.get("socialLinks", {}),
             "contentMarkdown": markdown_to_html(data.get("contentMarkdown", "")),
             "coinData": data.get("coinData", {}),
-            "seo": data.get("seo", {}),
+            "seo": data.get("seo") or {},
             "metaTitle": data.get("seo", {}).get("metaTitle", ""),
             "metaDescription": data.get("seo", {}).get("metaDescription", ""),
             "metaImage": data.get("seo", {}).get("metaImage", ""),
