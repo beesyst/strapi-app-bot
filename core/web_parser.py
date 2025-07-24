@@ -297,7 +297,7 @@ def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retr
             raw_name = base_name
         if avatar_url or attempt == max_retries - 1:
             break
-        time.sleep(2)  # retry delay
+        time.sleep(2)
 
     name = clean_project_name(raw_name)
     if not name or len(name) < 3:

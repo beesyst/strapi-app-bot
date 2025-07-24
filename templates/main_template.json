@@ -20,12 +20,12 @@
   "seo": {
     "metaTitle": "",
     "metaDescription": "",
-    "metaImage": "",
+    "metaImage": null,
     "metaSocial": [
       {
         "socialNetwork": "",
         "title": "",
-        "image": "",
+        "image": null,
         "description": ""
       }
     ],

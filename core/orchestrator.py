@@ -11,9 +11,10 @@ from core.api_ai import (
     load_openai_config,
     load_prompts,
 )
-from core.api_strapi import sync_projects_with_terminal_status as strapi_sync
+from core.api_strapi import create_project
 from core.coingecko_parser import enrich_with_coin_id
 from core.log_utils import log_critical, log_info, log_warning
+from core.seo_utils import build_seo_section
 from core.web_parser import (
     collect_social_links_main,
     fetch_twitter_avatar_and_name,
@@ -156,7 +157,9 @@ async def process_partner(
             main_data["shortDescription"] = short_desc.strip()
         if content_md:
             main_data["contentMarkdown"] = content_md.strip()
-
+        main_data["seo"] = await build_seo_section(
+            main_data, prompts, openai_cfg, executor
+        )
         main_json_path = os.path.join(storage_path, "main.json")
         status = compare_main_json(main_json_path, main_data)
         if status in ("add", "update"):
@@ -221,23 +224,39 @@ async def orchestrate_all():
                     f"[TIMEOUT] Превышено время на сбор {app_name} {url}, пропуск!"
                 )
             elapsed = int(time.time() - start_time)
-            if status == "add":
-                print(f"[add] {app_name} - {url} - {elapsed} sec")
-            elif status == "update":
-                print(f"[update] {app_name} - {url} - {elapsed} sec")
+
+            # Отправляем в Strapi по add/update
+            if status in ("add", "update"):
+                json_path = os.path.join(STORAGE_DIR, app_name, domain, "main.json")
+                try:
+                    with open(json_path, "r", encoding="utf-8") as fjson:
+                        main_data = json.load(fjson)
+                    api_url = app.get("api_url", "")
+                    api_token = app.get("api_token", "")
+                    if api_url and api_token:
+                        project_id = create_project(api_url, api_token, main_data)
+                        if project_id:
+                            print(f"[{status}] {app_name} - {url} - {elapsed} sec")
+                        else:
+                            status = "error"
+                            print(
+                                f"[error] {app_name} - {url} - {elapsed} sec [Strapi Create Failed]"
+                            )
+                            log_critical(
+                                f"[STRAPI_ERROR] {app_name} {url}: project_id not returned"
+                            )
+                    else:
+                        status = "error"
+                        print(f"[error] {app_name} - {url} - {elapsed} sec")
+                except Exception as e:
+                    status = "error"
+                    print(f"[error] {app_name} - {url} - {elapsed} sec")
+                    log_critical(f"[STRAPI_ERROR] {app_name} {url}: {e}")
             elif status == "skip":
                 print(f"[skip] {app_name} - {url} - {elapsed} sec")
             else:
                 print(f"[error] {app_name} - {url} - {elapsed} sec")
 
-            if status in ("add", "update"):
-                strapi_sync(
-                    os.path.join(
-                        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                        "config",
-                        "config.json",
-                    )
-                )
         print(f"[app] {app_name} done")
 
 

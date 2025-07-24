@@ -11,7 +11,7 @@ def markdown_to_html(md_text):
     return markdown.markdown(md_text, extensions=["extra"])
 
 
-# Создание проекта в Strapi, возвращает project_id если успешно
+# Создание проекта в Strapi
 def create_project(api_url, api_token, data):
     payload = {
         "data": {
@@ -20,6 +20,11 @@ def create_project(api_url, api_token, data):
             "socialLinks": data.get("socialLinks", {}),
             "contentMarkdown": markdown_to_html(data.get("contentMarkdown", "")),
             "coinData": data.get("coinData", {}),
+            "seo": data.get("seo", {}),
+            "metaTitle": data.get("seo", {}).get("metaTitle", ""),
+            "metaDescription": data.get("seo", {}).get("metaDescription", ""),
+            "metaImage": data.get("seo", {}).get("metaImage", ""),
+            "keywords": data.get("seo", {}).get("keywords", ""),
         }
     }
     headers = {
@@ -62,7 +67,7 @@ def upload_logo(api_url, api_token, project_id, image_path):
     return None
 
 
-# Основная функция синхронизации всех проектов (лог только в strapi.log, без терминала)
+# Основная функция синхронизации всех проектов
 def sync_projects(config_path, only_app=None):
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)

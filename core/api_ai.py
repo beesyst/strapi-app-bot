@@ -13,19 +13,34 @@ def load_openai_config(config_path="config/config.json"):
     return config["openai"]
 
 
-# Загрузка промптов
+# Загрузка промптов из файла
 def load_prompts(prompt_path="config/prompt.json"):
     with open(prompt_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-# Рендер промпта с контекстом (форматирование шаблона)
+# Рендер шаблона промпта с контекстом
 def render_prompt(template, context):
     return template.format(**context)
 
 
-# Запрос к OpenAI API
-def call_openai_api(prompt, api_key, api_url, model):
+# Универсальный вызов OpenAI API с полным конфигом
+def call_ai_with_config(prompt, openai_cfg):
+    return call_openai_api(
+        prompt,
+        openai_cfg["api_key"],
+        openai_cfg["api_url"],
+        openai_cfg["model"],
+        openai_cfg["system_prompt"],
+        openai_cfg["temperature"],
+        openai_cfg["max_tokens"],
+    )
+
+
+# Вызов OpenAI API
+def call_openai_api(
+    prompt, api_key, api_url, model, system_prompt, temperature, max_tokens
+):
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -33,11 +48,11 @@ def call_openai_api(prompt, api_key, api_url, model):
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": "Ты профессиональный крипто-журналист."},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
         ],
-        "temperature": 0.7,
-        "max_tokens": 2048,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
     }
     try:
         resp = requests.post(api_url, headers=headers, json=payload, timeout=60)
@@ -56,7 +71,7 @@ def call_openai_api(prompt, api_key, api_url, model):
     return ""
 
 
-# enrich_main_json: обновляет contentMarkdown в main.json
+# Обновляет contentMarkdown в main.json
 def enrich_main_json(json_path, content):
     if not os.path.exists(json_path):
         ai_log(f"[AI][ERROR] main.json not found: {json_path}")
@@ -70,7 +85,7 @@ def enrich_main_json(json_path, content):
     return True
 
 
-# enrich_short_description: обновляет shortDescription в main.json
+# Обновляет shortDescription в main.json
 def enrich_short_description(json_path, short_desc):
     if not os.path.exists(json_path):
         ai_log(f"[AI][ERROR] main.json не найден: {json_path}")
@@ -84,7 +99,7 @@ def enrich_short_description(json_path, short_desc):
     return True
 
 
-# Асинхронный генератор короткого описания для orchestrator
+# Асинхронно генерирует короткое описание для проекта (short_desc)
 async def ai_generate_short_desc(data, prompts, openai_cfg, executor):
     def sync_ai_short():
         short_ctx = {
@@ -92,18 +107,13 @@ async def ai_generate_short_desc(data, prompts, openai_cfg, executor):
             "website2": data.get("socialLinks", {}).get("websiteURL", ""),
         }
         short_prompt = render_prompt(prompts["short_description"], short_ctx)
-        return call_openai_api(
-            short_prompt,
-            openai_cfg["api_key"],
-            openai_cfg["api_url"],
-            openai_cfg["model"],
-        )
+        return call_ai_with_config(short_prompt, openai_cfg)
 
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, sync_ai_short)
 
 
-# Асинхронный генератор полного markdown-контента для orchestrator
+# Асинхронно генерирует полный markdown-контент проекта
 async def ai_generate_content_markdown(
     data, app_name, domain, prompts, openai_cfg, executor
 ):
@@ -113,12 +123,7 @@ async def ai_generate_content_markdown(
             "website": data.get("socialLinks", {}).get("websiteURL", ""),
         }
         prompt1 = render_prompt(prompts["review_full"], context1)
-        content1 = call_openai_api(
-            prompt1,
-            openai_cfg["api_key"],
-            openai_cfg["api_url"],
-            openai_cfg["model"],
-        )
+        content1 = call_ai_with_config(prompt1, openai_cfg)
         # Проверяем связь проектов
         main_app_config_path = os.path.join("config", "apps", f"{app_name}.json")
         if os.path.exists(main_app_config_path):
@@ -138,12 +143,7 @@ async def ai_generate_content_markdown(
                 "website2": context1["website"],
             }
             prompt2 = render_prompt(prompts["connection"], context2)
-            content2 = call_openai_api(
-                prompt2,
-                openai_cfg["api_key"],
-                openai_cfg["api_url"],
-                openai_cfg["model"],
-            )
+            content2 = call_ai_with_config(prompt2, openai_cfg)
         all_content = content1
         if content2:
             all_content = (
@@ -151,19 +151,36 @@ async def ai_generate_content_markdown(
             )
         context3 = {"connection_with": main_name if content2 else ""}
         prompt3 = render_prompt(prompts["finalize"], context3)
-        final_content = call_openai_api(
-            f"{all_content}\n\n{prompt3}",
-            openai_cfg["api_key"],
-            openai_cfg["api_url"],
-            openai_cfg["model"],
-        )
+        final_content = call_ai_with_config(f"{all_content}\n\n{prompt3}", openai_cfg)
         return final_content
 
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, sync_ai_content)
 
 
-# Основной (синхронный) пайплайн генерации для оффлайн-режима
+# Асинхронный генератор SEO-описания
+async def ai_generate_seo_desc(short_desc, prompts, openai_cfg, executor, max_len=50):
+    def sync_seo_desc():
+        context = {"short_desc": short_desc, "max_len": max_len}
+        prompt = render_prompt(prompts["seo_short"], context)
+        return call_ai_with_config(prompt, openai_cfg)
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, sync_seo_desc)
+
+
+# Асинхронный генератор SEO-ключевых слов
+async def ai_generate_keywords(content, prompts, openai_cfg, executor):
+    def sync_keywords():
+        context = {"content": content or ""}
+        prompt = render_prompt(prompts["seo_keywords"], context)
+        return call_ai_with_config(prompt, openai_cfg)
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, sync_keywords)
+
+
+# Синхронный генератор для оффлайн-режима
 def process_all_projects():
     openai_cfg = load_openai_config()
     prompts = load_prompts()
@@ -191,19 +208,14 @@ def process_all_projects():
                 ai_log(f"[AI][SKIP] {app_name}/{domain}: contentMarkdown уже есть")
                 continue
 
-            # Короткое описание (shortDescription)
+            # shortDescription
             if not data.get("shortDescription"):
                 short_ctx = {
                     "name2": data.get("name", domain),
                     "website2": data.get("socialLinks", {}).get("websiteURL", ""),
                 }
                 short_prompt = render_prompt(prompts["short_description"], short_ctx)
-                short_desc = call_openai_api(
-                    short_prompt,
-                    openai_cfg["api_key"],
-                    openai_cfg["api_url"],
-                    openai_cfg["model"],
-                )
+                short_desc = call_ai_with_config(short_prompt, openai_cfg)
                 if short_desc:
                     enrich_short_description(json_path, short_desc)
                 else:
@@ -217,12 +229,7 @@ def process_all_projects():
                 "website": data.get("socialLinks", {}).get("websiteURL", ""),
             }
             prompt1 = render_prompt(prompts["review_full"], context1)
-            content1 = call_openai_api(
-                prompt1,
-                openai_cfg["api_key"],
-                openai_cfg["api_url"],
-                openai_cfg["model"],
-            )
+            content1 = call_ai_with_config(prompt1, openai_cfg)
 
             # Связь с главным проектом (например, Celestia x Astria)
             main_app_config_path = os.path.join("config", "apps", f"{app_name}.json")
@@ -245,12 +252,7 @@ def process_all_projects():
                     "website2": context1["website"],
                 }
                 prompt2 = render_prompt(prompts["connection"], context2)
-                content2 = call_openai_api(
-                    prompt2,
-                    openai_cfg["api_key"],
-                    openai_cfg["api_url"],
-                    openai_cfg["model"],
-                )
+                content2 = call_ai_with_config(prompt2, openai_cfg)
 
             # Финализация и перевод
             all_content = content1
@@ -260,11 +262,8 @@ def process_all_projects():
                 )
             context3 = {"connection_with": main_name if content2 else ""}
             prompt3 = render_prompt(prompts["finalize"], context3)
-            final_content = call_openai_api(
-                f"{all_content}\n\n{prompt3}",
-                openai_cfg["api_key"],
-                openai_cfg["api_url"],
-                openai_cfg["model"],
+            final_content = call_ai_with_config(
+                f"{all_content}\n\n{prompt3}", openai_cfg
             )
 
             if final_content:
