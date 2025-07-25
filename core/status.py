@@ -13,12 +13,12 @@ STATUSES = {ADD, UPDATE, SKIP, ERROR}
 MAIN_FIELDS = ["name", "svgLogo", "socialLinks", "coinData"]
 
 
-# Текущее время
+# Получить текущее время
 def now():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-# Сравнение только по ключевым полям
+# Сравнение только по ключевым полям (main fields)
 def compare_main_fields(d1, d2):
     for k in MAIN_FIELDS:
         if d1.get(k) != d2.get(k):
@@ -26,7 +26,7 @@ def compare_main_fields(d1, d2):
     return True
 
 
-# Универсальный логгер для [status]
+# Логировать статус как info
 def log_status_info(status, app, domain, url, extra=""):
     msg = f"[{status}] {app} - {domain} - {url}"
     if extra:
@@ -34,7 +34,7 @@ def log_status_info(status, app, domain, url, extra=""):
     log_info(msg)
 
 
-# Для сбора/обновления main.json
+# Лог статуса main.json
 def log_mainjson_status(status, app, domain, url, error_msg=""):
     if status == ERROR:
         log_error(f"[error] {app} - {domain} - {url} [{error_msg}]")
@@ -44,7 +44,7 @@ def log_mainjson_status(status, app, domain, url, error_msg=""):
         log_error(f"[invalid_status] {status} for {app} - {domain} - {url}")
 
 
-# Для отправки/обновления в Strapi
+# Лог статуса Strapi
 def log_strapi_status(status, app, domain, url, error_msg=""):
     if status == ERROR:
         log_critical(f"[error] {app} - {domain} - {url} [{error_msg}]")
@@ -54,7 +54,7 @@ def log_strapi_status(status, app, domain, url, error_msg=""):
         log_error(f"[invalid_status] {status} for {app} - {domain} - {url}")
 
 
-# Проверка необходимости обновления main.json
+# Проверить необходимость обновления main.json
 def check_mainjson_status(old_data, new_data):
     if compare_main_fields(old_data, new_data):
         return SKIP
@@ -62,7 +62,7 @@ def check_mainjson_status(old_data, new_data):
         return UPDATE
 
 
-# Проверка необходимости обновления Strapi
+# Проверить необходимость обновления Strapi
 def check_strapi_status(main_data, strapi_data):
     if compare_main_fields(main_data, strapi_data):
         return SKIP
@@ -70,7 +70,7 @@ def check_strapi_status(main_data, strapi_data):
         return UPDATE
 
 
-# Проверка: все ли ключевые поля заполнены
+# Проверить заполненность ключевых полей
 def check_fields_filled(data, fields=None):
     fields = fields or MAIN_FIELDS
     for k in fields:
@@ -80,7 +80,7 @@ def check_fields_filled(data, fields=None):
     return True
 
 
-# Получить diff по основным полям
+# Получить список различий по ключевым полям
 def diff_main_fields(d1, d2):
     diffs = []
     for k in MAIN_FIELDS:

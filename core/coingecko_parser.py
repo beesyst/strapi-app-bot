@@ -1,7 +1,10 @@
+import logging
 import time
 
 import requests
-from core.log_utils import log_info, log_warning
+
+# Логгер
+logger = logging.getLogger("coingecko_parser")
 
 COINGECKO_API_BASE = "https://api.coingecko.com/api/v3"
 
@@ -10,7 +13,7 @@ COINGECKO_API_BASE = "https://api.coingecko.com/api/v3"
 def search_coin_id(query, retries=3):
     for attempt in range(retries):
         try:
-            log_info(f"[coingecko_parser] Поиск CoinGecko ID по имени/тикеру: {query}")
+            logger.info(f"Поиск CoinGecko ID по имени/тикеру: {query}")
             resp = requests.get(
                 f"{COINGECKO_API_BASE}/search",
                 params={"query": query},
@@ -18,13 +21,11 @@ def search_coin_id(query, retries=3):
                 headers={"User-Agent": "Mozilla/5.0"},
             )
             if resp.status_code == 429:
-                log_warning(
-                    "[coingecko_parser] search status: 429 (rate limit), жду 8 сек"
-                )
+                logger.warning("search status: 429 (rate limit), жду 8 сек")
                 time.sleep(8)
                 continue
             if resp.status_code != 200:
-                log_warning(f"[coingecko_parser] search status: {resp.status_code}")
+                logger.warning(f"search status: {resp.status_code}")
                 return ""
             data = resp.json()
             coins = data.get("coins", [])
@@ -34,17 +35,13 @@ def search_coin_id(query, retries=3):
             for coin in coins:
                 # Прямое совпадение по имени или символу
                 if coin["name"].lower() == query_l or coin["symbol"].lower() == query_l:
-                    log_info(
-                        f"[coingecko_parser] Найдено точное совпадение: {coin['id']}"
-                    )
+                    logger.info(f"Найдено точное совпадение: {coin['id']}")
                     return coin["id"]
             # Фоллбек: просто первый найденный
-            log_info(
-                f"[coingecko_parser] Используем первый найденный: {coins[0]['id']}"
-            )
+            logger.info(f"Используем первый найденный: {coins[0]['id']}")
             return coins[0]["id"]
         except Exception as e:
-            log_warning(f"[coingecko_parser] Ошибка поиска по имени: {e}")
+            logger.warning(f"Ошибка поиска по имени: {e}")
             time.sleep(3)
     return ""
 
@@ -53,7 +50,7 @@ def search_coin_id(query, retries=3):
 def search_coin_id_by_website(website_url, retries=3, max_coins=10):
     for attempt in range(retries):
         try:
-            log_info(f"[coingecko_parser] Медленный поиск по сайту: {website_url}")
+            logger.info(f"Медленный поиск по сайту: {website_url}")
             domain = (
                 website_url.lower()
                 .replace("https://", "")
@@ -66,22 +63,16 @@ def search_coin_id_by_website(website_url, retries=3, max_coins=10):
                 headers={"User-Agent": "Mozilla/5.0"},
             )
             if resp.status_code == 429:
-                log_warning(
-                    "[coingecko_parser] /coins/list status: 429 (rate limit), жду 8 сек"
-                )
+                logger.warning("/coins/list status: 429 (rate limit), жду 8 сек")
                 time.sleep(8)
                 continue
             if resp.status_code != 200:
-                log_warning(
-                    f"[coingecko_parser] /coins/list status: {resp.status_code}"
-                )
+                logger.warning(f"/coins/list status: {resp.status_code}")
                 return ""
             coins = resp.json()
             for idx, coin in enumerate(coins):
                 if idx >= max_coins:
-                    log_warning(
-                        f"[coingecko_parser] Достигнут лимит {max_coins} монет при fallback!"
-                    )
+                    logger.warning(f"Достигнут лимит {max_coins} монет при fallback!")
                     break
                 coin_id = coin["id"]
                 try:
@@ -91,9 +82,7 @@ def search_coin_id_by_website(website_url, retries=3, max_coins=10):
                         headers={"User-Agent": "Mozilla/5.0"},
                     )
                     if details.status_code == 429:
-                        log_warning(
-                            f"[coingecko_parser] /coins/{coin_id} status: 429, жду 8 сек"
-                        )
+                        logger.warning(f"/coins/{coin_id} status: 429, жду 8 сек")
                         time.sleep(8)
                         continue
                     if details.status_code != 200:
@@ -102,15 +91,15 @@ def search_coin_id_by_website(website_url, retries=3, max_coins=10):
                     homepage_list = details_json.get("links", {}).get("homepage", [])
                     for url in homepage_list:
                         if url and domain in url:
-                            log_info(f"[coingecko_parser] Найдено по домену: {coin_id}")
+                            logger.info(f"Найдено по домену: {coin_id}")
                             return coin_id
                 except Exception:
                     continue
-                time.sleep(0.2)  # чтобы не словить бан по API
-            log_info(f"[coingecko_parser] Монета по домену не найдена: {domain}")
+                time.sleep(0.2)
+            logger.info(f"Монета по домену не найдена: {domain}")
             return ""
         except Exception as e:
-            log_warning(f"[coingecko_parser] Ошибка поиска по сайту: {e}")
+            logger.warning(f"Ошибка поиска по сайту: {e}")
             time.sleep(3)
     return ""
 
@@ -123,9 +112,8 @@ def get_coin_id_best(name, website_url):
     return coin_id
 
 
+# Обогащает main_data CoinGecko ID, пишет в coinData
 def enrich_with_coin_id(main_data):
-    from core.log_utils import log_info
-
     name = main_data.get("name", "")
     website_url = ""
     if "socialLinks" in main_data:
@@ -133,10 +121,10 @@ def enrich_with_coin_id(main_data):
     coin_id = get_coin_id_best(name, website_url)
     if coin_id:
         main_data["coinData"] = {"coin": coin_id}
-        log_info(f"[coingecko] CoinGecko ID найден для {name}: {coin_id}")
+        logger.info(f"CoinGecko ID найден для {name}: {coin_id}")
     else:
         main_data["coinData"] = {"coin": ""}
-        log_info(f"[coingecko] CoinGecko ID не найден для {name}")
+        logger.info(f"CoinGecko ID не найден для {name}")
     return main_data
 
 

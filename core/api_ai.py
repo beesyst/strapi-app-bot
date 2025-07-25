@@ -64,17 +64,18 @@ def call_openai_api(
             return text
         else:
             ai_log(
-                f"[AI][ERROR] status: {resp.status_code}, response: {resp.text[:500]}"
+                f"[AI][ERROR] status: {resp.status_code}, response: {resp.text[:500]}",
+                level="error",
             )
     except Exception as e:
-        ai_log(f"[AI][EXCEPTION] {str(e)}")
+        ai_log(f"[AI][EXCEPTION] {str(e)}", level="error")
     return ""
 
 
 # Обновляет contentMarkdown в main.json
 def enrich_main_json(json_path, content):
     if not os.path.exists(json_path):
-        ai_log(f"[AI][ERROR] main.json not found: {json_path}")
+        ai_log(f"[AI][ERROR] main.json not found: {json_path}", level="error")
         return False
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -88,7 +89,7 @@ def enrich_main_json(json_path, content):
 # Обновляет shortDescription в main.json
 def enrich_short_description(json_path, short_desc):
     if not os.path.exists(json_path):
-        ai_log(f"[AI][ERROR] main.json не найден: {json_path}")
+        ai_log(f"[AI][ERROR] main.json не найден: {json_path}", level="error")
         return False
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -180,7 +181,7 @@ async def ai_generate_keywords(content, prompts, openai_cfg, executor):
     return await loop.run_in_executor(executor, sync_keywords)
 
 
-# Синхронный генератор для оффлайн-режима
+# Синхронный генератор для оффлайн-режима (batch обработка всех проектов)
 def process_all_projects():
     openai_cfg = load_openai_config()
     prompts = load_prompts()
@@ -220,7 +221,8 @@ def process_all_projects():
                     enrich_short_description(json_path, short_desc)
                 else:
                     ai_log(
-                        f"[AI][FAIL] Не удалось сгенерировать shortDescription для {app_name}/{domain}"
+                        f"[AI][FAIL] Не удалось сгенерировать shortDescription для {app_name}/{domain}",
+                        level="error",
                     )
 
             # Основной markdown-обзор
@@ -270,7 +272,8 @@ def process_all_projects():
                 enrich_main_json(json_path, final_content)
             else:
                 ai_log(
-                    f"[AI][FAIL] Не удалось сгенерировать финальный контент для {app_name}/{domain}"
+                    f"[AI][FAIL] Не удалось сгенерировать финальный контент для {app_name}/{domain}",
+                    level="error",
                 )
 
 

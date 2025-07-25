@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import threading
 import time
@@ -13,7 +14,7 @@ from core.api_ai import (
 )
 from core.api_strapi import create_project
 from core.coingecko_parser import enrich_with_coin_id
-from core.log_utils import log_critical, log_info, log_warning
+from core.log_utils import strapi_log  # Логирование для strapi.log
 from core.seo_utils import build_seo_section
 from core.status import (
     ADD,
@@ -36,6 +37,9 @@ STORAGE_DIR = "storage/apps"
 
 spinner_frames = ["/", "-", "\\", "|"]
 
+# Настройка логгера
+logger = logging.getLogger(__name__)
+
 
 # Загрузка шаблона main.json
 def load_main_template():
@@ -55,12 +59,13 @@ def save_main_json(storage_path, data):
     json_path = os.path.join(storage_path, "main.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    log_info(f"main.json сохранен: {json_path}")
+    logger.info(f"main.json сохранен: {json_path}")
     return json_path
 
 
 # Анимация спиннера для терминала
 def spinner_task(text, stop_event):
+    """Анимация спиннера для терминала"""
     idx = 0
     while not stop_event.is_set():
         spin = spinner_frames[idx % len(spinner_frames)]
@@ -84,10 +89,10 @@ async def process_partner(
     try:
         storage_path = create_project_folder(app_name, domain)
 
-        log_info(f"[orchestrator] Создание main.json - {app_name} - {url}")
-        log_info(f"[web_parser] Сбор соц линков - {app_name} - {url}")
-        log_info(f"[ai] ИИ-генерация - {app_name} - {url}")
-        log_info(f"[coingecko_parser] Поиск API ID в Coingecko - {app_name} - {url}")
+        logger.info(f"Создание main.json - {app_name} - {url}")
+        logger.info(f"Сбор соц линков - {app_name} - {url}")
+        logger.info(f"ИИ-генерация - {app_name} - {url}")
+        logger.info(f"Поиск API ID в Coingecko - {app_name} - {url}")
 
         loop = asyncio.get_event_loop()
         # Сбор соц. линков (sync, executor)
@@ -141,7 +146,7 @@ async def process_partner(
         main_data = dict(main_template)
         main_data["socialLinks"] = final_socials
         main_data["name"] = real_name
-        log_info(f"[orchestrator] Итоговое имя проекта: '{main_data['name']}'")
+        logger.info(f"Итоговое имя проекта: '{main_data['name']}'")
         main_data["svgLogo"] = logo_filename
         if coin_result and "coinData" in coin_result:
             main_data["coinData"] = coin_result["coinData"]
@@ -163,24 +168,24 @@ async def process_partner(
                     old_data = json.load(f)
                 status = check_mainjson_status(old_data, main_data)
             except Exception as e:
-                log_warning(f"Ошибка сравнения main.json: {e}")
+                logger.warning(f"Ошибка сравнения main.json: {e}")
                 status = ADD
 
         # Логирование и сохранение статуса main.json
         if status in (ADD, UPDATE):
             save_main_json(storage_path, main_data)
             log_mainjson_status(status, app_name, domain, url)
-            log_info(f"[orchestrator] Готово - {app_name} - {url}")
+            logger.info(f"Готово - {app_name} - {url}")
         elif status == SKIP:
             log_mainjson_status(status, app_name, domain, url)
-            log_info(f"[SKIP] - {app_name} - {url}")
+            logger.info(f"[SKIP] - {app_name} - {url}")
         else:
             log_mainjson_status(
                 ERROR, app_name, domain, url, error_msg="Неизвестный статус"
             )
 
     except Exception as e:
-        log_critical(f"Ошибка обработки {url}: {e}")
+        logger.critical(f"Ошибка обработки {url}: {e}")
         status = ERROR
         log_mainjson_status(ERROR, app_name, domain, url, error_msg=str(e))
     finally:
@@ -197,13 +202,11 @@ async def enrich_coin_async(main_data, executor):
 
 # Загрузка лого в Strapi
 def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
-    from core.log_utils import strapi_log
+    from core.api_strapi import upload_logo
 
     if main_data.get("svgLogo"):
         image_path = os.path.join(storage_path, main_data["svgLogo"])
         if os.path.exists(image_path):
-            from core.api_strapi import upload_logo
-
             result = upload_logo(api_url, api_token, project_id, image_path)
             if result:
                 strapi_log(f"[UPLOAD] {image_path} to project_id={project_id}: OK")
@@ -232,7 +235,7 @@ async def orchestrate_all():
         print(f"[app] {app_name} start")
         app_config_path = os.path.join(APPS_CONFIG_DIR, f"{app_name}.json")
         if not os.path.exists(app_config_path):
-            log_warning(f"Config for app {app_name} not found, skipping")
+            logger.warning(f"Config for app {app_name} not found, skipping")
             continue
         with open(app_config_path, "r", encoding="utf-8") as f:
             app_config = json.load(f)
@@ -254,7 +257,7 @@ async def orchestrate_all():
                 )
             except asyncio.TimeoutError:
                 status = ERROR
-                log_warning(
+                logger.warning(
                     f"[TIMEOUT] Превышено время на сбор {app_name} {url}, пропуск!"
                 )
             elapsed = int(time.time() - start_time)
@@ -279,7 +282,7 @@ async def orchestrate_all():
                             print(
                                 f"[error] {app_name} - {url} - {elapsed} sec [Strapi Create Failed]"
                             )
-                            log_critical(
+                            logger.critical(
                                 f"[STRAPI_ERROR] {app_name} {url}: project_id not returned"
                             )
                     else:
@@ -288,7 +291,7 @@ async def orchestrate_all():
                 except Exception as e:
                     status = ERROR
                     print(f"[error] {app_name} - {url} - {elapsed} sec")
-                    log_critical(f"[STRAPI_ERROR] {app_name} {url}: {e}")
+                    logger.critical(f"[STRAPI_ERROR] {app_name} {url}: {e}")
             elif status == SKIP:
                 print(f"[skip] {app_name} - {url} - {elapsed} sec")
             else:  # ERROR
