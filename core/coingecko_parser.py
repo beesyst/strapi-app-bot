@@ -1,12 +1,26 @@
+import json
+import os
 import time
 
 import requests
 from core.log_utils import get_logger
 
-# Получаем именованный логгер
 logger = get_logger("coingecko_parser")
 
-COINGECKO_API_BASE = "https://api.coingecko.com/api/v3"
+CONFIG_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "config.json"
+)
+
+
+def load_coingecko_api_base():
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        config = json.load(f)
+    return config.get("coingecko", {}).get(
+        "api_base", "https://api.coingecko.com/api/v3"
+    )
+
+
+COINGECKO_API_BASE = load_coingecko_api_base()
 
 
 # Быстрый поиск coin id на Coingecko по названию или тикеру
