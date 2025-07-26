@@ -11,7 +11,7 @@ from core.api_ai import (
     load_openai_config,
     load_prompts,
 )
-from core.api_strapi import create_project
+from core.api_strapi import try_upload_logo
 from core.coingecko_parser import enrich_with_coin_id
 from core.log_utils import get_logger
 from core.seo_utils import build_seo_section
@@ -73,10 +73,18 @@ def spinner_task(text, stop_event):
         time.sleep(0.13)
 
 
-# Асинхронная обработка одного партнера (проекта)
+# Асинхронная обработка одного партнера
 async def process_partner(
-    app_name, domain, url, main_template, prompts, openai_cfg, executor
+    app_name,
+    domain,
+    url,
+    main_template,
+    prompts,
+    openai_cfg,
+    executor,
+    show_status=False,  # <--- ВСЕГДА False, весь вывод снаружи!
 ):
+    start_time = time.time()
     spinner_text = f"{app_name} - {url}"
     stop_event = threading.Event()
     spinner_thread = threading.Thread(
@@ -86,7 +94,6 @@ async def process_partner(
     status = ERROR
     try:
         storage_path = create_project_folder(app_name, domain)
-
         logger.info(f"Создание main.json - {app_name} - {url}")
         logger.info(f"Сбор соц линков - {app_name} - {url}")
         logger.info(f"ИИ-генерация - {app_name} - {url}")
@@ -151,6 +158,7 @@ async def process_partner(
 
         main_json_path = os.path.join(storage_path, "main.json")
 
+        # --- Важно! ---
         if not os.path.exists(main_json_path):
             status = ADD
         else:
@@ -162,7 +170,7 @@ async def process_partner(
                 logger.warning(f"Ошибка сравнения main.json: {e}")
                 status = ADD
 
-        if status in (ADD, UPDATE):
+        if status == ADD or status == UPDATE:
             save_main_json(storage_path, main_data)
             log_mainjson_status(status, app_name, domain, url)
             logger.info(f"Готово - {app_name} - {url}")
@@ -181,6 +189,7 @@ async def process_partner(
     finally:
         stop_event.set()
         spinner_thread.join()
+        time.sleep(0.01)
     return status
 
 
@@ -190,34 +199,11 @@ async def enrich_coin_async(main_data, executor):
     return await loop.run_in_executor(executor, enrich_with_coin_id, main_data)
 
 
-# Пытается загрузить svgLogo проекта в Strapi (логирует в strapi.log)
-def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
-    from core.api_strapi import upload_logo
-
-    if main_data.get("svgLogo"):
-        image_path = os.path.join(storage_path, main_data["svgLogo"])
-        if os.path.exists(image_path):
-            result = upload_logo(api_url, api_token, project_id, image_path)
-            if result:
-                strapi_logger.info(
-                    f"[upload] {image_path} to project_id={project_id}: OK"
-                )
-            else:
-                strapi_logger.warning(
-                    f"[upload] {image_path} to project_id={project_id}"
-                )
-            return result
-        else:
-            strapi_logger.warning(f"[NO_IMAGE_FILE] {image_path}")
-    else:
-        strapi_logger.warning(f"[NO_svgLogo_FIELD] for project_id={project_id}")
-    return None
-
-
 # Главная оркестрация всего пайплайна
 async def orchestrate_all():
     with open(CENTRAL_CONFIG_PATH, "r", encoding="utf-8") as f:
         central_config = json.load(f)
+    strapi_sync = central_config.get("strapi_sync", True)
     main_template = load_main_template()
     prompts = load_prompts()
     openai_cfg = load_openai_config()
@@ -235,9 +221,12 @@ async def orchestrate_all():
             app_config = json.load(f)
         for url in app_config["partners"]:
             domain = get_domain_name(url)
+            storage_path = os.path.join(STORAGE_DIR, app_name, domain)
+            main_json_path = os.path.join(storage_path, "main.json")
             start_time = time.time()
+            status_main = ERROR
             try:
-                status = await asyncio.wait_for(
+                status_main = await asyncio.wait_for(
                     process_partner(
                         app_name,
                         domain,
@@ -246,53 +235,78 @@ async def orchestrate_all():
                         prompts,
                         openai_cfg,
                         executor,
+                        show_status=False,
                     ),
                     timeout=120,
                 )
             except asyncio.TimeoutError:
-                status = ERROR
                 logger.warning(
                     f"[timeout] Превышено время на сбор {app_name} {url}, пропуск!"
                 )
+                print(f"[error] {app_name} - {url} - timeout!")
+                continue
+
             elapsed = int(time.time() - start_time)
+            # strapi_sync: false - печать только main.json статуса
+            if not strapi_sync:
+                if status_main == ERROR:
+                    extra = " [main.json Error]"
+                else:
+                    extra = ""
+                print(
+                    f"\r[{status_main}] {app_name} - {url} - {elapsed} sec{extra}",
+                    end="",
+                    flush=True,
+                )
+                print()
+                continue
+            # strapi_sync: true - пушим в Strapi и печатаем статус
+            if not os.path.exists(main_json_path):
+                print(f"[error] {app_name} - {url} - {elapsed} sec [No main.json]")
+                continue
+            with open(main_json_path, "r", encoding="utf-8") as fjson:
+                main_data = json.load(fjson)
+            api_url = app.get("api_url", "")
+            api_token = app.get("api_token", "")
+            if api_url and api_token:
+                from core.api_strapi import (
+                    ERROR as STRAPI_ERROR,
+                )
+                from core.api_strapi import (
+                    SKIP as STRAPI_SKIP,
+                )
+                from core.api_strapi import (
+                    create_project,
+                )
 
-            if status in (ADD, UPDATE):
-                storage_path = os.path.join(STORAGE_DIR, app_name, domain)
-                json_path = os.path.join(storage_path, "main.json")
-                try:
-                    with open(json_path, "r", encoding="utf-8") as fjson:
-                        main_data = json.load(fjson)
-                    api_url = app.get("api_url", "")
-                    api_token = app.get("api_token", "")
-                    if api_url and api_token:
-                        project_id = create_project(api_url, api_token, main_data)
-                        if project_id:
-                            print(
-                                f"\r[{status}] {app_name} - {url} - {elapsed} sec{' ' * 10}"
-                            )
-                            try_upload_logo(
-                                main_data, storage_path, api_url, api_token, project_id
-                            )
-                        else:
-                            status = ERROR
-                            print(
-                                f"[error] {app_name} - {url} - {elapsed} sec [Strapi Create Failed]"
-                            )
-                            logger.critical(
-                                f"[STRAPI_ERROR] {app_name} {url}: project_id not returned"
-                            )
-                    else:
-                        status = ERROR
-                        print(f"[error] {app_name} - {url} - {elapsed} sec")
-                except Exception as e:
-                    status = ERROR
-                    print(f"[error] {app_name} - {url} - {elapsed} sec")
-                    logger.critical(f"[STRAPI_ERROR] {app_name} {url}: {e}")
-            elif status == SKIP:
-                print(f"[skip] {app_name} - {url} - {elapsed} sec")
+                status_strapi, project_id = create_project(
+                    api_url,
+                    api_token,
+                    main_data,
+                    app_name=app_name,
+                    domain=domain,
+                    url=url,
+                )
+                final_status = (
+                    status_strapi if status_strapi != STRAPI_ERROR else "error"
+                )
+                extra = ""
+                if status_strapi == STRAPI_ERROR:
+                    extra = " [Strapi Create Failed]"
+                elif status_strapi == STRAPI_SKIP:
+                    extra = " [Already exists]"
+                print(
+                    f"\r[{final_status}] {app_name} - {url} - {elapsed} sec{extra}",
+                    end="",
+                    flush=True,
+                )
+                print()
+                if project_id:
+                    try_upload_logo(
+                        main_data, storage_path, api_url, api_token, project_id
+                    )
             else:
-                print(f"[error] {app_name} - {url} - {elapsed} sec")
-
+                print(f"[error] {app_name} - {url} - {elapsed} sec [No API]")
         print(f"[app] {app_name} done")
 
 

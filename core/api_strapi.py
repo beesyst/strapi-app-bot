@@ -41,7 +41,6 @@ def project_exists(api_url, api_token, name):
 
 # Логирует ключевые секции main.json в strapi.log по секциям (новый стиль!)
 def log_strapi_sections(data):
-    # Основные поля, порядок не важен
     sections = [
         "name",
         "svgLogo",
@@ -55,7 +54,7 @@ def log_strapi_sections(data):
     ]
     for key in sections:
         val = data.get(key)
-        # Логика по формату
+        # Форматированный лог по секциям
         if key == "name":
             if val:
                 logger.info(f"[name] Размещено имя {val}")
@@ -87,7 +86,6 @@ def log_strapi_sections(data):
             else:
                 logger.warning("[slug] не найдено")
         elif key == "coinData":
-            # В coinData смотрим поле coin, если оно есть и не пустое
             coin_val = val.get("coin") if isinstance(val, dict) else ""
             if coin_val:
                 logger.info(f"[coinData] coin найден: {coin_val}")
@@ -121,7 +119,7 @@ def create_project(api_url, api_token, data, app_name=None, domain=None, url=Non
         if status == SKIP:
             logger.info(f"[SKIP] Проект уже существует: {data.get('name', '')}")
             log_strapi_sections(data)
-            return project_id
+            return status, project_id
     else:
         status = ADD
         log_strapi_status(status, app_name, domain, url)
@@ -148,11 +146,10 @@ def create_project(api_url, api_token, data, app_name=None, domain=None, url=Non
         logger.info(
             f"[create] {data.get('name', '')}: {resp.status_code}, {resp.text[:200]}"
         )
-        log_strapi_sections(data)
         if resp.status_code in (200, 201):
-            return resp.json()["data"]["id"]
+            log_strapi_sections(data)
+            return ADD, resp.json()["data"]["id"]
         if resp.status_code in (409, 400, 500):
-            # Повторно ищем id — вдруг был конфликт, но всё же есть объект
             project_id, _ = project_exists(api_url, api_token, data.get("name", ""))
             if project_id:
                 log_strapi_status(SKIP, app_name, domain, url)
@@ -160,11 +157,11 @@ def create_project(api_url, api_token, data, app_name=None, domain=None, url=Non
                     f"[SKIP] Проект уже существует после ошибки: {data.get('name', '')}"
                 )
                 log_strapi_sections(data)
-                return project_id
+                return SKIP, project_id
     except Exception as e:
         log_strapi_status(ERROR, app_name, domain, url, error_msg=str(e))
         logger.error(f"[create_project] {e}")
-    return None
+    return ERROR, None
 
 
 # Загрузка лого через эндпоинт /upload с коротким логом
@@ -190,6 +187,27 @@ def upload_logo(api_url, api_token, project_id, image_path):
     except Exception as e:
         logger.error(f"[UPLOAD] Ошибка загрузки svgLogo: {e}")
     return None
+
+
+# Пытается загрузить svgLogo проекта в Strapi (логирует в strapi.log)
+def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
+    image_name = main_data.get("svgLogo")
+    if not image_name:
+        logger.warning("[svgLogo] не найдено (нет поля svgLogo)")
+        return None
+    image_path = os.path.join(storage_path, image_name)
+    if not os.path.exists(image_path):
+        logger.warning(f"[svgLogo] не найдено (файл отсутствует): {image_path}")
+        return None
+    result = upload_logo(api_url, api_token, project_id, image_path)
+    if result:
+        logger.info(
+            f"[svgLogo] успешно загружено: {image_name} для project_id={project_id}"
+        )
+        return result
+    else:
+        logger.warning(f"[svgLogo] ошибка загрузки: {image_name}")
+        return None
 
 
 # Основная функция синхронизации всех проектов по шаблону
@@ -242,19 +260,18 @@ def sync_projects(config_path, only_app=None):
                 )
                 logger.error(f"[main.json] не загружен для {domain}: {e}")
                 continue
-            project_id = create_project(
+            status, project_id = create_project(
                 api_url, api_token, data, app_name=app_name, domain=domain, url=partner
             )
-            if not project_id:
+            if status == ERROR or not project_id:
                 log_strapi_status(
                     ERROR, app_name, domain, partner, error_msg="project_id не создан"
                 )
                 logger.error(f"[project_id] не создан: {domain}")
                 continue
-            if data.get("svgLogo") and os.path.exists(image_path):
-                upload_logo(api_url, api_token, project_id, image_path)
-            else:
-                logger.warning(f"[svgLogo] no_image or no_svglogo: {image_path}")
+            try_upload_logo(
+                data, os.path.dirname(json_path), api_url, api_token, project_id
+            )
 
 
 # Альтернативная синхронизация без вывода в терминал
@@ -289,10 +306,10 @@ def sync_projects_with_terminal_status(config_path):
             try:
                 with open(json_path, "r", encoding="utf-8") as f3:
                     data = json.load(f3)
-                project_id = create_project(
+                status, project_id = create_project(
                     api_url, api_token, data, app_name, domain, partner
                 )
-                if project_id:
+                if status not in (ERROR, None) and project_id:
                     if data.get("svgLogo") and os.path.exists(image_path):
                         upload_logo(api_url, api_token, project_id, image_path)
             except Exception:
