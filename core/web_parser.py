@@ -1,4 +1,3 @@
-import logging
 import os
 import re
 import subprocess
@@ -7,9 +6,10 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
+from core.log_utils import get_logger
 
-# Именованный логгер для web_parser
-logger = logging.getLogger("web_parser")
+# Получаем логгер web_parser для всех сообщений этого модуля
+logger = get_logger("web_parser")
 
 # Кэш для ускорения парсинга
 FETCHED_HTML_CACHE = {}
@@ -36,7 +36,7 @@ SOCIAL_PATTERNS = {
 BAD_NAMES = {"", "x", "profile", "new to x"}
 
 
-# Очистка имени проекта
+# Очищает и нормализует имя проекта
 def clean_project_name(name):
     name = re.sub(r"\s*[\(\[\{].*?[\)\]\}]", "", name)
     name = re.sub(r"[^A-Za-zА-Яа-я0-9\- ]", "", name)
@@ -45,7 +45,7 @@ def clean_project_name(name):
     return name.strip()
 
 
-# Получение html по url (user-agent для обхода блокировок)
+# Загружает HTML страницы с кэшем, логирует успех/ошибку
 def fetch_url_html(url):
     if url in FETCHED_HTML_CACHE:
         return FETCHED_HTML_CACHE[url]
@@ -53,15 +53,15 @@ def fetch_url_html(url):
     try:
         html = requests.get(url, headers=headers, timeout=10).text
         FETCHED_HTML_CACHE[url] = html
-        logger.info(f"HTML успешно получен: {url}")
+        logger.info("HTML успешно получен: %s", url)
         return html
     except Exception as e:
-        logger.warning(f"Ошибка получения HTML {url}: {e}")
+        logger.warning("Ошибка получения HTML %s: %s", url, e)
         FETCHED_HTML_CACHE[url] = ""
         return ""
 
 
-# Поиск внутренних ссылок (до max_links)
+# Ищет внутренние ссылки сайта (максимум max_links), с кэшем
 def get_internal_links(html, base_url, max_links=10):
     if base_url in PARSED_INTERNALS_CACHE:
         return PARSED_INTERNALS_CACHE[base_url]
@@ -75,26 +75,26 @@ def get_internal_links(html, base_url, max_links=10):
                 break
     links_list = list(found)
     PARSED_INTERNALS_CACHE[base_url] = links_list
-    logger.info(f"Внутренние ссылки для {base_url}: {links_list}")
+    logger.info("Внутренние ссылки для %s: %s", base_url, links_list)
     return links_list
 
 
-# Нормализация ссылок (например, twitter.com → x.com)
+# Приводит соцссылки к единому виду (например, twitter → x)
 def normalize_socials(socials):
     if socials.get("twitterURL"):
         socials["twitterURL"] = socials["twitterURL"].replace("twitter.com", "x.com")
     return socials
 
 
-# Получение домена из url (например, https://site.com/abc → site)
+# Получает доменное имя из URL и логирует результат
 def get_domain_name(url):
     domain = urlparse(url).netloc
     result = domain.replace("www.", "").split(".")[0]
-    logger.info(f"get_domain_name({url}) -> {result}")
+    logger.info("get_domain_name(%s) -> %s", url, result)
     return result
 
 
-# Вызов Node.js-парсера для Twitter/X профиля (twitter_parser.js)
+# Получает ссылки и имя/аватар из X/Twitter через Node-скрипт
 def get_links_from_x_profile(profile_url):
     ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     NODE_CORE_DIR = os.path.join(ROOT_DIR, "core")
@@ -108,30 +108,30 @@ def get_links_from_x_profile(profile_url):
             timeout=60,
         )
         if result.returncode == 0:
-            logger.info(f"twitter_parser.js успешно обработал: {profile_url}")
+            logger.info("twitter_parser.js успешно обработал: %s", profile_url)
             return safe_json_loads(result.stdout)
         else:
             logger.warning(
-                f"twitter_parser.js error for {profile_url}: {result.stderr}"
+                "twitter_parser.js error for %s: %s", profile_url, result.stderr
             )
             return {"links": [], "avatar": "", "name": ""}
     except Exception as e:
-        logger.warning(f"Ошибка запуска twitter_parser.js для {profile_url}: {e}")
+        logger.warning("Ошибка запуска twitter_parser.js для %s: %s", profile_url, e)
         return {"links": [], "avatar": "", "name": ""}
 
 
-# Безопасная загрузка JSON
+# Безопасный json.loads с логом ошибок
 def safe_json_loads(data):
     import json
 
     try:
         return json.loads(data)
     except Exception as e:
-        logger.warning(f"Ошибка при safe_json_loads: {e}")
+        logger.warning("Ошибка при safe_json_loads: %s", e)
         return {}
 
 
-# Поиск лучшей docs-ссылки на странице
+# Находит лучшую ссылку на документацию среди ссылок страницы
 def find_best_docs_link(soup, base_url):
     candidates = []
     for a in soup.find_all("a", href=True):
@@ -143,7 +143,6 @@ def find_best_docs_link(soup, base_url):
             for keyword in ["docs", "documentation", "developer docs", "developers"]
         ):
             candidates.append((text, href_full))
-    # Фильтруем только "docs", но без api-docs
     filtered = [
         (text, href)
         for text, href in candidates
@@ -160,7 +159,6 @@ def find_best_docs_link(soup, base_url):
         )
     ]
 
-    # Сортировка по приоритету
     def score(href):
         parsed = urlparse(href)
         if re.match(r".*/docs/?$", parsed.path) and not parsed.netloc.startswith(
@@ -188,13 +186,13 @@ def find_best_docs_link(soup, base_url):
                 break
     if doc_url:
         if doc_url not in PARSED_DOCS_LINKS_LOGGED:
-            logger.info(f"Лучшая docs-ссылка найдена: {doc_url}")
+            logger.info("Лучшая docs-ссылка найдена: %s", doc_url)
             PARSED_DOCS_LINKS_LOGGED.add(doc_url)
         return doc_url
     return ""
 
 
-# Вытащить соц.ссылки и docs из html
+# Извлекает все социальные ссылки и docs с html страницы
 def extract_social_links(html, base_url, is_main_page=False):
     if base_url in PARSED_SOCIALS_CACHE:
         return PARSED_SOCIALS_CACHE[base_url]
@@ -215,11 +213,11 @@ def extract_social_links(html, base_url, is_main_page=False):
         links["documentURL"] = ""
     PARSED_SOCIALS_CACHE[base_url] = links
     if is_main_page:
-        logger.info(f"Соцсети и docs для {base_url}: {links}")
+        logger.info("Соцсети и docs для %s: %s", base_url, links)
     return links
 
 
-# Только соцсети/docs/имя - для async сбора
+# Основная функция для сбора соцсетей и docs по проекту (главная + внутренние)
 def collect_social_links_main(url, main_template, storage_path=None):
     found_socials = {}
     html = fetch_url_html(url)
@@ -235,7 +233,7 @@ def collect_social_links_main(url, main_template, storage_path=None):
                 if v and not found_socials.get(k):
                     found_socials[k] = v
         except Exception as e:
-            logger.warning(f"Ошибка парсинга {link}: {e}")
+            logger.warning("Ошибка парсинга %s: %s", link, e)
 
     found_socials = normalize_socials(found_socials)
     if found_socials.get("documentURL"):
@@ -247,7 +245,7 @@ def collect_social_links_main(url, main_template, storage_path=None):
                 if v and not found_socials.get(k):
                     found_socials[k] = v
         except Exception as e:
-            logger.warning(f"Ошибка docs: {e}")
+            logger.warning("Ошибка docs: %s", e)
 
     project_name = ""
     if not found_socials.get("twitterURL"):
@@ -256,20 +254,20 @@ def collect_social_links_main(url, main_template, storage_path=None):
         m = re.match(r"^(.+?)\s*[\(/]", title)
         if m and m.group(1):
             project_name = m.group(1).strip()
-            logger.info(f"Имя проекта по <title> (pattern): '{project_name}'")
+            logger.info("Имя проекта по <title> (pattern): '%s'", project_name)
         elif title:
             project_name = title
-            logger.info(f"Имя проекта по <title>: '{project_name}'")
+            logger.info("Имя проекта по <title>: '%s'", project_name)
         else:
             project_name = get_domain_name(url).capitalize()
-            logger.info(f"Имя проекта по домену: '{project_name}'")
+            logger.info("Имя проекта по домену: '%s'", project_name)
     clean_name = clean_project_name(project_name)
     if not clean_name:
         clean_name = get_domain_name(url).capitalize()
     return found_socials, clean_name
 
 
-# Получить аватар и имя из твиттера (sync)
+# Получает и скачивает аватар и имя из X/Twitter
 def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retries=3):
     twitter_result = None
     avatar_url = ""
@@ -278,14 +276,18 @@ def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retr
         twitter_result = get_links_from_x_profile(twitter_url)
         avatar_url = twitter_result.get("avatar", "")
         raw_name = twitter_result.get("name", "") or base_name
-        logger.info(f"twitter_parser.js вернул имя: '{raw_name}' (попытка {attempt+1})")
+        logger.info(
+            "twitter_parser.js вернул имя: '%s' (попытка %d)", raw_name, attempt + 1
+        )
         if (
             not raw_name
             or len(raw_name.strip()) < 3
             or raw_name.strip().lower() in BAD_NAMES
         ):
             logger.warning(
-                f"Имя из twitter_parser.js ('{raw_name}') невалидно, fallback на base_name ('{base_name}')"
+                "Имя из twitter_parser.js ('%s') невалидно, fallback на base_name ('%s')",
+                raw_name,
+                base_name,
             )
             raw_name = base_name
         if avatar_url or attempt == max_retries - 1:
@@ -295,7 +297,9 @@ def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retr
     name = clean_project_name(raw_name)
     if not name or len(name) < 3:
         logger.warning(
-            f"Имя после clean_project_name ('{name}') короткое, fallback на base_name ('{base_name}')"
+            "Имя после clean_project_name ('%s') короткое, fallback на base_name ('%s')",
+            name,
+            base_name,
         )
         name = clean_project_name(base_name)
 
@@ -308,16 +312,18 @@ def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retr
                 avatar_path = os.path.join(storage_path, logo_filename)
                 with open(avatar_path, "wb") as imgf:
                     imgf.write(avatar_data)
-                logger.info(f"Скачан: {avatar_url} → {avatar_path}")
+                logger.info("Скачан: %s → %s", avatar_url, avatar_path)
                 return logo_filename, name
             except Exception as e:
-                logger.warning(f"Ошибка скачивания аватара (попытка {attempt+1}): {e}")
+                logger.warning(
+                    "Ошибка скачивания аватара (попытка %d): %s", attempt + 1, e
+                )
                 time.sleep(1)
         return "", name
     return "", name
 
 
-# Сбор всех соцсетей + docs + имя + аватар
+# Собирает все соцсети и docs, а также скачивает аватар, обновляет main_data
 def collect_all_socials(url, main_template, storage_path=None, max_internal_links=10):
     import copy
 
@@ -336,7 +342,7 @@ def collect_all_socials(url, main_template, storage_path=None, max_internal_link
                 if v and not found_socials.get(k):
                     found_socials[k] = v
         except Exception as e:
-            logger.warning(f"Ошибка парсинга {link}: {e}")
+            logger.warning("Ошибка парсинга %s: %s", link, e)
 
     found_socials = normalize_socials(found_socials)
     if found_socials.get("documentURL"):
@@ -348,7 +354,7 @@ def collect_all_socials(url, main_template, storage_path=None, max_internal_link
                 if v and not found_socials.get(k):
                     found_socials[k] = v
         except Exception as e:
-            logger.warning(f"Ошибка docs: {e}")
+            logger.warning("Ошибка docs: %s", e)
 
     avatar_path = ""
     project_name = ""
@@ -387,7 +393,7 @@ def collect_all_socials(url, main_template, storage_path=None, max_internal_link
     clean_name = clean_project_name(project_name)
     if not clean_name:
         clean_name = get_domain_name(url).capitalize()
-    logger.info(f"Итоговое имя проекта: '{clean_name}'")
+    logger.info("Итоговое имя проекта: '%s'", clean_name)
 
     logo_filename = f"{clean_name.lower().replace(' ', '')}.jpg"
     if found_socials.get("twitterURL") and avatar_url and storage_path:
@@ -398,10 +404,12 @@ def collect_all_socials(url, main_template, storage_path=None, max_internal_link
                 imgf.write(avatar_data)
             main_data["svgLogo"] = logo_filename
         except Exception as e:
-            logger.warning(f"Ошибка скачивания аватара: {e}")
+            logger.warning("Ошибка скачивания аватара: %s", e)
     else:
         main_data["svgLogo"] = logo_filename
-    logger.info(f"Итоговый svgLogo: {main_data['svgLogo']} (avatar_url: {avatar_url})")
+    logger.info(
+        "Итоговый svgLogo: %s (avatar_url: %s)", main_data["svgLogo"], avatar_url
+    )
     social_keys = list(main_template["socialLinks"].keys())
     final_socials = {k: found_socials.get(k, "") for k in social_keys}
     main_data["socialLinks"] = final_socials

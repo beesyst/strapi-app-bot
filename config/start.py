@@ -13,7 +13,7 @@ from core.log_utils import auto_clear_logs_if_needed, init_setup_log
 
 # Централизованная очистка и инициализация логов
 auto_clear_logs_if_needed()
-init_setup_log(LOGS_DIR)
+init_setup_log()
 
 # Проверяем venv, при необходимости пересобираем
 VENV_PATH = os.path.join(ROOT_DIR, "venv")

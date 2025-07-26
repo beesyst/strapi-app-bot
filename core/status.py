@@ -1,6 +1,10 @@
 from datetime import datetime
 
-from core.log_utils import log_critical, log_error, log_info
+from core.log_utils import get_logger
+
+# Именованные логгеры
+logger = get_logger("orchestrator")
+strapi_logger = get_logger("strapi")
 
 # Допустимые статусы
 ADD = "add"
@@ -13,12 +17,12 @@ STATUSES = {ADD, UPDATE, SKIP, ERROR}
 MAIN_FIELDS = ["name", "svgLogo", "socialLinks", "coinData"]
 
 
-# Получить текущее время
+# Получить текущее время (строка)
 def now():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-# Сравнение только по ключевым полям (main fields)
+# Сравнение по ключевым полям
 def compare_main_fields(d1, d2):
     for k in MAIN_FIELDS:
         if d1.get(k) != d2.get(k):
@@ -26,32 +30,32 @@ def compare_main_fields(d1, d2):
     return True
 
 
-# Логировать статус как info
+# Логировать статус операции
 def log_status_info(status, app, domain, url, extra=""):
     msg = f"[{status}] {app} - {domain} - {url}"
     if extra:
         msg += f" [{extra}]"
-    log_info(msg)
+    logger.info(msg)
 
 
 # Лог статуса main.json
 def log_mainjson_status(status, app, domain, url, error_msg=""):
     if status == ERROR:
-        log_error(f"[error] {app} - {domain} - {url} [{error_msg}]")
+        logger.error(f"[{status}] {app} - {domain} - {url} [{error_msg}]")
     elif status in STATUSES:
         log_status_info(status, app, domain, url)
     else:
-        log_error(f"[invalid_status] {status} for {app} - {domain} - {url}")
+        logger.error(f"[invalid_status] {status} for {app} - {domain} - {url}")
 
 
 # Лог статуса Strapi
 def log_strapi_status(status, app, domain, url, error_msg=""):
     if status == ERROR:
-        log_critical(f"[error] {app} - {domain} - {url} [{error_msg}]")
+        strapi_logger.critical(f"[{status}] {app} - {domain} - {url} [{error_msg}]")
     elif status in STATUSES:
-        log_status_info(status, app, domain, url)
+        strapi_logger.info(f"[{status}] {app} - {domain} - {url}")
     else:
-        log_error(f"[invalid_status] {status} for {app} - {domain} - {url}")
+        strapi_logger.error(f"[invalid_status] {status} for {app} - {domain} - {url}")
 
 
 # Проверить необходимость обновления main.json

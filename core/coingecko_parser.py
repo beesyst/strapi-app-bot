@@ -1,10 +1,10 @@
-import logging
 import time
 
 import requests
+from core.log_utils import get_logger
 
-# Логгер
-logger = logging.getLogger("coingecko_parser")
+# Получаем именованный логгер
+logger = get_logger("coingecko_parser")
 
 COINGECKO_API_BASE = "https://api.coingecko.com/api/v3"
 
@@ -112,7 +112,7 @@ def get_coin_id_best(name, website_url):
     return coin_id
 
 
-# Обогащает main_data CoinGecko ID, пишет в coinData
+# Обогащает main_data CoinGecko ID, пишет результат в coinData
 def enrich_with_coin_id(main_data):
     name = main_data.get("name", "")
     website_url = ""
@@ -128,6 +128,6 @@ def enrich_with_coin_id(main_data):
     return main_data
 
 
-# Тестовый пример
+# Тестовый пример запуска поиска
 if __name__ == "__main__":
     print(get_coin_id_best("Eclipse", "https://www.eclipse.xyz/"))

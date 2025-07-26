@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import os
 import threading
 import time
@@ -14,7 +13,7 @@ from core.api_ai import (
 )
 from core.api_strapi import create_project
 from core.coingecko_parser import enrich_with_coin_id
-from core.log_utils import strapi_log  # Логирование для strapi.log
+from core.log_utils import get_logger
 from core.seo_utils import build_seo_section
 from core.status import (
     ADD,
@@ -30,6 +29,10 @@ from core.web_parser import (
     get_domain_name,
 )
 
+# Получаем логгер orchestrator (имя модуля)
+logger = get_logger("orchestrator")
+strapi_logger = get_logger("strapi")
+
 TEMPLATE_PATH = "templates/main_template.json"
 CENTRAL_CONFIG_PATH = "config/config.json"
 APPS_CONFIG_DIR = "config/apps"
@@ -37,24 +40,21 @@ STORAGE_DIR = "storage/apps"
 
 spinner_frames = ["/", "-", "\\", "|"]
 
-# Настройка логгера
-logger = logging.getLogger(__name__)
 
-
-# Загрузка шаблона main.json
+# Загружает основной шаблон main.json
 def load_main_template():
     with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-# Создание папки для проекта
+# Создает папку для хранения результата по проекту
 def create_project_folder(app_name, domain):
     storage_path = os.path.join(STORAGE_DIR, app_name, domain)
     os.makedirs(storage_path, exist_ok=True)
     return storage_path
 
 
-# Сохранение main.json
+# Сохраняет main.json для проекта
 def save_main_json(storage_path, data):
     json_path = os.path.join(storage_path, "main.json")
     with open(json_path, "w", encoding="utf-8") as f:
@@ -63,19 +63,17 @@ def save_main_json(storage_path, data):
     return json_path
 
 
-# Анимация спиннера для терминала
+# Анимация спиннера для отображения статуса в терминале
 def spinner_task(text, stop_event):
-    """Анимация спиннера для терминала"""
     idx = 0
     while not stop_event.is_set():
         spin = spinner_frames[idx % len(spinner_frames)]
         print(f"\r[{spin}] {text} ", end="", flush=True)
         idx += 1
         time.sleep(0.13)
-    print("\r" + " " * (len(text) + 10) + "\r", end="", flush=True)
 
 
-# Асинхронный процесс для одного партнера
+# Асинхронная обработка одного партнера (проекта)
 async def process_partner(
     app_name, domain, url, main_template, prompts, openai_cfg, executor
 ):
@@ -95,11 +93,9 @@ async def process_partner(
         logger.info(f"Поиск API ID в Coingecko - {app_name} - {url}")
 
         loop = asyncio.get_event_loop()
-        # Сбор соц. линков (sync, executor)
         socials_future = loop.run_in_executor(
             executor, collect_social_links_main, url, main_template, storage_path
         )
-        # AI и CoinGecko (async)
         main_data_for_ai = dict(main_template)
         main_data_for_ai["name"] = domain.capitalize()
         main_data_for_ai["socialLinks"]["websiteURL"] = url
@@ -114,10 +110,8 @@ async def process_partner(
         )
         coin_future = asyncio.create_task(enrich_coin_async(main_data_for_ai, executor))
 
-        # Получаем соцлинки и clean_name
         found_socials, clean_name = await socials_future
 
-        # Если есть twitter - сразу парсим аватар/имя параллельно (async executor)
         if found_socials.get("twitterURL"):
             twitter_future = loop.run_in_executor(
                 executor,
@@ -129,18 +123,15 @@ async def process_partner(
         else:
             twitter_future = None
 
-        # Собираем остальные результаты параллельно
         coin_result, short_desc, content_md = await asyncio.gather(
             coin_future, ai_short_future, ai_content_future
         )
 
-        # Если был twitter - ждем результат
         if twitter_future:
             logo_filename, real_name = await twitter_future
         else:
             logo_filename, real_name = None, None
 
-        # Формируем main_data
         social_keys = list(main_template["socialLinks"].keys())
         final_socials = {k: found_socials.get(k, "") for k in social_keys}
         main_data = dict(main_template)
@@ -171,14 +162,13 @@ async def process_partner(
                 logger.warning(f"Ошибка сравнения main.json: {e}")
                 status = ADD
 
-        # Логирование и сохранение статуса main.json
         if status in (ADD, UPDATE):
             save_main_json(storage_path, main_data)
             log_mainjson_status(status, app_name, domain, url)
             logger.info(f"Готово - {app_name} - {url}")
         elif status == SKIP:
             log_mainjson_status(status, app_name, domain, url)
-            logger.info(f"[SKIP] - {app_name} - {url}")
+            logger.info(f"[skip] - {app_name} - {url}")
         else:
             log_mainjson_status(
                 ERROR, app_name, domain, url, error_msg="Неизвестный статус"
@@ -194,13 +184,13 @@ async def process_partner(
     return status
 
 
-# Асинхронный CoinGecko enrichment
+# Асинхронное обогащение данных по коину через CoinGecko
 async def enrich_coin_async(main_data, executor):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, enrich_with_coin_id, main_data)
 
 
-# Загрузка лого в Strapi
+# Пытается загрузить svgLogo проекта в Strapi (логирует в strapi.log)
 def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
     from core.api_strapi import upload_logo
 
@@ -209,18 +199,22 @@ def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
         if os.path.exists(image_path):
             result = upload_logo(api_url, api_token, project_id, image_path)
             if result:
-                strapi_log(f"[UPLOAD] {image_path} to project_id={project_id}: OK")
+                strapi_logger.info(
+                    f"[upload] {image_path} to project_id={project_id}: OK"
+                )
             else:
-                strapi_log(f"[UPLOAD_FAIL] {image_path} to project_id={project_id}")
+                strapi_logger.warning(
+                    f"[upload] {image_path} to project_id={project_id}"
+                )
             return result
         else:
-            strapi_log(f"[NO_IMAGE_FILE] {image_path}")
+            strapi_logger.warning(f"[NO_IMAGE_FILE] {image_path}")
     else:
-        strapi_log(f"[NO_svgLogo_FIELD] for project_id={project_id}")
+        strapi_logger.warning(f"[NO_svgLogo_FIELD] for project_id={project_id}")
     return None
 
 
-# Асинхронный запуск по всем проектам
+# Главная оркестрация всего пайплайна
 async def orchestrate_all():
     with open(CENTRAL_CONFIG_PATH, "r", encoding="utf-8") as f:
         central_config = json.load(f)
@@ -258,7 +252,7 @@ async def orchestrate_all():
             except asyncio.TimeoutError:
                 status = ERROR
                 logger.warning(
-                    f"[TIMEOUT] Превышено время на сбор {app_name} {url}, пропуск!"
+                    f"[timeout] Превышено время на сбор {app_name} {url}, пропуск!"
                 )
             elapsed = int(time.time() - start_time)
 
@@ -273,7 +267,9 @@ async def orchestrate_all():
                     if api_url and api_token:
                         project_id = create_project(api_url, api_token, main_data)
                         if project_id:
-                            print(f"[{status}] {app_name} - {url} - {elapsed} sec")
+                            print(
+                                f"\r[{status}] {app_name} - {url} - {elapsed} sec{' ' * 10}"
+                            )
                             try_upload_logo(
                                 main_data, storage_path, api_url, api_token, project_id
                             )
@@ -294,13 +290,13 @@ async def orchestrate_all():
                     logger.critical(f"[STRAPI_ERROR] {app_name} {url}: {e}")
             elif status == SKIP:
                 print(f"[skip] {app_name} - {url} - {elapsed} sec")
-            else:  # ERROR
+            else:
                 print(f"[error] {app_name} - {url} - {elapsed} sec")
 
         print(f"[app] {app_name} done")
 
 
-# Точка входа: запуск пайплайна
+# Запуск пайплайна
 def run_pipeline():
     asyncio.run(orchestrate_all())
 

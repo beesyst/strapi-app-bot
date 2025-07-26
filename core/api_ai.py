@@ -3,7 +3,10 @@ import json
 import os
 
 import requests
-from core.log_utils import ai_log
+from core.log_utils import get_logger
+
+# Получаем логгер для AI-компонента
+logger = get_logger("ai")
 
 
 # Загрузка OpenAI-конфига
@@ -37,7 +40,7 @@ def call_ai_with_config(prompt, openai_cfg):
     )
 
 
-# Вызов OpenAI API
+# Прямой вызов OpenAI API и логирование результата
 def call_openai_api(
     prompt, api_key, api_url, model, system_prompt, temperature, max_tokens
 ):
@@ -56,47 +59,46 @@ def call_openai_api(
     }
     try:
         resp = requests.post(api_url, headers=headers, json=payload, timeout=60)
-        ai_log(f"[AI][REQUEST] prompt: {prompt[:150]}...")
+        logger.info("[request] prompt: %s...", prompt[:150])
         if resp.status_code == 200:
             result = resp.json()
             text = result["choices"][0]["message"]["content"]
-            ai_log(f"[AI][RESPONSE] {text[:150]}...")
+            logger.info("[response] %s...", text[:150])
             return text
         else:
-            ai_log(
-                f"[AI][ERROR] status: {resp.status_code}, response: {resp.text[:500]}",
-                level="error",
+            logger.error(
+                "[error] status: %s, response: %s", resp.status_code, resp.text[:500]
             )
     except Exception as e:
-        ai_log(f"[AI][EXCEPTION] {str(e)}", level="error")
+        logger.error("[EXCEPTION] %s", str(e))
     return ""
 
 
 # Обновляет contentMarkdown в main.json
 def enrich_main_json(json_path, content):
     if not os.path.exists(json_path):
-        ai_log(f"[AI][ERROR] main.json not found: {json_path}", level="error")
+        logger.error("[ERROR] main.json not found: %s", json_path)
         return False
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     data["contentMarkdown"] = content
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    ai_log(f"[AI][OK] contentMarkdown обновлён для {json_path}")
+    logger.info("[OK] contentMarkdown обновлён для %s", json_path)
     return True
 
 
 # Обновляет shortDescription в main.json
 def enrich_short_description(json_path, short_desc):
     if not os.path.exists(json_path):
-        ai_log(f"[AI][ERROR] main.json не найден: {json_path}", level="error")
+        logger.error("[ERROR] main.json не найден: %s", json_path)
         return False
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     data["shortDescription"] = short_desc.strip()
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    ai_log(f"[AI][OK] shortDescription обновлён для {json_path}")
+    logger.info("[OK] shortDescription обновлён для %s", json_path)
     return True
 
 
@@ -181,7 +183,7 @@ async def ai_generate_keywords(content, prompts, openai_cfg, executor):
     return await loop.run_in_executor(executor, sync_keywords)
 
 
-# Синхронный генератор для оффлайн-режима (batch обработка всех проектов)
+# Синхронный генератор для оффлайн-режима
 def process_all_projects():
     openai_cfg = load_openai_config()
     prompts = load_prompts()
@@ -206,7 +208,7 @@ def process_all_projects():
 
             # Пропускаем, если уже есть сгенерированный контент
             if data.get("contentMarkdown"):
-                ai_log(f"[AI][SKIP] {app_name}/{domain}: contentMarkdown уже есть")
+                logger.info("[SKIP] %s/%s: contentMarkdown уже есть", app_name, domain)
                 continue
 
             # shortDescription
@@ -220,9 +222,10 @@ def process_all_projects():
                 if short_desc:
                     enrich_short_description(json_path, short_desc)
                 else:
-                    ai_log(
-                        f"[AI][FAIL] Не удалось сгенерировать shortDescription для {app_name}/{domain}",
-                        level="error",
+                    logger.error(
+                        "[FAIL] Не удалось сгенерировать shortDescription для %s/%s",
+                        app_name,
+                        domain,
                     )
 
             # Основной markdown-обзор
@@ -271,9 +274,10 @@ def process_all_projects():
             if final_content:
                 enrich_main_json(json_path, final_content)
             else:
-                ai_log(
-                    f"[AI][FAIL] Не удалось сгенерировать финальный контент для {app_name}/{domain}",
-                    level="error",
+                logger.error(
+                    "[FAIL] Не удалось сгенерировать финальный контент для %s/%s",
+                    app_name,
+                    domain,
                 )
 
 
