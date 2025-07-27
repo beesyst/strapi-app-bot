@@ -10,6 +10,7 @@ from core.log_utils import get_logger
 
 # Получаем логгер для seo_utils
 logger = get_logger("seo_utils")
+ai_logger = get_logger("ai")
 
 
 # Генерирует SEO-описание с ограничением длины и ретраями
@@ -21,27 +22,24 @@ async def ai_generate_seo_desc(
     )
     desc = (desc or "").strip()
     if len(desc) <= max_len:
-        logger.info(f"SEO desc сгенерировано с первой попытки: '{desc}'")
+        ai_logger.info("[seo_desc_first_try] %s", desc)
         return desc
 
-    # Retry loop если слишком длинно
     base_prompt = prompts["seo_short"].format(short_desc=short_desc, max_len=max_len)
     for i in range(max_retries):
         retry_prompt = prompts["seo_short_retry"].format(
             base_prompt=base_prompt, max_len=max_len, result=desc
         )
+        ai_logger.info("[request] %s", retry_prompt[:200])
         desc_retry = await _ai_generate_seo_desc(
             retry_prompt, prompts, openai_cfg, executor, max_len=max_len
         )
         desc_retry = (desc_retry or "").strip()
-        logger.info(f"SEO desc retry #{i+1}: '{desc_retry}' (orig: '{desc}')")
+        ai_logger.info("[seo_desc_retry #%d] %s (orig: %s)", i + 1, desc_retry, desc)
         if len(desc_retry) <= max_len:
             return desc_retry
         desc = desc_retry
-    # Если ничего не помогло - режем по max_len
-    logger.warning(
-        f"SEO desc не удалось сократить до {max_len}, принудительно обрезаем: '{desc[:max_len]}'"
-    )
+    ai_logger.warning("[seo_desc_truncated] %s", desc[:max_len])
     return desc[:max_len]
 
 
@@ -60,8 +58,12 @@ async def build_seo_section(main_data, prompts, openai_cfg, executor):
     )
     seo_desc, keywords = await asyncio.gather(seo_desc_task, keywords_task)
 
-    logger.info(
-        f"SEO metaTitle: '{name}', metaDesc: '{short_desc}', seo_desc: '{seo_desc}', keywords: '{keywords}'"
+    ai_logger.info(
+        "[seo_result] metaTitle: '%s', metaDesc: '%s', seo_desc: '%s', keywords: '%s'",
+        name,
+        short_desc,
+        seo_desc,
+        keywords,
     )
 
     return {
