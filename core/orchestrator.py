@@ -82,7 +82,7 @@ async def process_partner(
     prompts,
     openai_cfg,
     executor,
-    show_status=False,  # <--- ВСЕГДА False, весь вывод снаружи!
+    show_status=False,
 ):
     start_time = time.time()
     spinner_text = f"{app_name} - {url}"

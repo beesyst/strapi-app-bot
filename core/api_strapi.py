@@ -39,7 +39,7 @@ def project_exists(api_url, api_token, name):
     return None, None
 
 
-# Логирует ключевые секции main.json в strapi.log по секциям (новый стиль!)
+# Логирует ключевые секции main.json в strapi.log по секциям
 def log_strapi_sections(data):
     sections = [
         "name",
@@ -117,7 +117,7 @@ def create_project(api_url, api_token, data, app_name=None, domain=None, url=Non
         status = check_strapi_status(data, existing_attrs)
         log_strapi_status(status, app_name, domain, url)
         if status == SKIP:
-            logger.info(f"[SKIP] Проект уже существует: {data.get('name', '')}")
+            logger.info(f"[skip] Проект уже существует: {data.get('name', '')}")
             log_strapi_sections(data)
             return status, project_id
     else:
@@ -189,7 +189,38 @@ def upload_logo(api_url, api_token, project_id, image_path):
     return None
 
 
-# Пытается загрузить svgLogo проекта в Strapi (логирует в strapi.log)
+# обновляем seo секцию с media id картинки (logo_id)
+def update_seo_image(api_url, api_token, project_id, logo_id):
+    headers = {
+        "Authorization": api_token,
+        "Content-Type": "application/json",
+    }
+    get_url = f"{api_url}/{project_id}?populate[seo][populate][metaSocial]=*"
+    resp = requests.get(get_url, headers=headers)
+    if resp.status_code != 200:
+        logger.warning(
+            f"[seo_patch] Не удалось получить текущий seo: {resp.status_code}"
+        )
+        return False
+
+    project = resp.json().get("data", {}).get("attributes", {})
+    old_seo = project.get("seo", {}) if project else {}
+
+    new_seo = dict(old_seo)
+    new_seo["metaImage"] = logo_id
+    if "metaSocial" in new_seo and new_seo["metaSocial"]:
+        new_seo["metaSocial"][0]["image"] = logo_id
+    else:
+        new_seo["metaSocial"] = [{"socialNetwork": "Twitter", "image": logo_id}]
+
+    data = {"seo": new_seo}
+    put_url = f"{api_url}/{project_id}"
+    put_resp = requests.put(put_url, json={"data": data}, headers=headers)
+    logger.info(f"[seo_patch] PATCH seo: {put_resp.status_code}, {put_resp.text[:200]}")
+    return put_resp.status_code == 200
+
+
+# Пытается загрузить svgLogo проекта в Strapi
 def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
     image_name = main_data.get("svgLogo")
     if not image_name:
@@ -204,6 +235,9 @@ def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
         logger.info(
             f"[svgLogo] успешно загружено: {image_name} для project_id={project_id}"
         )
+        logo_id = result.get("id")
+        if logo_id:
+            update_seo_image(api_url, api_token, project_id, logo_id)
         return result
     else:
         logger.warning(f"[svgLogo] ошибка загрузки: {image_name}")
