@@ -5,6 +5,7 @@ import time
 import requests
 from core.log_utils import get_logger
 
+# Логгер
 logger = get_logger("coingecko")
 
 CONFIG_PATH = os.path.join(
@@ -60,7 +61,7 @@ def search_coin_id(query, retries=3):
     return ""
 
 
-# Медленный fallback: ищет coin id на Coingecko по домену
+# Медленный fallback: поиск coin id на Coingecko по домену
 def search_coin_id_by_website(website_url, retries=3, max_coins=10):
     for attempt in range(retries):
         try:
@@ -126,7 +127,7 @@ def get_coin_id_best(name, website_url):
     return coin_id
 
 
-# Обогащает main_data CoinGecko ID, пишет результат в coinData
+# Обогащение main_data CoinGecko ID, результат в coinData
 def enrich_with_coin_id(main_data):
     name = main_data.get("name", "")
     website_url = ""

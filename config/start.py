@@ -15,7 +15,7 @@ from core.log_utils import auto_clear_logs_if_needed, init_setup_log
 auto_clear_logs_if_needed()
 init_setup_log()
 
-# Проверяем venv, при необходимости пересобираем
+# Проверка venv
 VENV_PATH = os.path.join(ROOT_DIR, "venv")
 if sys.prefix == sys.base_prefix:
     if not os.path.isdir(VENV_PATH):
@@ -26,14 +26,14 @@ if sys.prefix == sys.base_prefix:
         py_in_venv = os.path.join(VENV_PATH, "Scripts", "python.exe")
     os.execv(py_in_venv, [py_in_venv] + sys.argv)
 
-# Ставим зависимости (pip, npm, playwright)
+# Зависимости (pip, npm, playwright)
 INSTALL_PATH = os.path.join(ROOT_DIR, "core", "install.py")
 setup_log_path = os.path.join(LOGS_DIR, "setup.log")
 with open(setup_log_path, "a") as logf:
     subprocess.run([sys.executable, INSTALL_PATH], check=True, stdout=logf, stderr=logf)
 
 
-# Импортируем и запускаем orchestrator
+# Импорт и запуск orchestrator
 def run_orchestrator():
     import importlib.util
 

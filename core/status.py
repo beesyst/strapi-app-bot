@@ -2,11 +2,11 @@ from datetime import datetime
 
 from core.log_utils import get_logger
 
-# Именованные логгеры
+# Логгеры
 logger = get_logger("orchestrator")
 strapi_logger = get_logger("strapi")
 
-# Допустимые статусы
+# Статусы
 ADD = "add"
 UPDATE = "update"
 SKIP = "skip"
@@ -17,7 +17,7 @@ STATUSES = {ADD, UPDATE, SKIP, ERROR}
 MAIN_FIELDS = ["name", "svgLogo", "socialLinks", "coinData"]
 
 
-# Получить текущее время (строка)
+# Текущее время (строка)
 def now():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -30,7 +30,7 @@ def compare_main_fields(d1, d2):
     return True
 
 
-# Логировать статус операции
+# Лог статуса операции
 def log_status_info(status, app, domain, url, extra=""):
     msg = f"[{status}] {app} - {domain} - {url}"
     if extra:
@@ -58,7 +58,7 @@ def log_strapi_status(status, app, domain, url, error_msg=""):
         strapi_logger.error(f"[invalid_status] {status} for {app} - {domain} - {url}")
 
 
-# Проверить необходимость обновления main.json
+# Проверка обновления main.json
 def check_mainjson_status(old_data, new_data):
     if compare_main_fields(old_data, new_data):
         return SKIP
@@ -66,7 +66,7 @@ def check_mainjson_status(old_data, new_data):
         return UPDATE
 
 
-# Проверить необходимость обновления Strapi
+# Проверка обновления Strapi
 def check_strapi_status(main_data, strapi_data):
     if compare_main_fields(main_data, strapi_data):
         return SKIP
@@ -74,7 +74,7 @@ def check_strapi_status(main_data, strapi_data):
         return UPDATE
 
 
-# Проверить заполненность ключевых полей
+# Проверка заполненности ключевых полей
 def check_fields_filled(data, fields=None):
     fields = fields or MAIN_FIELDS
     for k in fields:
@@ -84,7 +84,7 @@ def check_fields_filled(data, fields=None):
     return True
 
 
-# Получить список различий по ключевым полям
+# Получение списка различий по ключевым полям
 def diff_main_fields(d1, d2):
     diffs = []
     for k in MAIN_FIELDS:

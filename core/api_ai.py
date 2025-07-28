@@ -4,8 +4,9 @@ import os
 
 import requests
 from core.log_utils import get_logger
+from core.normalize import normalize_content_to_template_md
 
-# Получаем логгер для AI-компонента
+# Логгер
 logger = get_logger("ai")
 
 
@@ -74,7 +75,7 @@ def call_openai_api(
     return ""
 
 
-# Обновляет contentMarkdown в main.json
+# Обновление contentMarkdown в main.json
 def enrich_main_json(json_path, content):
     if not os.path.exists(json_path):
         logger.error("[ERROR] main.json not found: %s", json_path)
@@ -88,7 +89,7 @@ def enrich_main_json(json_path, content):
     return True
 
 
-# Обновляет shortDescription в main.json
+# Обновление вляет shortDescription в main.json
 def enrich_short_description(json_path, short_desc):
     if not os.path.exists(json_path):
         logger.error("[ERROR] main.json не найден: %s", json_path)
@@ -102,7 +103,7 @@ def enrich_short_description(json_path, short_desc):
     return True
 
 
-# Асинхронно генерирует короткое описание для проекта (short_desc)
+# Асинх генерация описания для проекта (short_desc)
 async def ai_generate_short_desc(data, prompts, openai_cfg, executor):
     def sync_ai_short():
         short_ctx = {
@@ -122,7 +123,7 @@ def load_allowed_categories(config_path="config/config.json"):
     return config.get("categories", [])
 
 
-# Нормализует и валидирует категории из AI
+# Нормализация и валидация категории из AI
 def clean_categories(raw_cats, allowed_categories):
     if not isinstance(raw_cats, list):
         raw_cats = [c.strip() for c in raw_cats.split(",") if c.strip()]
@@ -135,7 +136,7 @@ def clean_categories(raw_cats, allowed_categories):
     return result[:3]
 
 
-# Асинхронно генерирует массив категорий для проекта
+# Асинх генерация массива категорий для проекта
 async def ai_generate_project_categories(
     data, prompts, openai_cfg, executor, allowed_categories=None
 ):
@@ -152,7 +153,6 @@ async def ai_generate_project_categories(
             cats = [c.strip() for c in raw.split(",") if c.strip()]
         else:
             cats = [c.strip("-•. \t") for c in raw.splitlines() if c.strip()]
-        # Магия clean_categories
         if allowed_categories is not None:
             return clean_categories(cats, allowed_categories)
         return cats[:3]
@@ -161,7 +161,12 @@ async def ai_generate_project_categories(
     return await loop.run_in_executor(executor, sync_ai_categories)
 
 
-# Асинхронно генерирует полный markdown-контент проекта
+def load_content_template(template_path="templates/content_template.json"):
+    with open(template_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+# Асинх генерация полного markdown-контент проекта
 async def ai_generate_content_markdown(
     data, app_name, domain, prompts, openai_cfg, executor
 ):
@@ -172,7 +177,7 @@ async def ai_generate_content_markdown(
         }
         prompt1 = render_prompt(prompts["review_full"], context1)
         content1 = call_ai_with_config(prompt1, openai_cfg)
-        # Проверяем связь проектов
+
         main_app_config_path = os.path.join("config", "apps", f"{app_name}.json")
         if os.path.exists(main_app_config_path):
             with open(main_app_config_path, "r", encoding="utf-8") as f:
@@ -182,6 +187,7 @@ async def ai_generate_content_markdown(
         else:
             main_name = app_name.capitalize()
             main_url = ""
+
         content2 = ""
         if domain.lower() != main_name.lower():
             context2 = {
@@ -192,21 +198,34 @@ async def ai_generate_content_markdown(
             }
             prompt2 = render_prompt(prompts["connection"], context2)
             content2 = call_ai_with_config(prompt2, openai_cfg)
+
         all_content = content1
         if content2:
             all_content = (
                 f"{content1}\n\n## {main_name} x {context1['name']}\n\n{content2}"
             )
+
         context3 = {"connection_with": main_name if content2 else ""}
         prompt3 = render_prompt(prompts["finalize"], context3)
         final_content = call_ai_with_config(f"{all_content}\n\n{prompt3}", openai_cfg)
-        return final_content
+
+        from core.api_ai import load_content_template
+
+        content_template = load_content_template()
+
+        connection_title = f"{main_name} x {context1['name']}" if content2 else ""
+
+        normalized_md = normalize_content_to_template_md(
+            final_content, content_template, connection_title
+        )
+
+        return normalized_md.strip()
 
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, sync_ai_content)
 
 
-# Асинхронный генератор SEO-описания
+# Асинх генерация SEO-описания
 async def ai_generate_seo_desc(short_desc, prompts, openai_cfg, executor, max_len=50):
     def sync_seo_desc():
         context = {"short_desc": short_desc, "max_len": max_len}
@@ -217,7 +236,7 @@ async def ai_generate_seo_desc(short_desc, prompts, openai_cfg, executor, max_le
     return await loop.run_in_executor(executor, sync_seo_desc)
 
 
-# Асинхронный генератор SEO-ключевых слов
+# Асинх генерация SEO-ключевых слов
 async def ai_generate_keywords(content, prompts, openai_cfg, executor):
     def sync_keywords():
         context = {"content": content or ""}
@@ -228,7 +247,7 @@ async def ai_generate_keywords(content, prompts, openai_cfg, executor):
     return await loop.run_in_executor(executor, sync_keywords)
 
 
-# Синхронный генератор для оффлайн-режима
+# Синхр генерация для оффлайн-режима
 def process_all_projects():
     openai_cfg = load_openai_config()
     prompts = load_prompts()
@@ -251,7 +270,6 @@ def process_all_projects():
             with open(json_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
-            # Пропускаем, если уже есть сгенерированный контент
             if data.get("contentMarkdown"):
                 logger.info("[SKIP] %s/%s: contentMarkdown уже есть", app_name, domain)
                 continue
@@ -268,7 +286,7 @@ def process_all_projects():
                     enrich_short_description(json_path, short_desc)
                 else:
                     logger.error(
-                        "[FAIL] Не удалось сгенерировать shortDescription для %s/%s",
+                        "[fail] Не удалось сгенерировать shortDescription для %s/%s",
                         app_name,
                         domain,
                     )
@@ -293,7 +311,7 @@ def process_all_projects():
                 main_url = ""
 
             content2 = ""
-            # Добавляем связку, если имя не совпадает с основным проектом
+            # Добавление связки, если имя не совпадает с основным проектом
             if domain.lower() != main_name.lower():
                 context2 = {
                     "name1": main_name,
@@ -320,7 +338,7 @@ def process_all_projects():
                 enrich_main_json(json_path, final_content)
             else:
                 logger.error(
-                    "[FAIL] Не удалось сгенерировать финальный контент для %s/%s",
+                    "[fail] Не удалось сгенерировать финальный контент для %s/%s",
                     app_name,
                     domain,
                 )

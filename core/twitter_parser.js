@@ -19,7 +19,7 @@ async function main() {
 
     try {
         await page.goto(url, { timeout: 45000, waitUntil: 'domcontentloaded' });
-        // Ждем динамику X
+        // Ожидание динамики X
         await page.waitForTimeout(3500);
 
         const result = await page.evaluate(() => {
@@ -34,11 +34,11 @@ async function main() {
                 name = nameEl.textContent.trim();
             }
 
-            // Если не нашли, fallback — из <title>
+            // Если не ннайдено, fallback - из <title>
             if (!name) {
                 const titleEl = document.querySelector('title');
                 if (titleEl && titleEl.textContent) {
-                    // Берем до первой скобки или " / "
+                    // До первой скобки или " / "
                     let t = titleEl.textContent.trim();
                     let match = t.match(/^(.+?)\s*\(/) || t.match(/^(.+?)\s*\/\s/);
                     if (match && match[1]) {
@@ -101,11 +101,11 @@ async function main() {
                 }
             }
 
-            // Возвращаем ссылки, аватар и имя (name)
+            // Возврат ссылки, аватар и имя (name)
             return { links, avatar, name };
         });
 
-        // Выводим результат в stdout
+        // Вывод результата в stdout
         console.log(JSON.stringify(result));
     } catch (err) {
         console.error("Error:", err);

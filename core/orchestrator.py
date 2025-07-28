@@ -34,7 +34,7 @@ from core.web_parser import (
     get_domain_name,
 )
 
-# Получаем логгер orchestrator (имя модуля)
+# Логгеры
 logger = get_logger("orchestrator")
 strapi_logger = get_logger("strapi")
 
@@ -46,20 +46,20 @@ STORAGE_DIR = "storage/apps"
 spinner_frames = ["/", "-", "\\", "|"]
 
 
-# Загружает основной шаблон main.json
+# Шаблон main.json
 def load_main_template():
     with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-# Создает папку для хранения результата по проекту
+# Папка для хранения результата по проекту
 def create_project_folder(app_name, domain):
     storage_path = os.path.join(STORAGE_DIR, app_name, domain)
     os.makedirs(storage_path, exist_ok=True)
     return storage_path
 
 
-# Сохраняет main.json для проекта
+# Сохранение main.json для проекта
 def save_main_json(storage_path, data):
     json_path = os.path.join(storage_path, "main.json")
     with open(json_path, "w", encoding="utf-8") as f:
@@ -78,7 +78,7 @@ def spinner_task(text, stop_event):
         time.sleep(0.13)
 
 
-# Асинхронная обработка одного партнера
+# Асинх обработка одного партнера
 async def process_partner(
     app_name,
     domain,
@@ -155,7 +155,7 @@ async def process_partner(
         else:
             logo_filename, real_name = None, None
 
-        categories = await ai_categories_future  # <- всегда чистый массив из config
+        categories = await ai_categories_future
 
         social_keys = list(main_template["socialLinks"].keys())
         final_socials = {k: found_socials.get(k, "") for k in social_keys}
@@ -222,7 +222,7 @@ async def process_partner(
     return status
 
 
-# Асинхронное обогащение данных по коину через CoinGecko
+# Асинх обогащение данных по коину через CoinGecko
 async def enrich_coin_async(main_data, executor):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, enrich_with_coin_id, main_data)

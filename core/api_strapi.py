@@ -12,7 +12,7 @@ from core.status import (
     log_strapi_status,
 )
 
-# Логгер strapi.log
+# Логгер
 logger = get_logger("strapi")
 
 
@@ -39,7 +39,7 @@ def project_exists(api_url_proj, api_token, name):
     return None, None
 
 
-# Логирует ключевые секции main.json в strapi.log по секциям
+# Лог ключевых секций main.json в strapi.log по секциям
 def log_strapi_sections(data):
     sections = [
         "name",
@@ -178,7 +178,7 @@ def create_project(
     return ERROR, None
 
 
-# Загрузка лого через эндпоинт /upload с коротким логом
+# Загрузка лого через эндпоинт /upload
 def upload_logo(api_url, api_token, project_id, image_path):
     if not os.path.exists(image_path):
         logger.warning(f"[svgLogo] no_image: {image_path}")
@@ -196,14 +196,14 @@ def upload_logo(api_url, api_token, project_id, image_path):
                 f"[svgLogo] {image_path} to project_id={project_id}: {resp.status_code}, {resp.text[:200]}"
             )
             if resp.status_code in (200, 201):
-                logger.info(f"[UPLOAD] {image_path} to project_id={project_id}: OK")
+                logger.info(f"[upload] {image_path} to project_id={project_id}: OK")
                 return resp.json()[0]
     except Exception as e:
-        logger.error(f"[UPLOAD] Ошибка загрузки svgLogo: {e}")
+        logger.error(f"[upload] Ошибка загрузки svgLogo: {e}")
     return None
 
 
-# обновляем seo секцию с media id картинки (logo_id)
+# Обновление seo секции с media id картинки (logo_id)
 def update_seo_image(api_url_proj, api_token, project_id, logo_id):
     headers = {
         "Authorization": api_token,
@@ -234,7 +234,7 @@ def update_seo_image(api_url_proj, api_token, project_id, logo_id):
     return put_resp.status_code == 200
 
 
-# Пытается загрузить svgLogo проекта в Strapi
+# Загрузка svgLogo проекта в Strapi
 def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
     image_name = main_data.get("svgLogo")
     if not image_name:
@@ -258,7 +258,7 @@ def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
         return None
 
 
-# Получает или создает категорию по имени, возвращает id
+# Получение или создание категории по имени
 def get_or_create_project_category(api_url_cat, api_token, category_name):
     url = f"{api_url_cat}?filters[name][$eq]={category_name}"
     headers = {"Authorization": api_token}
@@ -268,7 +268,6 @@ def get_or_create_project_category(api_url_cat, api_token, category_name):
         items = data.get("data", [])
         if items:
             return items[0]["id"]
-    # Если нет - создает новую
     create_url = api_url_cat
     payload = {"data": {"name": category_name}}
     resp = requests.post(create_url, headers=headers, json=payload)
@@ -278,7 +277,7 @@ def get_or_create_project_category(api_url_cat, api_token, category_name):
     return None
 
 
-# Вернуть список id (или []), создавая новые если надо
+# Список id (или [])
 def get_project_category_ids(api_url_cat, api_token, category_names):
     ids = []
     for cat in category_names:

@@ -8,7 +8,7 @@ import requests
 from bs4 import BeautifulSoup
 from core.log_utils import get_logger
 
-# Получаем логгер web_parser для всех сообщений этого модуля
+# Логгер
 logger = get_logger("web_parser")
 
 # Кэш для ускорения парсинга
@@ -36,7 +36,7 @@ SOCIAL_PATTERNS = {
 BAD_NAMES = {"", "x", "profile", "new to x"}
 
 
-# Очищает и нормализует имя проекта
+# Очистка и нормализация имени проекта
 def clean_project_name(name):
     name = re.sub(r"\s*[\(\[\{].*?[\)\]\}]", "", name)
     name = re.sub(r"[^A-Za-zА-Яа-я0-9\- ]", "", name)
@@ -45,7 +45,7 @@ def clean_project_name(name):
     return name.strip()
 
 
-# Загружает HTML страницы с кэшем, логирует успех/ошибку
+# Загрузка HTML страницы с кэшем, лог успех/ошибка
 def fetch_url_html(url):
     if url in FETCHED_HTML_CACHE:
         return FETCHED_HTML_CACHE[url]
@@ -61,7 +61,7 @@ def fetch_url_html(url):
         return ""
 
 
-# Ищет внутренние ссылки сайта (максимум max_links), с кэшем
+# Поиск внутренних сссылок сайта (максимум max_links) с кэшем
 def get_internal_links(html, base_url, max_links=10):
     if base_url in PARSED_INTERNALS_CACHE:
         return PARSED_INTERNALS_CACHE[base_url]
@@ -79,14 +79,14 @@ def get_internal_links(html, base_url, max_links=10):
     return links_list
 
 
-# Приводит соцссылки к единому виду (например, twitter → x)
+# Привод соцссылок к единому виду (например, twitter → x)
 def normalize_socials(socials):
     if socials.get("twitterURL"):
         socials["twitterURL"] = socials["twitterURL"].replace("twitter.com", "x.com")
     return socials
 
 
-# Получает доменное имя из URL и логирует результат
+# Доменное имя из URL и лог результата
 def get_domain_name(url):
     domain = urlparse(url).netloc
     result = domain.replace("www.", "").split(".")[0]
@@ -94,7 +94,7 @@ def get_domain_name(url):
     return result
 
 
-# Получает ссылки и имя/аватар из X/Twitter через Node-скрипт
+# Ссылки и имя/аватар из X/Twitter через Node-скрипт
 def get_links_from_x_profile(profile_url):
     ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     NODE_CORE_DIR = os.path.join(ROOT_DIR, "core")
@@ -131,7 +131,7 @@ def safe_json_loads(data):
         return {}
 
 
-# Находит лучшую ссылку на документацию среди ссылок страницы
+# Поиск лучшей ссылки на док среди ссылок страницы
 def find_best_docs_link(soup, base_url):
     candidates = []
     for a in soup.find_all("a", href=True):
@@ -192,7 +192,7 @@ def find_best_docs_link(soup, base_url):
     return ""
 
 
-# Извлекает все социальные ссылки и docs с html страницы
+# Извлечение всех соц ссылок и docs с html страницы
 def extract_social_links(html, base_url, is_main_page=False):
     if base_url in PARSED_SOCIALS_CACHE:
         return PARSED_SOCIALS_CACHE[base_url]
@@ -267,7 +267,7 @@ def collect_social_links_main(url, main_template, storage_path=None):
     return found_socials, clean_name
 
 
-# Получает и скачивает аватар и имя из X/Twitter
+# Получение и скачивание аватар и имя из X/Twitter
 def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retries=3):
     twitter_result = None
     avatar_url = ""
@@ -323,7 +323,7 @@ def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retr
     return "", name
 
 
-# Собирает все соцсети и docs, а также скачивает аватар, обновляет main_data
+# Сбор всех соц ссылок и docs, а также загрузка аватара и обновление main_data
 def collect_all_socials(url, main_template, storage_path=None, max_internal_links=10):
     import copy
 

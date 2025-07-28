@@ -8,12 +8,12 @@ from core.api_ai import (
 )
 from core.log_utils import get_logger
 
-# Получаем логгер для seo_utils
+# Логгер
 logger = get_logger("seo_utils")
 ai_logger = get_logger("ai")
 
 
-# Генерирует SEO-описание с ограничением длины и ретраями
+# SEO-описание с ограничением длины и ретраями
 async def ai_generate_seo_desc(
     short_desc, prompts, openai_cfg, executor, max_len=50, max_retries=3
 ):
@@ -43,13 +43,13 @@ async def ai_generate_seo_desc(
     return desc[:max_len]
 
 
-# Генерирует SEO-секцию для main.json
+# SEO-секция для main.json
 async def build_seo_section(main_data, prompts, openai_cfg, executor):
     name = main_data.get("name") or ""
     short_desc = main_data.get("shortDescription") or ""
     content_md = main_data.get("contentMarkdown") or ""
 
-    # Генерируем SEO-описание и ключевые слова параллельно
+    # SEO-описание и ключевые слова параллельно
     seo_desc_task = asyncio.create_task(
         ai_generate_seo_desc(short_desc, prompts, openai_cfg, executor, max_len=50)
     )
