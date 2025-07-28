@@ -5,7 +5,7 @@ import time
 import requests
 from core.log_utils import get_logger
 
-logger = get_logger("coingecko_parser")
+logger = get_logger("coingecko")
 
 CONFIG_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "config.json"

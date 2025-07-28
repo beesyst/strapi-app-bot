@@ -13,11 +13,11 @@ from core.api_ai import (
     load_openai_config,
     load_prompts,
 )
+from core.api_coingecko import enrich_with_coin_id
 from core.api_strapi import (
     get_project_category_ids,
     try_upload_logo,
 )
-from core.coingecko_parser import enrich_with_coin_id
 from core.log_utils import get_logger
 from core.seo_utils import build_seo_section
 from core.status import (
