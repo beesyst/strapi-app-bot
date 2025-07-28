@@ -7,11 +7,16 @@ from concurrent.futures import ThreadPoolExecutor
 
 from core.api_ai import (
     ai_generate_content_markdown,
+    ai_generate_project_categories,
     ai_generate_short_desc,
+    load_allowed_categories,
     load_openai_config,
     load_prompts,
 )
-from core.api_strapi import try_upload_logo
+from core.api_strapi import (
+    get_project_category_ids,
+    try_upload_logo,
+)
 from core.coingecko_parser import enrich_with_coin_id
 from core.log_utils import get_logger
 from core.seo_utils import build_seo_section
@@ -82,7 +87,12 @@ async def process_partner(
     prompts,
     openai_cfg,
     executor,
+    allowed_categories,
     show_status=False,
+    strapi_sync=None,
+    api_url_proj=None,
+    api_url_cat=None,
+    api_token=None,
 ):
     start_time = time.time()
     spinner_text = f"{app_name} - {url}"
@@ -130,6 +140,12 @@ async def process_partner(
         else:
             twitter_future = None
 
+        ai_categories_future = asyncio.create_task(
+            ai_generate_project_categories(
+                main_data_for_ai, prompts, openai_cfg, executor, allowed_categories
+            )
+        )
+
         coin_result, short_desc, content_md = await asyncio.gather(
             coin_future, ai_short_future, ai_content_future
         )
@@ -138,6 +154,8 @@ async def process_partner(
             logo_filename, real_name = await twitter_future
         else:
             logo_filename, real_name = None, None
+
+        categories = await ai_categories_future  # <- всегда чистый массив из config
 
         social_keys = list(main_template["socialLinks"].keys())
         final_socials = {k: found_socials.get(k, "") for k in social_keys}
@@ -152,13 +170,24 @@ async def process_partner(
             main_data["shortDescription"] = short_desc.strip()
         if content_md:
             main_data["contentMarkdown"] = content_md.strip()
+
+        # Категории
+        if not categories:
+            main_data["project_categories"] = []
+        elif strapi_sync and api_url_cat and api_token:
+            category_ids = get_project_category_ids(api_url_cat, api_token, categories)
+            main_data["project_categories"] = category_ids
+        else:
+            main_data["project_categories"] = categories
+
+        # SEO
         main_data["seo"] = await build_seo_section(
             main_data, prompts, openai_cfg, executor
         )
 
         main_json_path = os.path.join(storage_path, "main.json")
 
-        # --- Важно! ---
+        # Проверка и сохранение main.json
         if not os.path.exists(main_json_path):
             status = ADD
         else:
@@ -201,6 +230,7 @@ async def enrich_coin_async(main_data, executor):
 
 # Главная оркестрация всего пайплайна
 async def orchestrate_all():
+    allowed_categories = load_allowed_categories()
     with open(CENTRAL_CONFIG_PATH, "r", encoding="utf-8") as f:
         central_config = json.load(f)
     strapi_sync = central_config.get("strapi_sync", True)
@@ -220,6 +250,9 @@ async def orchestrate_all():
         with open(app_config_path, "r", encoding="utf-8") as f:
             app_config = json.load(f)
         for url in app_config["partners"]:
+            api_url_proj = app.get("api_url_proj", "")
+            api_url_cat = app.get("api_url_cat", "")
+            api_token = app.get("api_token", "")
             domain = get_domain_name(url)
             storage_path = os.path.join(STORAGE_DIR, app_name, domain)
             main_json_path = os.path.join(storage_path, "main.json")
@@ -235,7 +268,12 @@ async def orchestrate_all():
                         prompts,
                         openai_cfg,
                         executor,
+                        allowed_categories,
                         show_status=False,
+                        strapi_sync=strapi_sync,
+                        api_url_proj=api_url_proj,
+                        api_url_cat=api_url_cat,
+                        api_token=api_token,
                     ),
                     timeout=120,
                 )
@@ -266,9 +304,7 @@ async def orchestrate_all():
                 continue
             with open(main_json_path, "r", encoding="utf-8") as fjson:
                 main_data = json.load(fjson)
-            api_url = app.get("api_url", "")
-            api_token = app.get("api_token", "")
-            if api_url and api_token:
+            if api_url_proj and api_token:
                 from core.api_strapi import (
                     ERROR as STRAPI_ERROR,
                 )
@@ -280,7 +316,8 @@ async def orchestrate_all():
                 )
 
                 status_strapi, project_id = create_project(
-                    api_url,
+                    api_url_proj,
+                    api_url_cat,
                     api_token,
                     main_data,
                     app_name=app_name,
@@ -303,7 +340,7 @@ async def orchestrate_all():
                 print()
                 if project_id:
                     try_upload_logo(
-                        main_data, storage_path, api_url, api_token, project_id
+                        main_data, storage_path, api_url_proj, api_token, project_id
                     )
             else:
                 print(f"[error] {app_name} - {url} - {elapsed} sec [No API]")

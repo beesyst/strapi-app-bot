@@ -116,6 +116,51 @@ async def ai_generate_short_desc(data, prompts, openai_cfg, executor):
     return await loop.run_in_executor(executor, sync_ai_short)
 
 
+def load_allowed_categories(config_path="config/config.json"):
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = json.load(f)
+    return config.get("categories", [])
+
+
+# Нормализует и валидирует категории из AI
+def clean_categories(raw_cats, allowed_categories):
+    if not isinstance(raw_cats, list):
+        raw_cats = [c.strip() for c in raw_cats.split(",") if c.strip()]
+    allowed = {c.lower(): c for c in allowed_categories}
+    result = []
+    for c in raw_cats:
+        key = c.strip().lower()
+        if key in allowed and allowed[key] not in result:
+            result.append(allowed[key])
+    return result[:3]
+
+
+# Асинхронно генерирует массив категорий для проекта
+async def ai_generate_project_categories(
+    data, prompts, openai_cfg, executor, allowed_categories=None
+):
+    def sync_ai_categories():
+        context = {
+            "name1": data.get("name", ""),
+            "website1": data.get("socialLinks", {}).get("websiteURL", ""),
+        }
+        prompt = render_prompt(prompts["project_categories"], context)
+        raw = call_ai_with_config(prompt, openai_cfg)
+        if not raw:
+            return []
+        if "," in raw:
+            cats = [c.strip() for c in raw.split(",") if c.strip()]
+        else:
+            cats = [c.strip("-•. \t") for c in raw.splitlines() if c.strip()]
+        # Магия clean_categories
+        if allowed_categories is not None:
+            return clean_categories(cats, allowed_categories)
+        return cats[:3]
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, sync_ai_categories)
+
+
 # Асинхронно генерирует полный markdown-контент проекта
 async def ai_generate_content_markdown(
     data, app_name, domain, prompts, openai_cfg, executor

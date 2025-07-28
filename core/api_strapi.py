@@ -22,8 +22,8 @@ def markdown_to_html(md_text):
 
 
 # Проверка существования проекта в Strapi
-def project_exists(api_url, api_token, name):
-    url = f"{api_url}?filters[name][$eq]={name}"
+def project_exists(api_url_proj, api_token, name):
+    url = f"{api_url_proj}?filters[name][$eq]={name}"
     headers = {
         "Authorization": api_token,
         "Content-Type": "application/json",
@@ -72,7 +72,12 @@ def log_strapi_sections(data):
                 logger.warning("[shortDescription] не найдено")
         elif key == "project_categories":
             if val and isinstance(val, list) and len(val) > 0:
-                logger.info("[project_categories] Готово")
+                if isinstance(val[0], str):
+                    logger.warning(
+                        "[project_categories] не id, а строки! (нужно исправить)"
+                    )
+                else:
+                    logger.info("[project_categories] Готово")
             else:
                 logger.warning("[project_categories] не найдено")
         elif key == "socialLinks":
@@ -108,10 +113,16 @@ def log_strapi_sections(data):
                 logger.warning(f"[{key}] не найдено")
 
 
-# Создание или обновление проекта в Strapi с логами по шаблону
-def create_project(api_url, api_token, data, app_name=None, domain=None, url=None):
+# Создание или обновление проекта в Strapi
+def create_project(
+    api_url_proj, api_url_cat, api_token, data, app_name=None, domain=None, url=None
+):
+    cats = data.get("project_categories", [])
+    if cats and isinstance(cats[0], str):
+        ids = get_project_category_ids(api_url_cat, api_token, cats)
+        data["project_categories"] = ids
     project_id, existing_attrs = project_exists(
-        api_url, api_token, data.get("name", "")
+        api_url_proj, api_token, data.get("name", "")
     )
     if project_id:
         status = check_strapi_status(data, existing_attrs)
@@ -135,6 +146,7 @@ def create_project(api_url, api_token, data, app_name=None, domain=None, url=Non
             "metaDescription": data.get("seo", {}).get("metaDescription", ""),
             "metaImage": data.get("seo", {}).get("metaImage", ""),
             "keywords": data.get("seo", {}).get("keywords", ""),
+            "project_categories": data.get("project_categories", []),
         }
     }
     headers = {
@@ -142,7 +154,7 @@ def create_project(api_url, api_token, data, app_name=None, domain=None, url=Non
         "Content-Type": "application/json",
     }
     try:
-        resp = requests.post(api_url, json=payload, headers=headers, timeout=10)
+        resp = requests.post(api_url_proj, json=payload, headers=headers, timeout=10)
         logger.info(
             f"[create] {data.get('name', '')}: {resp.status_code}, {resp.text[:200]}"
         )
@@ -150,7 +162,9 @@ def create_project(api_url, api_token, data, app_name=None, domain=None, url=Non
             log_strapi_sections(data)
             return ADD, resp.json()["data"]["id"]
         if resp.status_code in (409, 400, 500):
-            project_id, _ = project_exists(api_url, api_token, data.get("name", ""))
+            project_id, _ = project_exists(
+                api_url_proj, api_token, data.get("name", "")
+            )
             if project_id:
                 log_strapi_status(SKIP, app_name, domain, url)
                 logger.info(
@@ -190,12 +204,12 @@ def upload_logo(api_url, api_token, project_id, image_path):
 
 
 # обновляем seo секцию с media id картинки (logo_id)
-def update_seo_image(api_url, api_token, project_id, logo_id):
+def update_seo_image(api_url_proj, api_token, project_id, logo_id):
     headers = {
         "Authorization": api_token,
         "Content-Type": "application/json",
     }
-    get_url = f"{api_url}/{project_id}?populate[seo][populate][metaSocial]=*"
+    get_url = f"{api_url_proj}/{project_id}?populate[seo][populate][metaSocial]=*"
     resp = requests.get(get_url, headers=headers)
     if resp.status_code != 200:
         logger.warning(
@@ -214,7 +228,7 @@ def update_seo_image(api_url, api_token, project_id, logo_id):
         new_seo["metaSocial"] = [{"socialNetwork": "Twitter", "image": logo_id}]
 
     data = {"seo": new_seo}
-    put_url = f"{api_url}/{project_id}"
+    put_url = f"{api_url_proj}/{project_id}"
     put_resp = requests.put(put_url, json={"data": data}, headers=headers)
     logger.info(f"[seo_patch] PATCH seo: {put_resp.status_code}, {put_resp.text[:200]}")
     return put_resp.status_code == 200
@@ -244,6 +258,36 @@ def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
         return None
 
 
+# Получает или создает категорию по имени, возвращает id
+def get_or_create_project_category(api_url_cat, api_token, category_name):
+    url = f"{api_url_cat}?filters[name][$eq]={category_name}"
+    headers = {"Authorization": api_token}
+    resp = requests.get(url, headers=headers)
+    if resp.status_code == 200:
+        data = resp.json()
+        items = data.get("data", [])
+        if items:
+            return items[0]["id"]
+    # Если нет - создает новую
+    create_url = api_url_cat
+    payload = {"data": {"name": category_name}}
+    resp = requests.post(create_url, headers=headers, json=payload)
+    if resp.status_code in (200, 201):
+        data = resp.json()
+        return data["data"]["id"]
+    return None
+
+
+# Вернуть список id (или []), создавая новые если надо
+def get_project_category_ids(api_url_cat, api_token, category_names):
+    ids = []
+    for cat in category_names:
+        id_ = get_or_create_project_category(api_url_cat, api_token, cat)
+        if id_:
+            ids.append(id_)
+    return ids
+
+
 # Основная функция синхронизации всех проектов по шаблону
 def sync_projects(config_path, only_app=None):
     with open(config_path, "r", encoding="utf-8") as f:
@@ -254,10 +298,13 @@ def sync_projects(config_path, only_app=None):
         if not app.get("enabled", True):
             continue
         app_name = app["app"]
-        api_url = app.get("api_url")
+        api_url_proj = app.get("api_url_proj")
+        api_url_cat = app.get("api_url_cat")
         api_token = app.get("api_token")
-        if not api_url or not api_token:
-            logger.warning(f"[skip] {app_name}: no api_url or api_token")
+        if not api_url_proj or not api_url_cat or not api_token:
+            logger.warning(
+                f"[skip] {app_name}: no api_url_proj or api_url_cat or api_token"
+            )
             continue
         partners_path = os.path.join("config", "apps", f"{app_name}.json")
         if not os.path.exists(partners_path):
@@ -295,7 +342,13 @@ def sync_projects(config_path, only_app=None):
                 logger.error(f"[main.json] не загружен для {domain}: {e}")
                 continue
             status, project_id = create_project(
-                api_url, api_token, data, app_name=app_name, domain=domain, url=partner
+                app.get("api_url_proj"),
+                app.get("api_url_cat"),
+                api_token,
+                data,
+                app_name=app_name,
+                domain=domain,
+                url=partner,
             )
             if status == ERROR or not project_id:
                 log_strapi_status(
@@ -304,7 +357,11 @@ def sync_projects(config_path, only_app=None):
                 logger.error(f"[project_id] не создан: {domain}")
                 continue
             try_upload_logo(
-                data, os.path.dirname(json_path), api_url, api_token, project_id
+                data,
+                os.path.dirname(json_path),
+                app.get("api_url_proj"),
+                api_token,
+                project_id,
             )
 
 
@@ -316,9 +373,10 @@ def sync_projects_with_terminal_status(config_path):
         if not app.get("enabled", True):
             continue
         app_name = app["app"]
-        api_url = app.get("api_url", "")
-        api_token = app.get("api_token", "")
-        if not api_url or not api_token:
+        api_url_proj = app.get("api_url_proj")
+        api_url_cat = app.get("api_url_cat")
+        api_token = app.get("api_token")
+        if not api_url_proj or not api_url_cat or not api_token:
             continue
         partners_path = os.path.join("config", "apps", f"{app_name}.json")
         if not os.path.exists(partners_path):
@@ -341,11 +399,19 @@ def sync_projects_with_terminal_status(config_path):
                 with open(json_path, "r", encoding="utf-8") as f3:
                     data = json.load(f3)
                 status, project_id = create_project(
-                    api_url, api_token, data, app_name, domain, partner
+                    app.get("api_url_proj"),
+                    app.get("api_url_cat"),
+                    api_token,
+                    data,
+                    app_name=app_name,
+                    domain=domain,
+                    url=partner,
                 )
                 if status not in (ERROR, None) and project_id:
                     if data.get("svgLogo") and os.path.exists(image_path):
-                        upload_logo(api_url, api_token, project_id, image_path)
+                        upload_logo(
+                            app.get("api_url_proj"), api_token, project_id, image_path
+                        )
             except Exception:
                 continue
 
