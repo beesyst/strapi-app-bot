@@ -16,6 +16,18 @@ from core.status import (
 logger = get_logger("strapi")
 
 
+# Заголовок для Strapi API
+def get_strapi_headers(api_token, extra=None, skip_content_type=False):
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+    }
+    if not skip_content_type:
+        headers["Content-Type"] = "application/json"
+    if extra:
+        headers.update(extra)
+    return headers
+
+
 # Markdown → HTML для Strapi
 def markdown_to_html(md_text):
     return markdown.markdown(md_text, extensions=["extra"])
@@ -24,10 +36,7 @@ def markdown_to_html(md_text):
 # Проверка существования проекта в Strapi
 def project_exists(api_url_proj, api_token, name):
     url = f"{api_url_proj}?filters[name][$eq]={name}"
-    headers = {
-        "Authorization": api_token,
-        "Content-Type": "application/json",
-    }
+    headers = get_strapi_headers(api_token)
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         if resp.status_code == 200:
@@ -149,10 +158,7 @@ def create_project(
             "project_categories": data.get("project_categories", []),
         }
     }
-    headers = {
-        "Authorization": api_token,
-        "Content-Type": "application/json",
-    }
+    headers = get_strapi_headers(api_token)
     try:
         resp = requests.post(api_url_proj, json=payload, headers=headers, timeout=10)
         logger.info(
@@ -184,7 +190,7 @@ def upload_logo(api_url, api_token, project_id, image_path):
         logger.warning(f"[svgLogo] no_image: {image_path}")
         return None
     upload_url = api_url.replace("/projects", "/upload")
-    headers = {"Authorization": api_token}
+    headers = get_strapi_headers(api_token, skip_content_type=True)
     ref = "api::project.project"
     field = "svgLogo"
     try:
@@ -205,10 +211,7 @@ def upload_logo(api_url, api_token, project_id, image_path):
 
 # Обновление seo секции с media id картинки (logo_id)
 def update_seo_image(api_url_proj, api_token, project_id, logo_id):
-    headers = {
-        "Authorization": api_token,
-        "Content-Type": "application/json",
-    }
+    headers = get_strapi_headers(api_token)
     get_url = f"{api_url_proj}/{project_id}?populate[seo][populate][metaSocial]=*"
     resp = requests.get(get_url, headers=headers)
     if resp.status_code != 200:
@@ -261,7 +264,7 @@ def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
 # Получение или создание категории по имени
 def get_or_create_project_category(api_url_cat, api_token, category_name):
     url = f"{api_url_cat}?filters[name][$eq]={category_name}"
-    headers = {"Authorization": api_token}
+    headers = get_strapi_headers(api_token)
     resp = requests.get(url, headers=headers)
     if resp.status_code == 200:
         data = resp.json()
