@@ -285,6 +285,39 @@ async def ai_generate_keywords(content, prompts, openai_cfg, executor):
     return await loop.run_in_executor(executor, sync_keywords)
 
 
+# Асинхронная генерация seo_short с ретраями
+async def ai_generate_seo_desc_with_retries(
+    short_desc, prompts, openai_cfg, executor, max_len=50, max_retries=3
+):
+    desc = await ai_generate_seo_desc(
+        short_desc, prompts, openai_cfg, executor, max_len=max_len
+    )
+    desc = (desc or "").strip()
+    if len(desc) <= max_len:
+        logger.info("[seo_desc_first_try] %s", desc)
+        return desc
+
+    base_prompt = prompts["seo_short"].format(short_desc=short_desc, max_len=max_len)
+    for i in range(max_retries):
+        retry_prompt = prompts["seo_short_retry"].format(
+            base_prompt=base_prompt, max_len=max_len, result=desc
+        )
+        logger.info(
+            f"[request] {PROMPT_TYPE_SEO_SHORT} prompt (retry #{i+1}): %s...",
+            retry_prompt[:200],
+        )
+        desc_retry = await ai_generate_seo_desc(
+            retry_prompt, prompts, openai_cfg, executor, max_len=max_len
+        )
+        desc_retry = (desc_retry or "").strip()
+        logger.info("[seo_desc_retry #%d] %s (orig: %s)", i + 1, desc_retry, desc)
+        if len(desc_retry) <= max_len:
+            return desc_retry
+        desc = desc_retry
+    logger.warning("[seo_desc_truncated] %s", desc[:max_len])
+    return desc[:max_len]
+
+
 # Синхр генерация для оффлайн-режима
 def process_all_projects():
     openai_cfg = load_openai_config()
