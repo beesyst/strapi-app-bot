@@ -1,5 +1,5 @@
 {
-  "name": "strapi-proj-bot-core",
+  "name": "strapi-app-bot-core",
   "version": "1.0.0",
   "dependencies": {
     "playwright": "^1.53.2",

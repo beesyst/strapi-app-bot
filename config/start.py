@@ -19,7 +19,7 @@ init_setup_log()
 VENV_PATH = os.path.join(ROOT_DIR, "venv")
 if sys.prefix == sys.base_prefix:
     if not os.path.isdir(VENV_PATH):
-        print("[start] Виртуальное окружение не найдено, создаю venv ...")
+        print("[start] Virtual environment not found, creating venv...")
         subprocess.run(["python3", "-m", "venv", VENV_PATH], check=True)
     py_in_venv = os.path.join(VENV_PATH, "bin", "python")
     if not os.path.exists(py_in_venv):
@@ -50,4 +50,4 @@ if __name__ == "__main__":
         run_orchestrator()
         print("[finish] Success")
     except Exception as e:
-        print(f"[strapi-proj-bot] Error: {e}")
+        print(f"[strapi-app-bot] Error: {e}")
