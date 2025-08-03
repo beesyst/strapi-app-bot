@@ -4,7 +4,6 @@ import os
 
 import requests
 from core.log_utils import get_logger
-from core.normalize import normalize_content_to_template_md
 
 # Константы
 PROMPT_TYPE_REVIEW_FULL = "review_full"
@@ -190,11 +189,16 @@ def load_content_template(template_path="templates/content_template.json"):
 
 
 # Асинх генерация полного markdown-контент проекта
+from core.normalize import normalize_content_to_template_md_with_retry
+
+# ...
+
+
 async def ai_generate_content_markdown(
     data, app_name, domain, prompts, openai_cfg, executor
 ):
     def sync_ai_content():
-        # Генерация "сырого" контента (review_full)
+        # --- Генерация "сырого" markdown (AI) ---
         context1 = {
             "name": data.get("name", domain),
             "website": data.get("socialLinks", {}).get("websiteURL", ""),
@@ -204,7 +208,7 @@ async def ai_generate_content_markdown(
             prompt1, openai_cfg, prompt_type=PROMPT_TYPE_REVIEW_FULL
         )
 
-        # Связь между проектами (connection)
+        # --- Связь между проектами (AI) ---
         main_app_config_path = os.path.join("config", "apps", f"{app_name}.json")
         if os.path.exists(main_app_config_path):
             with open(main_app_config_path, "r", encoding="utf-8") as f:
@@ -234,11 +238,10 @@ async def ai_generate_content_markdown(
                 f"{content1}\n\n## {main_name} x {context1['name']}\n\n{content2}"
             )
 
-        # Отдельный запрос на finalize
+        # --- Финализация и перевод (AI) ---
         context3 = {"connection_with": main_name if content2 else ""}
         finalize_instruction = render_prompt(prompts["finalize"], context3)
 
-        # Вызов с кастомным system prompt = finalize_instruction
         final_content = call_ai_with_config(
             all_content,
             openai_cfg,
@@ -246,12 +249,56 @@ async def ai_generate_content_markdown(
             prompt_type=PROMPT_TYPE_FINALIZE,
         )
 
+        # --- Нормализация markdown (с автоматическим ретраем AI при ошибках Features) ---
         from core.api_ai import load_content_template
 
         content_template = load_content_template()
         connection_title = f"{main_name} x {context1['name']}" if content2 else ""
-        normalized_md = normalize_content_to_template_md(
-            final_content, content_template, connection_title
+
+        # Определяем функцию-ретрай (просто генерируем всё заново)
+        def ai_retry_func():
+            # Всё выше (до normalize) — один в один, т.е. повторяем вызов
+            context1 = {
+                "name": data.get("name", domain),
+                "website": data.get("socialLinks", {}).get("websiteURL", ""),
+            }
+            prompt1 = render_prompt(prompts["review_full"], context1)
+            content1 = call_ai_with_config(
+                prompt1, openai_cfg, prompt_type=PROMPT_TYPE_REVIEW_FULL
+            )
+            content2 = ""
+            if domain.lower() != main_name.lower():
+                context2 = {
+                    "name1": main_name,
+                    "website1": main_url,
+                    "name2": context1["name"],
+                    "website2": context1["website"],
+                }
+                prompt2 = render_prompt(prompts["connection"], context2)
+                content2 = call_ai_with_config(
+                    prompt2, openai_cfg, prompt_type=PROMPT_TYPE_CONNECTION
+                )
+            all_content = content1
+            if content2:
+                all_content = (
+                    f"{content1}\n\n## {main_name} x {context1['name']}\n\n{content2}"
+                )
+            finalize_instruction = render_prompt(prompts["finalize"], context3)
+            final_content = call_ai_with_config(
+                all_content,
+                openai_cfg,
+                custom_system_prompt=finalize_instruction,
+                prompt_type=PROMPT_TYPE_FINALIZE,
+            )
+            return final_content
+
+        # Используем функцию нормализации с ретраями!
+        normalized_md = normalize_content_to_template_md_with_retry(
+            final_content,
+            content_template,
+            connection_title,
+            ai_retry_func=ai_retry_func,
+            max_retries=3,
         )
         return normalized_md.strip()
 
