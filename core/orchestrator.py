@@ -9,7 +9,6 @@ from core.api_ai import (
     ai_generate_content_markdown,
     ai_generate_project_categories,
     ai_generate_short_desc,
-    load_allowed_categories,
     load_openai_config,
     load_prompts,
 )
@@ -142,7 +141,11 @@ async def process_partner(
 
         ai_categories_future = asyncio.create_task(
             ai_generate_project_categories(
-                main_data_for_ai, prompts, openai_cfg, executor, allowed_categories
+                main_data_for_ai,
+                prompts,
+                openai_cfg,
+                executor,
+                allowed_categories,
             )
         )
 
@@ -230,9 +233,10 @@ async def enrich_coin_async(main_data, executor):
 
 # Главная оркестрация всего пайплайна
 async def orchestrate_all():
-    allowed_categories = load_allowed_categories()
+    # Глобальный список для fallback
     with open(CENTRAL_CONFIG_PATH, "r", encoding="utf-8") as f:
         central_config = json.load(f)
+    allowed_categories = central_config.get("categories", [])
     strapi_sync = central_config.get("strapi_sync", True)
     main_template = load_main_template()
     prompts = load_prompts()
@@ -242,6 +246,9 @@ async def orchestrate_all():
         if not app.get("enabled", True):
             continue
         app_name = app["app"]
+        # Приоритет категорий
+        app_categories = app.get("categories") or allowed_categories
+
         print(f"[app] {app_name} start")
         app_config_path = os.path.join(APPS_CONFIG_DIR, f"{app_name}.json")
         if not os.path.exists(app_config_path):
@@ -268,7 +275,7 @@ async def orchestrate_all():
                         prompts,
                         openai_cfg,
                         executor,
-                        allowed_categories,
+                        app_categories,
                         show_status=False,
                         strapi_sync=strapi_sync,
                         api_url_proj=api_url_proj,
@@ -298,7 +305,7 @@ async def orchestrate_all():
                 )
                 print()
                 continue
-            # strapi_sync: true - пушим в Strapi и печатаем статус
+            # strapi_sync: true - пуш в Strapi и печать статуса
             if not os.path.exists(main_json_path):
                 print(f"[error] {app_name} - {url} - {elapsed} sec [No main.json]")
                 continue
