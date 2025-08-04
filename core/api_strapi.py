@@ -237,9 +237,31 @@ def update_seo_image(api_url_proj, api_token, project_id, logo_id):
     return put_resp.status_code == 200
 
 
+# Установка alt
+def set_strapi_alt(api_url, api_token, image_id, alt_text):
+    upload_url = api_url.replace("/projects", "/upload")
+    url = f"{upload_url}?id={image_id}"
+    headers = {"Authorization": f"Bearer {api_token}"}
+    files = {"fileInfo": (None, json.dumps({"alternativeText": alt_text}))}
+    try:
+        resp = requests.post(url, headers=headers, files=files, timeout=10)
+        if resp.status_code in (200, 201):
+            logger.info(
+                f"[svgLogo-alt] alternativeText успешно обновлен для id={image_id}"
+            )
+            return True
+        logger.warning(
+            f"[svgLogo-alt] Не удалось обновить alternativeText для id={image_id}: {resp.status_code}, {resp.text[:200]}"
+        )
+    except Exception as e:
+        logger.error(f"[svgLogo-alt] Ошибка обновления alternativeText: {e}")
+    return False
+
+
 # Загрузка svgLogo проекта в Strapi
 def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
     image_name = main_data.get("svgLogo")
+    project_name = main_data.get("name") or ""
     if not image_name:
         logger.warning("[svgLogo] не найдено (нет поля svgLogo)")
         return None
@@ -254,6 +276,8 @@ def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
         )
         logo_id = result.get("id")
         if logo_id:
+            if project_name:
+                set_strapi_alt(api_url, api_token, logo_id, project_name)
             update_seo_image(api_url, api_token, project_id, logo_id)
         return result
     else:
