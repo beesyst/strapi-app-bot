@@ -10,7 +10,7 @@ logger = get_logger("seo_utils")
 
 
 # SEO-секция для main.json
-async def build_seo_section(main_data, prompts, openai_cfg, executor):
+async def build_seo_section(main_data, prompts, ai_cfg, executor):
     name = main_data.get("name") or ""
     short_desc = main_data.get("shortDescription") or ""
     content_md = main_data.get("contentMarkdown") or ""
@@ -18,11 +18,11 @@ async def build_seo_section(main_data, prompts, openai_cfg, executor):
     # Асинх получение seo_desc (через retries) и keywords
     seo_desc_task = asyncio.create_task(
         ai_generate_seo_desc_with_retries(
-            short_desc, prompts, openai_cfg, executor, max_len=50
+            short_desc, prompts, ai_cfg, executor, max_len=50
         )
     )
     keywords_task = asyncio.create_task(
-        ai_generate_keywords(content_md, prompts, openai_cfg, executor)
+        ai_generate_keywords(content_md, prompts, ai_cfg, executor)
     )
     seo_desc, keywords = await asyncio.gather(seo_desc_task, keywords_task)
 

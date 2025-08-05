@@ -9,7 +9,7 @@ from core.api_ai import (
     ai_generate_content_markdown,
     ai_generate_project_categories,
     ai_generate_short_desc,
-    load_openai_config,
+    load_ai_config,
     load_prompts,
 )
 from core.api_coingecko import enrich_with_coin_id
@@ -84,7 +84,7 @@ async def process_partner(
     url,
     main_template,
     prompts,
-    openai_cfg,
+    ai_cfg,
     executor,
     allowed_categories,
     show_status=False,
@@ -117,11 +117,11 @@ async def process_partner(
         main_data_for_ai["socialLinks"]["websiteURL"] = url
 
         ai_short_future = asyncio.create_task(
-            ai_generate_short_desc(main_data_for_ai, prompts, openai_cfg, executor)
+            ai_generate_short_desc(main_data_for_ai, prompts, ai_cfg, executor)
         )
         ai_content_future = asyncio.create_task(
             ai_generate_content_markdown(
-                main_data_for_ai, app_name, domain, prompts, openai_cfg, executor
+                main_data_for_ai, app_name, domain, prompts, ai_cfg, executor
             )
         )
         coin_future = asyncio.create_task(enrich_coin_async(main_data_for_ai, executor))
@@ -143,7 +143,7 @@ async def process_partner(
             ai_generate_project_categories(
                 main_data_for_ai,
                 prompts,
-                openai_cfg,
+                ai_cfg,
                 executor,
                 allowed_categories,
             )
@@ -184,9 +184,7 @@ async def process_partner(
             main_data["project_categories"] = categories
 
         # SEO
-        main_data["seo"] = await build_seo_section(
-            main_data, prompts, openai_cfg, executor
-        )
+        main_data["seo"] = await build_seo_section(main_data, prompts, ai_cfg, executor)
 
         main_json_path = os.path.join(storage_path, "main.json")
 
@@ -240,7 +238,7 @@ async def orchestrate_all():
     strapi_sync = central_config.get("strapi_sync", True)
     main_template = load_main_template()
     prompts = load_prompts()
-    openai_cfg = load_openai_config()
+    ai_cfg = load_ai_config()
     executor = ThreadPoolExecutor(max_workers=8)
     for app in central_config["apps"]:
         if not app.get("enabled", True):
@@ -273,7 +271,7 @@ async def orchestrate_all():
                         url,
                         main_template,
                         prompts,
-                        openai_cfg,
+                        ai_cfg,
                         executor,
                         app_categories,
                         show_status=False,

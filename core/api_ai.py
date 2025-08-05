@@ -19,11 +19,19 @@ PROMPT_TYPE_SEO_KEYWORDS = "seo_keywords"
 logger = get_logger("ai")
 
 
-# Загрузка OpenAI-конфига
-def load_openai_config(config_path="config/config.json"):
+# Загрузка AI-конфига
+def load_ai_config(config_path="config/config.json"):
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
-    return config["openai"]
+    return config["ai"]
+
+
+# Поиск провайдера по имени модели
+def find_provider_by_model(ai_cfg, model_name):
+    for provider_name, prov_cfg in ai_cfg["providers"].items():
+        if model_name in prov_cfg.get("models", []):
+            return provider_name, prov_cfg
+    raise ValueError(f"Provider for model '{model_name}' not found in config")
 
 
 # Загрузка промптов из файла
@@ -37,40 +45,45 @@ def render_prompt(template, context):
     return template.format(**context)
 
 
-def get_group_for_prompt_type(openai_cfg, prompt_type):
-    groups = openai_cfg["groups"]
+def get_group_for_prompt_type(ai_cfg, prompt_type):
+    groups = ai_cfg["groups"]
     for group_cfg in groups.values():
         if "prompts" in group_cfg and prompt_type in group_cfg["prompts"]:
             return group_cfg
     raise ValueError(f"No group found for prompt_type '{prompt_type}'")
 
 
-# Универсальный вызов OpenAI API с полным конфигом
+# Универсальный вызов AI API с полным конфигом
 def call_ai_with_config(
-    prompt, openai_cfg, custom_system_prompt=None, prompt_type="prompt"
+    prompt, ai_cfg, custom_system_prompt=None, prompt_type="prompt"
 ):
-    group_cfg = get_group_for_prompt_type(openai_cfg, prompt_type)
-    api_url = openai_cfg.get("api_url") or group_cfg.get("api_url")
-    return call_openai_api(
+    group_cfg = get_group_for_prompt_type(ai_cfg, prompt_type)
+    model = group_cfg["model"]
+    provider_name, provider_cfg = find_provider_by_model(ai_cfg, model)
+    api_url = provider_cfg.get("api_url")
+    api_key = provider_cfg.get("api_key")
+    web_search_options = group_cfg.get("web_search_options")
+
+    return call_ai_api(
         prompt=prompt,
-        api_key=openai_cfg["api_key"],
+        api_key=api_key,
         api_url=api_url,
-        model=group_cfg["model"],
+        model=model,
         system_prompt=custom_system_prompt,
-        tools=group_cfg.get("tools"),
         prompt_type=prompt_type,
+        web_search_options=web_search_options,
     )
 
 
-# Прямой вызов OpenAI API и лог результата
-def call_openai_api(
+# Прямой вызов AI API и лог результата
+def call_ai_api(
     prompt,
     api_key,
     api_url,
     model,
     system_prompt=None,
-    tools=None,
     prompt_type="prompt",
+    web_search_options=None,
 ):
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -85,8 +98,7 @@ def call_openai_api(
         }
         if system_prompt:
             payload["system"] = system_prompt
-        if tools:
-            payload["tools"] = tools
+        # Perplexity не использует /responses endpoint
     else:
         payload = {
             "model": model,
@@ -95,6 +107,8 @@ def call_openai_api(
             )
             + [{"role": "user", "content": prompt}],
         }
+        if web_search_options:
+            payload["web_search_options"] = web_search_options
 
     try:
         logger.info(f"[request] {prompt_type} prompt ({model}): {prompt}")
@@ -107,7 +121,7 @@ def call_openai_api(
             text = ""
 
             if api_url.endswith("/responses"):
-                # Новый OpenAI /responses: dict c output (list of actions)
+                # Новый AI /responses: dict c output (list of actions)
                 if isinstance(result, dict) and "output" in result:
                     for item in result["output"]:
                         if item.get("type") == "message":
@@ -181,7 +195,7 @@ def enrich_short_description(json_path, short_desc):
 
 
 # Асинх генерация описания для проекта (short_desc)
-async def ai_generate_short_desc(data, prompts, openai_cfg, executor):
+async def ai_generate_short_desc(data, prompts, ai_cfg, executor):
     def sync_ai_short():
         short_ctx = {
             "name2": data.get("name", ""),
@@ -189,7 +203,7 @@ async def ai_generate_short_desc(data, prompts, openai_cfg, executor):
         }
         short_prompt = render_prompt(prompts["short_description"], short_ctx)
         return call_ai_with_config(
-            short_prompt, openai_cfg, prompt_type=PROMPT_TYPE_SHORT_DESCRIPTION
+            short_prompt, ai_cfg, prompt_type=PROMPT_TYPE_SHORT_DESCRIPTION
         )
 
     loop = asyncio.get_event_loop()
@@ -217,7 +231,7 @@ def clean_categories(raw_cats, allowed_categories):
 
 # Асинх генерация массива категорий для проекта
 async def ai_generate_project_categories(
-    data, prompts, openai_cfg, executor, allowed_categories=None
+    data, prompts, ai_cfg, executor, allowed_categories=None
 ):
     def sync_ai_categories():
         context = {
@@ -226,7 +240,7 @@ async def ai_generate_project_categories(
         }
         prompt = render_prompt(prompts["project_categories"], context)
         raw = call_ai_with_config(
-            prompt, openai_cfg, prompt_type=PROMPT_TYPE_PROJECT_CATEGORIES
+            prompt, ai_cfg, prompt_type=PROMPT_TYPE_PROJECT_CATEGORIES
         )
         if not raw:
             return []
@@ -249,7 +263,7 @@ def load_content_template(template_path="templates/content_template.json"):
 
 # Асинх генерация полного markdown-контент проекта
 async def ai_generate_content_markdown(
-    data, app_name, domain, prompts, openai_cfg, executor
+    data, app_name, domain, prompts, ai_cfg, executor
 ):
     def sync_ai_content():
         # --- Генерация "сырого" markdown (AI) ---
@@ -259,7 +273,7 @@ async def ai_generate_content_markdown(
         }
         prompt1 = render_prompt(prompts["review_full"], context1)
         content1 = call_ai_with_config(
-            prompt1, openai_cfg, prompt_type=PROMPT_TYPE_REVIEW_FULL
+            prompt1, ai_cfg, prompt_type=PROMPT_TYPE_REVIEW_FULL
         )
 
         # --- Связь между проектами (AI) ---
@@ -283,7 +297,7 @@ async def ai_generate_content_markdown(
             }
             prompt2 = render_prompt(prompts["connection"], context2)
             content2 = call_ai_with_config(
-                prompt2, openai_cfg, prompt_type=PROMPT_TYPE_CONNECTION
+                prompt2, ai_cfg, prompt_type=PROMPT_TYPE_CONNECTION
             )
 
         all_content = content1
@@ -298,7 +312,7 @@ async def ai_generate_content_markdown(
 
         final_content = call_ai_with_config(
             all_content,
-            openai_cfg,
+            ai_cfg,
             custom_system_prompt=finalize_instruction,
             prompt_type=PROMPT_TYPE_FINALIZE,
         )
@@ -318,7 +332,7 @@ async def ai_generate_content_markdown(
             }
             prompt1 = render_prompt(prompts["review_full"], context1)
             content1 = call_ai_with_config(
-                prompt1, openai_cfg, prompt_type=PROMPT_TYPE_REVIEW_FULL
+                prompt1, ai_cfg, prompt_type=PROMPT_TYPE_REVIEW_FULL
             )
             content2 = ""
             if domain.lower() != main_name.lower():
@@ -330,7 +344,7 @@ async def ai_generate_content_markdown(
                 }
                 prompt2 = render_prompt(prompts["connection"], context2)
                 content2 = call_ai_with_config(
-                    prompt2, openai_cfg, prompt_type=PROMPT_TYPE_CONNECTION
+                    prompt2, ai_cfg, prompt_type=PROMPT_TYPE_CONNECTION
                 )
             all_content = content1
             if content2:
@@ -340,7 +354,7 @@ async def ai_generate_content_markdown(
             finalize_instruction = render_prompt(prompts["finalize"], context3)
             final_content = call_ai_with_config(
                 all_content,
-                openai_cfg,
+                ai_cfg,
                 custom_system_prompt=finalize_instruction,
                 prompt_type=PROMPT_TYPE_FINALIZE,
             )
@@ -361,26 +375,22 @@ async def ai_generate_content_markdown(
 
 
 # Асинх генерация SEO-описания
-async def ai_generate_seo_desc(short_desc, prompts, openai_cfg, executor, max_len=50):
+async def ai_generate_seo_desc(short_desc, prompts, ai_cfg, executor, max_len=50):
     def sync_seo_desc():
         context = {"short_desc": short_desc, "max_len": max_len}
         prompt = render_prompt(prompts["seo_short"], context)
-        return call_ai_with_config(
-            prompt, openai_cfg, prompt_type=PROMPT_TYPE_SEO_SHORT
-        )
+        return call_ai_with_config(prompt, ai_cfg, prompt_type=PROMPT_TYPE_SEO_SHORT)
 
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, sync_seo_desc)
 
 
 # Асинх генерация SEO-ключевых слов
-async def ai_generate_keywords(content, prompts, openai_cfg, executor):
+async def ai_generate_keywords(content, prompts, ai_cfg, executor):
     def sync_keywords():
         context = {"content": content or ""}
         prompt = render_prompt(prompts["seo_keywords"], context)
-        return call_ai_with_config(
-            prompt, openai_cfg, prompt_type=PROMPT_TYPE_SEO_KEYWORDS
-        )
+        return call_ai_with_config(prompt, ai_cfg, prompt_type=PROMPT_TYPE_SEO_KEYWORDS)
 
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, sync_keywords)
@@ -388,10 +398,10 @@ async def ai_generate_keywords(content, prompts, openai_cfg, executor):
 
 # Асинхронная генерация seo_short с ретраями
 async def ai_generate_seo_desc_with_retries(
-    short_desc, prompts, openai_cfg, executor, max_len=50, max_retries=3
+    short_desc, prompts, ai_cfg, executor, max_len=50, max_retries=3
 ):
     desc = await ai_generate_seo_desc(
-        short_desc, prompts, openai_cfg, executor, max_len=max_len
+        short_desc, prompts, ai_cfg, executor, max_len=max_len
     )
     desc = (desc or "").strip()
     if len(desc) <= max_len:
@@ -408,7 +418,7 @@ async def ai_generate_seo_desc_with_retries(
             retry_prompt[:200],
         )
         desc_retry = await ai_generate_seo_desc(
-            retry_prompt, prompts, openai_cfg, executor, max_len=max_len
+            retry_prompt, prompts, ai_cfg, executor, max_len=max_len
         )
         desc_retry = (desc_retry or "").strip()
         logger.info("[seo_desc_retry #%d] %s (orig: %s)", i + 1, desc_retry, desc)
@@ -421,7 +431,7 @@ async def ai_generate_seo_desc_with_retries(
 
 # Синхр генерация для оффлайн-режима
 def process_all_projects():
-    openai_cfg = load_openai_config()
+    ai_cfg = load_ai_config()
     prompts = load_prompts()
     base_dir = os.path.join("storage", "apps")
 
@@ -454,7 +464,7 @@ def process_all_projects():
                 }
                 short_prompt = render_prompt(prompts["short_description"], short_ctx)
                 short_desc = call_ai_with_config(
-                    short_prompt, openai_cfg, prompt_type=PROMPT_TYPE_SHORT_DESCRIPTION
+                    short_prompt, ai_cfg, prompt_type=PROMPT_TYPE_SHORT_DESCRIPTION
                 )
                 if short_desc:
                     enrich_short_description(json_path, short_desc)
@@ -472,7 +482,7 @@ def process_all_projects():
             }
             prompt1 = render_prompt(prompts["review_full"], context1)
             content1 = call_ai_with_config(
-                prompt1, openai_cfg, prompt_type=PROMPT_TYPE_REVIEW_FULL
+                prompt1, ai_cfg, prompt_type=PROMPT_TYPE_REVIEW_FULL
             )
 
             # Связь с главным проектом (например, Celestia x Astria)
@@ -497,7 +507,7 @@ def process_all_projects():
                 }
                 prompt2 = render_prompt(prompts["connection"], context2)
                 content2 = call_ai_with_config(
-                    prompt2, openai_cfg, prompt_type=PROMPT_TYPE_CONNECTION
+                    prompt2, ai_cfg, prompt_type=PROMPT_TYPE_CONNECTION
                 )
 
             # Финализация и перевод
@@ -510,7 +520,7 @@ def process_all_projects():
             prompt3 = render_prompt(prompts["finalize"], context3)
             final_content = call_ai_with_config(
                 all_content,
-                openai_cfg,
+                ai_cfg,
                 custom_system_prompt=prompt3,
                 prompt_type=PROMPT_TYPE_FINALIZE,
             )
