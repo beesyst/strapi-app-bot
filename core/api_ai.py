@@ -4,6 +4,7 @@ import os
 
 import requests
 from core.log_utils import get_logger
+from core.normalize import normalize_content_to_template_md_with_retry
 
 # Константы
 PROMPT_TYPE_REVIEW_FULL = "review_full"
@@ -36,57 +37,115 @@ def render_prompt(template, context):
     return template.format(**context)
 
 
+def get_group_for_prompt_type(openai_cfg, prompt_type):
+    groups = openai_cfg["groups"]
+    for group_cfg in groups.values():
+        if "prompts" in group_cfg and prompt_type in group_cfg["prompts"]:
+            return group_cfg
+    raise ValueError(f"No group found for prompt_type '{prompt_type}'")
+
+
 # Универсальный вызов OpenAI API с полным конфигом
 def call_ai_with_config(
     prompt, openai_cfg, custom_system_prompt=None, prompt_type="prompt"
 ):
+    group_cfg = get_group_for_prompt_type(openai_cfg, prompt_type)
+    api_url = openai_cfg.get("api_url") or group_cfg.get("api_url")
     return call_openai_api(
-        prompt,
-        openai_cfg["api_key"],
-        openai_cfg["api_url"],
-        openai_cfg["model"],
-        custom_system_prompt if custom_system_prompt else openai_cfg["system_prompt"],
-        openai_cfg["temperature"],
-        openai_cfg["max_tokens"],
+        prompt=prompt,
+        api_key=openai_cfg["api_key"],
+        api_url=api_url,
+        model=group_cfg["model"],
+        system_prompt=custom_system_prompt,
+        tools=group_cfg.get("tools"),
         prompt_type=prompt_type,
     )
 
 
-# Прямой вызов OpenAI API и логирование результата
+# Прямой вызов OpenAI API и лог результата
 def call_openai_api(
     prompt,
     api_key,
     api_url,
     model,
-    system_prompt,
-    temperature,
-    max_tokens,
+    system_prompt=None,
+    tools=None,
     prompt_type="prompt",
 ):
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-    }
+
+    # payload (для /responses и chat/completions)
+    if api_url.endswith("/responses"):
+        payload = {
+            "model": model,
+            "input": prompt,
+        }
+        if system_prompt:
+            payload["system"] = system_prompt
+        if tools:
+            payload["tools"] = tools
+    else:
+        payload = {
+            "model": model,
+            "messages": (
+                [{"role": "system", "content": system_prompt}] if system_prompt else []
+            )
+            + [{"role": "user", "content": prompt}],
+        }
+
     try:
+        logger.info(f"[request] {prompt_type} prompt ({model}): {prompt}")
+        logger.debug(f"[payload] {json.dumps(payload, ensure_ascii=False, indent=2)}")
+
         resp = requests.post(api_url, headers=headers, json=payload, timeout=60)
-        logger.info(f"[request] {prompt_type} prompt: %s...", prompt[:150])
+        # Если нужно выводить и полный ответ (response)
         if resp.status_code == 200:
             result = resp.json()
-            text = result["choices"][0]["message"]["content"]
-            logger.info(f"[response] {prompt_type}: %s...", text[:150])
-            return text
+            text = ""
+
+            if api_url.endswith("/responses"):
+                # Новый OpenAI /responses: dict c output (list of actions)
+                if isinstance(result, dict) and "output" in result:
+                    for item in result["output"]:
+                        if item.get("type") == "message":
+                            content = item.get("content", [])
+                            if content and isinstance(content, list):
+                                text = content[0].get("text", "")
+                                break
+                # Старый/альтернативный формат (верхний уровень - список)
+                elif isinstance(result, list):
+                    for item in result:
+                        if item.get("type") == "message":
+                            content = item.get("content", [])
+                            if content and isinstance(content, list):
+                                text = content[0].get("text", "")
+                                break
+                # В случае unexpected result — логируем для отладки
+                if not text:
+                    logger.error(
+                        "[error] No message found in responses result: %s",
+                        str(result)[:1200],
+                    )
+                # Лог ответа (модель + полный текст)
+                logger.info(f"[response] {prompt_type} ({model}): {text}")
+                return text
+
+            else:
+                # Стандартный chat/completions
+                choices = result.get("choices", [])
+                if choices and "message" in choices[0]:
+                    text = choices[0]["message"]["content"]
+                else:
+                    text = ""
+                logger.info(f"[response] {prompt_type} ({model}): {text}")
+                return text
+
         else:
             logger.error(
-                "[error] status: %s, response: %s", resp.status_code, resp.text[:500]
+                "[error] status: %s, response: %s", resp.status_code, resp.text[:1200]
             )
     except Exception as e:
         logger.error("[EXCEPTION] %s", str(e))
@@ -189,11 +248,6 @@ def load_content_template(template_path="templates/content_template.json"):
 
 
 # Асинх генерация полного markdown-контент проекта
-from core.normalize import normalize_content_to_template_md_with_retry
-
-# ...
-
-
 async def ai_generate_content_markdown(
     data, app_name, domain, prompts, openai_cfg, executor
 ):
@@ -455,8 +509,9 @@ def process_all_projects():
             context3 = {"connection_with": main_name if content2 else ""}
             prompt3 = render_prompt(prompts["finalize"], context3)
             final_content = call_ai_with_config(
-                f"{all_content}\n\n{prompt3}",
+                all_content,
                 openai_cfg,
+                custom_system_prompt=prompt3,
                 prompt_type=PROMPT_TYPE_FINALIZE,
             )
 

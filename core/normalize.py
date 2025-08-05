@@ -1,5 +1,10 @@
 import re
 
+from core.log_utils import get_logger
+
+# Логгер
+logger = get_logger("host")
+
 
 # Разбивка markdown на секции по "## Title"
 def split_markdown_sections(md_text):
@@ -17,8 +22,6 @@ def split_markdown_sections(md_text):
 
 # Чистка и нормализация отдельной секции
 def clean_section_md(text, section):
-    import re
-
     errors = []
     text = re.sub(
         r"(\bIn summary\b|\bOverall\b|\bВ целом\b|\bПодытожим\b)[\s\S]*$",
@@ -57,7 +60,6 @@ def clean_section_md(text, section):
                         desc = desc_match.group(1).strip()
                     else:
                         desc = ""
-                # ВАЖНО: Удаляем лишние звездочки из всех частей
                 title = "-".join(parts).replace(" -", "-").replace("- ", "-")
                 title = re.sub(r"--+", "-", title)
                 title = re.sub(r"\*+", "", title)
@@ -69,7 +71,6 @@ def clean_section_md(text, section):
                 cleaned_lines.append(f"- **{title}**: {desc}")
                 continue
 
-            # Классика: **Title**: Description
             m = re.match(r"\*{2,}([^\*]+?)\*{2,}[:\-\s]+(.+)", line)
             if m:
                 title, desc = m.group(1).strip(), m.group(2).strip()
@@ -82,7 +83,6 @@ def clean_section_md(text, section):
                 cleaned_lines.append(f"- **{title}**: {desc}")
                 continue
 
-            # Без bold, до первого двоеточия/тире
             m2 = re.match(r"(.+?)[\:\-]\s+(.+)", line)
             if m2:
                 title = m2.group(1).strip()
@@ -96,7 +96,6 @@ def clean_section_md(text, section):
                 cleaned_lines.append(f"- **{title}**: {desc}")
                 continue
 
-            # Orphan bold (без описания)
             m3 = re.match(r"\*\*(.+?)\*\*", line)
             if m3:
                 errors.append(
@@ -104,7 +103,6 @@ def clean_section_md(text, section):
                 )
                 continue
 
-            # fallback - error
             errors.append(f"Unrecognized feature line {idx+1}: {raw_line}")
 
         if errors or not cleaned_lines:
@@ -114,10 +112,32 @@ def clean_section_md(text, section):
     return text.strip(), []
 
 
+# Коррекция заголовка партнерского раздела
+def fix_connection_section_headers(blocks, connection_title):
+    conn_name = connection_title
+    right_lower = conn_name.lower()
+    wrong_headers = []
+    for k in list(blocks):
+        k_low = k.strip().lower()
+        if (
+            k_low.startswith("x ")
+            or k_low.endswith(" x " + right_lower.split(" x ")[1])
+            or (k_low.endswith(" x astria") and "astria" in right_lower)
+            or (k_low.endswith(right_lower.split(" x ")[1]) and " x " not in k_low)
+            or (k_low == right_lower.split(" x ")[1])
+        ):
+            wrong_headers.append(k)
+    for k in wrong_headers:
+        blocks[conn_name] = blocks.pop(k)
+    return blocks
+
+
 # Основная функция нормализации markdown по шаблону (без ретраев)
 def normalize_content_to_template_md(raw_md, template, connection_title=None):
     sections = template["sections"]
     blocks = split_markdown_sections(raw_md)
+    if connection_title:
+        blocks = fix_connection_section_headers(blocks, connection_title)
     out_md = ""
     for section in sections:
         sec_title = section["title"]
@@ -128,7 +148,6 @@ def normalize_content_to_template_md(raw_md, template, connection_title=None):
             if k.lower() == sec_title.lower():
                 found = blocks[k]
                 break
-        # Удаляем пустой connection-раздел
         if section["title"] == "{connection_title}" and (
             not found or not found.strip()
         ):
@@ -142,6 +161,10 @@ def normalize_content_to_template_md(raw_md, template, connection_title=None):
                 + ("- " if section["type"] == "list" else "")
                 + "\n\n"
             )
+    if connection_title and f"## {connection_title}" not in out_md:
+        logger.warning(
+            f"[normalize] Connection section '{connection_title}' not found in output!"
+        )
     return out_md.strip()
 
 
@@ -152,6 +175,8 @@ def normalize_content_to_template_md_with_retry(
     for attempt in range(max_retries):
         sections = template["sections"]
         blocks = split_markdown_sections(raw_md)
+        if connection_title:
+            blocks = fix_connection_section_headers(blocks, connection_title)
         out_md = ""
         retry_needed = False
 
