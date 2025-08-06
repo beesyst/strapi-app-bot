@@ -1,0 +1,42 @@
+{
+  "name": "Magpie",
+  "shortDescription": "MagpieXYZ is a multi-chain DeFi protocol focused on optimizing yields for veTokenomics governance token holders across ecosystems.",
+  "svgLogo": "magpie.jpg",
+  "project_categories": [
+    23,
+    22,
+    31
+  ],
+  "socialLinks": {
+    "websiteURL": "https://www.magpiexyz.io/",
+    "twitterURL": "https://x.com/magpiexyz_io",
+    "discordURL": "https://discord.com/invite/magpiexyz",
+    "githubURL": "",
+    "mediumURL": "",
+    "youtubeURL": "",
+    "telegramURL": "https://t.me/Official_MagpieMegaDao/101118",
+    "documentURL": "",
+    "linkedinURL": "",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": ""
+  },
+  "seo": {
+    "metaTitle": "Magpie",
+    "metaDescription": "MagpieXYZ is a multi-chain DeFi protocol focused on optimizing yields for veTokenomics governance token holders across ecosystems.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "Magpie",
+        "description": "MagpieXYZ boosts yields for veToken holders across chains.",
+        "image": null
+      }
+    ],
+    "keywords": "magpie xyz multi-chain defi, veTokenomics yield aggregator, liquid staking platform",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nMagpieXYZ is a decentralized, multi-chain DeFi protocol designed to optimize yield for liquidity providers and veTokenomics governance token holders within various ecosystems. The platform’s first version, including the MGP token, was launched in the summer of 2022 on BNB Chain, a fact supported by major crypto market aggregators and official project materials. Early 2023 saw Magpie announce a strategic partnership with Wombat Exchange, integrating their technologies—which became a significant catalyst for growth and subsequent collaborations. \n\nThe project’s development focus is on creating multiple SubDAO structures to support different veTokenomics protocols and expand income-generating tools. Notably, in January 2024, Magpie announced a partnership with EigenLayer, launching the SubDAO Eigenpie, which allows users to earn rewards from Ethereum and EigenLayer through liquid re-staking. As of early March 2025, the TVL (Total Value Locked) within the ecosystem surpassed $190 million, and by April 2025, the market capitalization of the MGP token reached $22.5 million, with a total supply of 1 billion tokens and a fully diluted valuation around $70.46 million. \n\nKey milestones include the launch of Eigenpie (January 23, 2024), the release of Babypie for liquid BTC staking on Babylon (March 2025), and ongoing efforts to extend support to new ecosystems, along with forging additional partnerships and launching new services. Magpie’s strategic aim is reducing barriers to participation in veTokenomics systems and ensuring fair distribution of income by aggregating voting power and automating token management.\n\n## Functionality\n\nMagpie operates as a yield aggregator and efficiency-enhancement service for veTokenomics protocols, easing collective management of governance tokens to increase engagement and returns. The platform pools assets from liquidity providers and governance token holders, consolidates them into veTokens (tokens with deferred voting rights), and actively participates in governance voting and protocol management—working with partner protocols like Wombat Exchange— to earn additional tokens or emissions-based rewards.\n\nEarned revenues are redistributed proportionally among contributors, enabling users to earn without directly locking assets or assuming the risks associated with long-term staking. Since January 2024, Magpie has integrated EigenLayer’s technology, launching the Eigenpie SubDAO, which facilitates liquid re-staking for Ethereum. Users can deposit liquid staking tokens into Eigenpie, receiving ILR tokens (Isolated Liquid Restaking) that reflect their share and allow earning from both Ethereum staking rewards and EigenLayer’s re-staking without a freezing period.\n\nThe platform is also developing new SubDAOs such as Babypie—focused on liquid BTC staking on Babylon infrastructure—broadening toolsets for diverse users across different blockchains. Support for multi-chain integration, token automation, and incentive mechanisms (referral points, internal tokens, reward systems) are part of Magpie’s efforts to boost user engagement and network effects.\n\n## Features\n\n- **Multi-chain Support**: Enables seamless interaction and yield aggregation across BNB Chain, Ethereum, and expanding networks[1][5].\n- **veTokenomics Aggregator**: Pools assets to enhance governance power and amplify returns for liquidity providers[2][4].\n- **SubDAO Architecture**: Modular design with dedicated SubDAOs like Eigenpie and Babypie for different ecosystems and functionalities[1][6].\n- **Liquid Restaking**: Provides rewards from multiple protocols (EigenLayer, Ethereum) via ILR tokens without lock-up periods[1][10].\n- **Governance Yield Optimization**: Automates staking, conversion, and voting strategies to maximize governance token rewards[1][2].\n- **Integration with Wombat Exchange**: Deep partnership facilitating WOM/veWOM tokenomics, increasing yield and governance engagements since early 2023[1][2].\n- **LST and LRT Support**: Accepts a wide array of liquid staking tokens, issuing corresponding restake certificates with \"m\" prefixes[1].\n- **Native Token (MGP)**: Used for incentives, governance, and rewards, with a fixed supply of 1 billion tokens, actively traded as of April 2025[1][2].\n- **Point & Referral System**: Promotes activity and network growth through points and referral rewards within SubDAOs[1].\n- **Babypie Module**: SubDAO dedicated to liquid BTC staking on Babylon infrastructure, launched in March 2025[6].\n- **No User Lock-In**: Enables earning opportunities without mandatory long-term token locking[1][2][6].\n- **Transparent Metrics**: TVL and token performance stats are publicly accessible on the official website and CoinMarketCap[1][2][5].\n- **Yield for Stablecoins and ETH**: Supports high APR for deposits in stablecoins, BNB, frxETH, ETH, WOM, mWOM, and others[1].\n- **Reward Redistribution**: Automatically distributes generated rewards proportionally to liquidity providers and stakeholders[1][2].\n- **Roadmap and Ecosystem Expansion**: Continuous updates, new DeFi integrations, and cross-chain launches[1][6].\n\n## Celestia x Magpiexyz\n\nAs of August 6, 2025, there is no officially confirmed or documented connection between Celestia (https://celestia.org/) and MagpieXYZ (https://www.magpiexyz.io/). Neither project’s official websites, media publications, team statements, roadmaps, nor press releases contain information regarding joint product launches, integrations, or strategic partnerships. The available sources verify that the development paths of both projects remain independent.\n\nCelestia is a modular layer-1 blockchain focused on ensuring data availability and enabling task separation across different architectural layers. Its officially confirmed partners include StarkNet (since January 30, 2024), Polygon (via Polygon CDK), OP Stack, and ZK Stack, all of whom have integrated Celestia as a data availability layer for their Layer 2/3 solutions. \n\nMagpieXYZ, launched in October 2022, is a multi-chain protocol with the goal of optimizing yields for veTokenomics governance token holders through liquidity aggregation and reward distribution. Although Magpie actively supports multiple blockchains and is developing the Eigenpie re-staking platform announced in January 2024, there are no official references—either in social channels, official announcements, or technical documentation—about integrations, collaborations, or use cases involving Celestia for data storage, layer validation, or sidechain services.\n\nMajor crypto news and analytics platforms, both in Russian and English, have not reported any interaction between the two projects from their launch in 2022 through 2025. All updates, product releases, funding reports, and joint project announcements appear to be entirely separate.\n\nCurrently, in August 2025, there are no official statements, business, or technical documents confirming cooperation, integration, or joint initiatives between Celestia and MagpieXYZ. Any assumptions about such a link are unwarranted without further official confirmation."
+}

@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import subprocess
@@ -36,6 +37,29 @@ SOCIAL_PATTERNS = {
 BAD_NAMES = {"", "x", "profile", "new to x"}
 
 
+# HTML через browser_fetch.js (Playwright + Fingerprint-suite)
+def fetch_url_html_playwright(url):
+    ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    script_path = os.path.join(ROOT_DIR, "core", "browser_fetch.js")
+    try:
+        result = subprocess.run(
+            ["node", script_path, url],
+            cwd=os.path.dirname(script_path),
+            capture_output=True,
+            text=True,
+            timeout=65,
+        )
+        if result.returncode == 0:
+            logger.info("SOCIAL LINKS получены через browser_fetch.js: %s", url)
+            return result.stdout
+        else:
+            logger.warning("browser_fetch.js error for %s: %s", url, result.stderr)
+            return "{}"
+    except Exception as e:
+        logger.warning("Ошибка запуска browser_fetch.js для %s: %s", url, e)
+        return "{}"
+
+
 # Очистка и нормализация имени проекта
 def clean_project_name(name):
     name = re.sub(r"\s*[\(\[\{].*?[\)\]\}]", "", name)
@@ -43,6 +67,45 @@ def clean_project_name(name):
     name = re.sub(r"\s+", " ", name)
     name = name.strip(" ,.")
     return name.strip()
+
+
+# "Подозрительный" html
+def is_html_suspicious(html):
+    if (
+        "cf-browser-verification" in html
+        or "Cloudflare" in html
+        or "Just a moment..." in html
+    ):
+        return True
+    if len(html) < 2500:
+        return True
+    for dom in [
+        "twitter.com",
+        "x.com",
+        "discord.gg",
+        "t.me",
+        "telegram.me",
+        "github.com",
+        "medium.com",
+    ]:
+        if dom in html:
+            return False
+    return True
+
+
+def has_social_links(html):
+    for dom in [
+        "twitter.com",
+        "x.com",
+        "discord.gg",
+        "t.me",
+        "telegram.me",
+        "github.com",
+        "medium.com",
+    ]:
+        if dom in html:
+            return True
+    return False
 
 
 # Загрузка HTML страницы с кэшем, лог успех/ошибка
@@ -53,12 +116,12 @@ def fetch_url_html(url):
     try:
         html = requests.get(url, headers=headers, timeout=10).text
         FETCHED_HTML_CACHE[url] = html
-        logger.info("HTML успешно получен: %s", url)
         return html
     except Exception as e:
         logger.warning("Ошибка получения HTML %s: %s", url, e)
-        FETCHED_HTML_CACHE[url] = ""
-        return ""
+        html = fetch_url_html_playwright(url)
+        FETCHED_HTML_CACHE[url] = html
+        return html
 
 
 # Поиск внутренних сссылок сайта (максимум max_links) с кэшем
@@ -90,7 +153,6 @@ def normalize_socials(socials):
 def get_domain_name(url):
     domain = urlparse(url).netloc
     result = domain.replace("www.", "").split(".")[0]
-    logger.info("get_domain_name(%s) -> %s", url, result)
     return result
 
 
@@ -122,8 +184,6 @@ def get_links_from_x_profile(profile_url):
 
 # Безопасный json.loads с логом ошибок
 def safe_json_loads(data):
-    import json
-
     try:
         return json.loads(data)
     except Exception as e:
@@ -194,8 +254,19 @@ def find_best_docs_link(soup, base_url):
 
 # Извлечение всех соц ссылок и docs с html страницы
 def extract_social_links(html, base_url, is_main_page=False):
-    if base_url in PARSED_SOCIALS_CACHE:
-        return PARSED_SOCIALS_CACHE[base_url]
+    # Попытка распарсить JSON (из browser_fetch.js)
+    links = {}
+    is_json = False
+    try:
+        links = json.loads(html)
+        if isinstance(links, dict) and "websiteURL" in links:
+            is_json = True
+            if any(links.get(k) for k in links if k != "websiteURL"):
+                logger.info("SOCIAL LINKS из browser_fetch.js: %s", links)
+                return links
+    except Exception:
+        pass
+    # Обычный HTML-парсинг через BeautifulSoup
     soup = BeautifulSoup(html, "html.parser")
     links = {k: "" for k in SOCIAL_PATTERNS if k != "documentURL"}
     for a in soup.find_all("a", href=True):
@@ -211,9 +282,27 @@ def extract_social_links(html, base_url, is_main_page=False):
         links["documentURL"] = document_url
     else:
         links["documentURL"] = ""
-    PARSED_SOCIALS_CACHE[base_url] = links
-    if is_main_page:
-        logger.info("Соцсети и docs для %s: %s", base_url, links)
+    # Если все соцсети пустые - повторно через browser_fetch.js
+    if not is_json and all(not links[k] for k in links if k != "websiteURL"):
+        logger.info(
+            f"extract_social_links: ни одной соцссылки не найдено для {base_url}, повтор через browser_fetch.js"
+        )
+        html_browser = fetch_url_html_playwright(base_url)
+        try:
+            browser_links = json.loads(html_browser)
+            if (
+                isinstance(browser_links, dict)
+                and "websiteURL" in browser_links
+                and any(
+                    browser_links.get(k) for k in browser_links if k != "websiteURL"
+                )
+            ):
+                logger.info(
+                    "SOCIAL LINKS из browser_fetch.js (fallback): %s", browser_links
+                )
+                return browser_links
+        except Exception as e:
+            logger.warning(f"extract_social_links fallback JSON error: {e}")
     return links
 
 
