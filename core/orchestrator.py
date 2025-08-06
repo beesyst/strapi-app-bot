@@ -116,7 +116,7 @@ async def process_partner(
         main_data_for_ai["name"] = domain.capitalize()
         main_data_for_ai["socialLinks"]["websiteURL"] = url
 
-        # Сначала в параллели только контент и coin
+        # Параллельно только контент и coin
         ai_content_future = asyncio.create_task(
             ai_generate_content_markdown(
                 main_data_for_ai, app_name, domain, prompts, ai_cfg, executor
@@ -124,9 +124,10 @@ async def process_partner(
         )
         coin_future = asyncio.create_task(enrich_coin_async(main_data_for_ai, executor))
 
-        # Асинх соцсети и категории
+        # Асинх сбор соцсетей
         found_socials, clean_name = await socials_future
 
+        # Запрашиваем твиттер-аву и имя
         if found_socials.get("twitterURL"):
             twitter_future = loop.run_in_executor(
                 executor,
@@ -138,27 +139,21 @@ async def process_partner(
         else:
             twitter_future = None
 
-        ai_categories_future = asyncio.create_task(
-            ai_generate_project_categories(
-                main_data_for_ai,
-                prompts,
-                ai_cfg,
-                executor,
-                allowed_categories,
-            )
-        )
-
+        # Контент и coin одновременно
         coin_result, content_md = await asyncio.gather(coin_future, ai_content_future)
 
-        # Генерация short_desc
+        # Генерация шорт описания по content_md
         short_desc = await ai_generate_short_desc(content_md, prompts, ai_cfg, executor)
+
+        # Генерация категорий на основе content_md и allowed_categories
+        categories = await ai_generate_project_categories(
+            content_md, prompts, ai_cfg, executor, allowed_categories
+        )
 
         if twitter_future:
             logo_filename, real_name = await twitter_future
         else:
             logo_filename, real_name = None, None
-
-        categories = await ai_categories_future
 
         social_keys = list(main_template["socialLinks"].keys())
         final_socials = {k: found_socials.get(k, "") for k in social_keys}

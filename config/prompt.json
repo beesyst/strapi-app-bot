@@ -6,5 +6,5 @@
   "seo_keywords": "Создай на англ 3 ключа в виде релевантных НЧ-запросов через запятую для этой статьи.\n\n{content}",
   "seo_short": "Сократи этот текст на английском до {max_len} символов, сохрани суть и стиль: {short_desc}",
   "seo_short_retry": "{base_prompt}\nЕще короче! Только суть, максимум {max_len} символов. Нельзя длиннее!\n{result}",
-  "project_categories": "Подбери ровно 3 наиболее релевантные категории под этот проект {name1} {website1} из этого списка: Multichain, Crosschain, dApp, Modular, Tools, AI, Infra, DePIN, Data, Cloud, RWAFi, L1, L2, Rollup, Wallet, Edu, SocialFi, DeFi, CeFi, GameFi, Staking, Analytics, NodeFi, Bridge, Quest, ZK, VM, Marketplace, IoT, Identity, Security, Oracle, AMM, Trading, NFT, Metaverse, Explorer, DEX, CEX, Lending, Meme, DAO, Chain, Privacy, Interoperability, Invest, DeFAI, CeDeFi, Launchpad, Art, Payment. Ответь только тремя категориями через запятую, без пояснений и номеров. Пример ответа: Modular, Crosschain, Tools"
+  "project_categories": "Выбери ровно 3 наиболее релевантные категории для этого крипто-проекта на основе его полного описания ниже. Используй только следующий список категорий: {categories}. Ответь только названиями трех категорий через запятую, без пояснений, описаний и номеров. Пример ответа: Modular, Crosschain, Tools\n\nПолное описание проекта:\n{content}"
 }

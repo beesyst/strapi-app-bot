@@ -228,13 +228,11 @@ def clean_categories(raw_cats, allowed_categories):
 
 # Асинх генерация массива категорий для проекта
 async def ai_generate_project_categories(
-    data, prompts, ai_cfg, executor, allowed_categories=None
+    content, prompts, ai_cfg, executor, allowed_categories=None
 ):
     def sync_ai_categories():
-        context = {
-            "name1": data.get("name", ""),
-            "website1": data.get("socialLinks", {}).get("websiteURL", ""),
-        }
+        categories_str = ", ".join(allowed_categories or [])
+        context = {"categories": categories_str, "content": content}
         prompt = render_prompt(prompts["project_categories"], context)
         raw = call_ai_with_config(
             prompt, ai_cfg, prompt_type=PROMPT_TYPE_PROJECT_CATEGORIES
