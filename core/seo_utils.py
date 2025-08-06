@@ -17,9 +17,7 @@ async def build_seo_section(main_data, prompts, ai_cfg, executor):
 
     # Асинх получение seo_desc (через retries) и keywords
     seo_desc_task = asyncio.create_task(
-        ai_generate_seo_desc_with_retries(
-            short_desc, prompts, ai_cfg, executor, max_len=50
-        )
+        ai_generate_seo_desc_with_retries(short_desc, prompts, ai_cfg, executor)
     )
     keywords_task = asyncio.create_task(
         ai_generate_keywords(content_md, prompts, ai_cfg, executor)

@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import json
 import os
 
@@ -196,15 +197,59 @@ def enrich_short_description(json_path, short_desc):
 
 # Асинх генерация описания для проекта (short_desc)
 async def ai_generate_short_desc(content, prompts, ai_cfg, executor):
+    short_desc_cfg = ai_cfg["short_desc"]
+
     def sync_ai_short():
-        context = {"content": content}
+        context = {"content": content, "max_len": short_desc_cfg["max_len"]}
         short_prompt = render_prompt(prompts["short_description"], context)
         return call_ai_with_config(
             short_prompt, ai_cfg, prompt_type=PROMPT_TYPE_SHORT_DESCRIPTION
         )
 
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, sync_ai_short)
+    result = await loop.run_in_executor(executor, sync_ai_short)
+    return (result or "").strip()
+
+
+# Асинхронная генерация short_description с ретраями
+async def ai_generate_short_desc_with_retries(content, prompts, ai_cfg, executor):
+    short_desc_cfg = ai_cfg["short_desc"]
+    loop = asyncio.get_event_loop()
+
+    def sync_short():
+        context = {"content": content, "max_len": short_desc_cfg["max_len"]}
+        short_prompt = render_prompt(prompts["short_description"], context)
+        return call_ai_with_config(
+            short_prompt, ai_cfg, prompt_type=PROMPT_TYPE_SHORT_DESCRIPTION
+        )
+
+    desc = await loop.run_in_executor(executor, sync_short)
+    desc = (desc or "").strip()
+
+    if len(desc) <= short_desc_cfg["strapi_limit"]:
+        logger.info("[short_desc_first_try] %s", desc)
+        return desc
+
+    def sync_retry():
+        context = {"content": content, "max_len": short_desc_cfg["retry_len"]}
+        short_prompt_retry = render_prompt(prompts["short_description"], context)
+        return call_ai_with_config(
+            short_prompt_retry, ai_cfg, prompt_type=PROMPT_TYPE_SHORT_DESCRIPTION
+        )
+
+    desc_retry = await loop.run_in_executor(executor, sync_retry)
+    desc_retry = (desc_retry or "").strip()
+
+    if len(desc_retry) <= short_desc_cfg["strapi_limit"]:
+        logger.info("[short_desc_retry] %s", desc_retry)
+        return desc_retry
+
+    cutoff = desc_retry[: short_desc_cfg["strapi_limit"]]
+    if " " in cutoff:
+        cutoff = cutoff[: cutoff.rfind(" ")]
+    cutoff = cutoff.strip(" ,.;:-")
+    logger.warning("[short_desc_truncated_by_space] %s", cutoff)
+    return cutoff
 
 
 def load_allowed_categories(config_path="config/config.json"):
@@ -261,7 +306,7 @@ async def ai_generate_content_markdown(
     data, app_name, domain, prompts, ai_cfg, executor
 ):
     def sync_ai_content():
-        # --- Генерация "сырого" markdown (AI) ---
+        # Генерация "сырого" markdown
         context1 = {
             "name": data.get("name", domain),
             "website": data.get("socialLinks", {}).get("websiteURL", ""),
@@ -271,7 +316,7 @@ async def ai_generate_content_markdown(
             prompt1, ai_cfg, prompt_type=PROMPT_TYPE_REVIEW_FULL
         )
 
-        # --- Связь между проектами (AI) ---
+        # Связь между проектами
         main_app_config_path = os.path.join("config", "apps", f"{app_name}.json")
         if os.path.exists(main_app_config_path):
             with open(main_app_config_path, "r", encoding="utf-8") as f:
@@ -301,7 +346,7 @@ async def ai_generate_content_markdown(
                 f"{content1}\n\n## {main_name} x {context1['name']}\n\n{content2}"
             )
 
-        # --- Финализация и перевод (AI) ---
+        # Финализация и перевод
         context3 = {"connection_with": main_name if content2 else ""}
         finalize_instruction = render_prompt(prompts["finalize"], context3)
 
@@ -312,15 +357,14 @@ async def ai_generate_content_markdown(
             prompt_type=PROMPT_TYPE_FINALIZE,
         )
 
-        # --- Нормализация markdown (с автоматическим ретраем AI при ошибках Features) ---
+        # Нормализация markdown
         from core.api_ai import load_content_template
 
         content_template = load_content_template()
         connection_title = f"{main_name} x {context1['name']}" if content2 else ""
 
-        # Определяем функцию-ретрай (просто генерируем всё заново)
+        # Функция-ретрай
         def ai_retry_func():
-            # Всё выше (до normalize) — один в один, т.е. повторяем вызов
             context1 = {
                 "name": data.get("name", domain),
                 "website": data.get("socialLinks", {}).get("websiteURL", ""),
@@ -355,7 +399,6 @@ async def ai_generate_content_markdown(
             )
             return final_content
 
-        # Используем функцию нормализации с ретраями!
         normalized_md = normalize_content_to_template_md_with_retry(
             final_content,
             content_template,
@@ -370,14 +413,54 @@ async def ai_generate_content_markdown(
 
 
 # Асинх генерация SEO-описания
-async def ai_generate_seo_desc(short_desc, prompts, ai_cfg, executor, max_len=50):
+async def ai_generate_seo_desc(short_desc, prompts, ai_cfg, executor):
+    seo_short_cfg = ai_cfg["seo_short"]
+
     def sync_seo_desc():
-        context = {"short_desc": short_desc, "max_len": max_len}
+        context = {"short_desc": short_desc, "max_len": seo_short_cfg["max_len"]}
         prompt = render_prompt(prompts["seo_short"], context)
         return call_ai_with_config(prompt, ai_cfg, prompt_type=PROMPT_TYPE_SEO_SHORT)
 
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, sync_seo_desc)
+    result = await loop.run_in_executor(executor, sync_seo_desc)
+    return (result or "").strip()
+
+
+# Асинх генерация seo_short с ретраями
+async def ai_generate_seo_desc_with_retries(short_desc, prompts, ai_cfg, executor):
+    seo_short_cfg = ai_cfg["seo_short"]
+    loop = asyncio.get_event_loop()
+
+    def sync_seo_1():
+        context = {"short_desc": short_desc, "max_len": seo_short_cfg["max_len"]}
+        prompt = render_prompt(prompts["seo_short"], context)
+        return call_ai_with_config(prompt, ai_cfg, prompt_type=PROMPT_TYPE_SEO_SHORT)
+
+    desc = await loop.run_in_executor(executor, sync_seo_1)
+    desc = (desc or "").strip()
+
+    if len(desc) <= seo_short_cfg["strapi_limit"]:
+        logger.info("[seo_desc_first_try] %s", desc)
+        return desc
+
+    def sync_seo_2():
+        context = {"short_desc": short_desc, "max_len": seo_short_cfg["retry_len"]}
+        prompt = render_prompt(prompts["seo_short"], context)
+        return call_ai_with_config(prompt, ai_cfg, prompt_type=PROMPT_TYPE_SEO_SHORT)
+
+    desc_retry = await loop.run_in_executor(executor, sync_seo_2)
+    desc_retry = (desc_retry or "").strip()
+
+    if len(desc_retry) <= seo_short_cfg["strapi_limit"]:
+        logger.info("[seo_desc_retry] %s", desc_retry)
+        return desc_retry
+
+    cutoff = desc_retry[: seo_short_cfg["strapi_limit"]]
+    if " " in cutoff:
+        cutoff = cutoff[: cutoff.rfind(" ")]
+    cutoff = cutoff.strip(" ,.;:-")
+    logger.warning("[seo_desc_truncated_by_space] %s", cutoff)
+    return cutoff
 
 
 # Асинх генерация SEO-ключевых слов
@@ -391,41 +474,8 @@ async def ai_generate_keywords(content, prompts, ai_cfg, executor):
     return await loop.run_in_executor(executor, sync_keywords)
 
 
-# Асинхронная генерация seo_short с ретраями
-async def ai_generate_seo_desc_with_retries(
-    short_desc, prompts, ai_cfg, executor, max_len=50, max_retries=3
-):
-    desc = await ai_generate_seo_desc(
-        short_desc, prompts, ai_cfg, executor, max_len=max_len
-    )
-    desc = (desc or "").strip()
-    if len(desc) <= max_len:
-        logger.info("[seo_desc_first_try] %s", desc)
-        return desc
-
-    base_prompt = prompts["seo_short"].format(short_desc=short_desc, max_len=max_len)
-    for i in range(max_retries):
-        retry_prompt = prompts["seo_short_retry"].format(
-            base_prompt=base_prompt, max_len=max_len, result=desc
-        )
-        logger.info(
-            f"[request] {PROMPT_TYPE_SEO_SHORT} prompt (retry #{i+1}): %s...",
-            retry_prompt[:200],
-        )
-        desc_retry = await ai_generate_seo_desc(
-            retry_prompt, prompts, ai_cfg, executor, max_len=max_len
-        )
-        desc_retry = (desc_retry or "").strip()
-        logger.info("[seo_desc_retry #%d] %s (orig: %s)", i + 1, desc_retry, desc)
-        if len(desc_retry) <= max_len:
-            return desc_retry
-        desc = desc_retry
-    logger.warning("[seo_desc_truncated] %s", desc[:max_len])
-    return desc[:max_len]
-
-
 # Синхр генерация для оффлайн-режима
-def process_all_projects():
+async def process_all_projects(executor):
     ai_cfg = load_ai_config()
     prompts = load_prompts()
     base_dir = os.path.join("storage", "apps")
@@ -503,13 +553,9 @@ def process_all_projects():
             if final_content:
                 enrich_main_json(json_path, final_content)
 
-                # Теперь генерируем shortDescription из финального markdown
-                short_desc = call_ai_with_config(
-                    render_prompt(
-                        prompts["short_description"], {"content": final_content}
-                    ),
-                    ai_cfg,
-                    prompt_type=PROMPT_TYPE_SHORT_DESCRIPTION,
+                # Генерация shortDescription из финального markdown
+                short_desc = await ai_generate_short_desc_with_retries(
+                    final_content, prompts, ai_cfg, executor
                 )
                 if short_desc:
                     enrich_short_description(json_path, short_desc)
@@ -528,4 +574,5 @@ def process_all_projects():
 
 
 if __name__ == "__main__":
-    process_all_projects()
+    executor = concurrent.futures.ThreadPoolExecutor()
+    asyncio.run(process_all_projects(executor))

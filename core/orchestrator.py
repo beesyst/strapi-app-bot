@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from core.api_ai import (
     ai_generate_content_markdown,
     ai_generate_project_categories,
-    ai_generate_short_desc,
+    ai_generate_short_desc_with_retries,
     load_ai_config,
     load_prompts,
 )
@@ -143,7 +143,9 @@ async def process_partner(
         coin_result, content_md = await asyncio.gather(coin_future, ai_content_future)
 
         # Генерация шорт описания по content_md
-        short_desc = await ai_generate_short_desc(content_md, prompts, ai_cfg, executor)
+        short_desc = await ai_generate_short_desc_with_retries(
+            content_md, prompts, ai_cfg, executor
+        )
 
         # Генерация категорий на основе content_md и allowed_categories
         categories = await ai_generate_project_categories(
@@ -153,15 +155,17 @@ async def process_partner(
         if twitter_future:
             logo_filename, real_name = await twitter_future
         else:
-            logo_filename, real_name = None, None
+            logo_filename, real_name = None, clean_name
 
         social_keys = list(main_template["socialLinks"].keys())
         final_socials = {k: found_socials.get(k, "") for k in social_keys}
+
         main_data = dict(main_template)
         main_data["socialLinks"] = final_socials
         main_data["name"] = real_name
         logger.info(f"Итоговое имя проекта: '{main_data['name']}'")
         main_data["svgLogo"] = logo_filename
+
         if coin_result and "coinData" in coin_result:
             main_data["coinData"] = coin_result["coinData"]
         if short_desc:
