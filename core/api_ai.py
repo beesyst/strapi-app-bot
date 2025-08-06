@@ -195,13 +195,10 @@ def enrich_short_description(json_path, short_desc):
 
 
 # Асинх генерация описания для проекта (short_desc)
-async def ai_generate_short_desc(data, prompts, ai_cfg, executor):
+async def ai_generate_short_desc(content, prompts, ai_cfg, executor):
     def sync_ai_short():
-        short_ctx = {
-            "name2": data.get("name", ""),
-            "website2": data.get("socialLinks", {}).get("websiteURL", ""),
-        }
-        short_prompt = render_prompt(prompts["short_description"], short_ctx)
+        context = {"content": content}
+        short_prompt = render_prompt(prompts["short_description"], context)
         return call_ai_with_config(
             short_prompt, ai_cfg, prompt_type=PROMPT_TYPE_SHORT_DESCRIPTION
         )
@@ -456,26 +453,7 @@ def process_all_projects():
                 logger.info("[SKIP] %s/%s: contentMarkdown уже есть", app_name, domain)
                 continue
 
-            # shortDescription
-            if not data.get("shortDescription"):
-                short_ctx = {
-                    "name2": data.get("name", domain),
-                    "website2": data.get("socialLinks", {}).get("websiteURL", ""),
-                }
-                short_prompt = render_prompt(prompts["short_description"], short_ctx)
-                short_desc = call_ai_with_config(
-                    short_prompt, ai_cfg, prompt_type=PROMPT_TYPE_SHORT_DESCRIPTION
-                )
-                if short_desc:
-                    enrich_short_description(json_path, short_desc)
-                else:
-                    logger.error(
-                        "[fail] Не удалось сгенерировать shortDescription для %s/%s",
-                        app_name,
-                        domain,
-                    )
-
-            # Основной markdown-обзор
+            # Генерация обзора
             context1 = {
                 "name": data.get("name", domain),
                 "website": data.get("socialLinks", {}).get("websiteURL", ""),
@@ -485,7 +463,7 @@ def process_all_projects():
                 prompt1, ai_cfg, prompt_type=PROMPT_TYPE_REVIEW_FULL
             )
 
-            # Связь с главным проектом (например, Celestia x Astria)
+            # Генерация связки
             main_app_config_path = os.path.join("config", "apps", f"{app_name}.json")
             if os.path.exists(main_app_config_path):
                 with open(main_app_config_path, "r", encoding="utf-8") as f:
@@ -497,7 +475,6 @@ def process_all_projects():
                 main_url = ""
 
             content2 = ""
-            # Добавление связки, если имя не совпадает с основным проектом
             if domain.lower() != main_name.lower():
                 context2 = {
                     "name1": main_name,
@@ -527,6 +504,23 @@ def process_all_projects():
 
             if final_content:
                 enrich_main_json(json_path, final_content)
+
+                # Теперь генерируем shortDescription из финального markdown
+                short_desc = call_ai_with_config(
+                    render_prompt(
+                        prompts["short_description"], {"content": final_content}
+                    ),
+                    ai_cfg,
+                    prompt_type=PROMPT_TYPE_SHORT_DESCRIPTION,
+                )
+                if short_desc:
+                    enrich_short_description(json_path, short_desc)
+                else:
+                    logger.error(
+                        "[fail] Не удалось сгенерировать shortDescription для %s/%s",
+                        app_name,
+                        domain,
+                    )
             else:
                 logger.error(
                     "[fail] Не удалось сгенерировать финальный контент для %s/%s",

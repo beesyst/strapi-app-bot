@@ -116,9 +116,7 @@ async def process_partner(
         main_data_for_ai["name"] = domain.capitalize()
         main_data_for_ai["socialLinks"]["websiteURL"] = url
 
-        ai_short_future = asyncio.create_task(
-            ai_generate_short_desc(main_data_for_ai, prompts, ai_cfg, executor)
-        )
+        # Сначала в параллели только контент и coin
         ai_content_future = asyncio.create_task(
             ai_generate_content_markdown(
                 main_data_for_ai, app_name, domain, prompts, ai_cfg, executor
@@ -126,6 +124,7 @@ async def process_partner(
         )
         coin_future = asyncio.create_task(enrich_coin_async(main_data_for_ai, executor))
 
+        # Асинх соцсети и категории
         found_socials, clean_name = await socials_future
 
         if found_socials.get("twitterURL"):
@@ -149,9 +148,10 @@ async def process_partner(
             )
         )
 
-        coin_result, short_desc, content_md = await asyncio.gather(
-            coin_future, ai_short_future, ai_content_future
-        )
+        coin_result, content_md = await asyncio.gather(coin_future, ai_content_future)
+
+        # Генерация short_desc
+        short_desc = await ai_generate_short_desc(content_md, prompts, ai_cfg, executor)
 
         if twitter_future:
             logo_filename, real_name = await twitter_future
