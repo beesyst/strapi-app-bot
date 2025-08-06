@@ -3,7 +3,7 @@ const { chromium } = require('playwright');
 const { newInjectedContext } = require('fingerprint-injector');
 
 const url = process.argv[2];
-console.error('>>> browser_fetch.js запущен для: ' + url);  // <--- теперь ОК
+console.error('>>> browser_fetch.js запущен для: ' + url);
 
 (async () => {
     if (!url) {

@@ -50,7 +50,7 @@ def fetch_url_html_playwright(url):
             timeout=65,
         )
         if result.returncode == 0:
-            logger.info("SOCIAL LINKS получены через browser_fetch.js: %s", url)
+            logger.info("Соцлинки получены через browser_fetch.js: %s", url)
             return result.stdout
         else:
             logger.warning("browser_fetch.js error for %s: %s", url, result.stderr)
@@ -262,7 +262,7 @@ def extract_social_links(html, base_url, is_main_page=False):
         if isinstance(links, dict) and "websiteURL" in links:
             is_json = True
             if any(links.get(k) for k in links if k != "websiteURL"):
-                logger.info("SOCIAL LINKS из browser_fetch.js: %s", links)
+                logger.info("Соцлинки из browser_fetch.js: %s", links)
                 return links
     except Exception:
         pass
@@ -306,7 +306,7 @@ def extract_social_links(html, base_url, is_main_page=False):
     return links
 
 
-# Основная функция для сбора соцсетей и docs по проекту (главная + внутренние)
+# Основная функция для сбора соцсетей и docs по проекту
 def collect_social_links_main(url, main_template, storage_path=None):
     found_socials = {}
     html = fetch_url_html(url)
@@ -335,6 +335,41 @@ def collect_social_links_main(url, main_template, storage_path=None):
                     found_socials[k] = v
         except Exception as e:
             logger.warning("Ошибка docs: %s", e)
+
+    # Автоматический поиск docs, если не найден
+    if not found_socials.get("documentURL"):
+        domain = urlparse(url).netloc
+        domain_root = domain.replace("www.", "")
+        candidate_docs = [
+            f"https://docs.{domain_root}/",
+            f"https://{domain_root}/docs",
+            f"https://{domain_root}/docs/",
+            f"https://{domain_root}/documentation",
+            f"https://{domain_root}/whitepaper",
+        ]
+        for docs_url in candidate_docs:
+            try:
+                resp = requests.get(
+                    docs_url, timeout=8, headers={"User-Agent": "Mozilla/5.0"}
+                )
+                html = resp.text
+                # Простой критерий валидности: 200 OK, размер html > 2kb, в title или html есть "doc"
+                if resp.status_code == 200 and len(html) > 2200:
+                    soup = BeautifulSoup(html, "html.parser")
+                    title = (soup.title.string if soup.title else "").lower()
+                    doc_kw = (
+                        "doc" in title
+                        or "documentation" in title
+                        or "sidebar" in html
+                        or "menu" in html
+                        or "docs" in docs_url
+                    )
+                    if doc_kw:
+                        logger.info("Авто-найдена docs-ссылка: %s", docs_url)
+                        found_socials["documentURL"] = docs_url
+                        break
+            except Exception as e:
+                logger.warning("Ошибка автопоиска docs (%s): %s", docs_url, e)
 
     project_name = ""
     if not found_socials.get("twitterURL"):
