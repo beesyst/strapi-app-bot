@@ -1,9 +1,9 @@
 import copy
 import json
+import json as _json
 import os
 import re
 import subprocess
-import time
 from urllib.parse import urljoin, urlparse
 
 import requests
@@ -61,6 +61,7 @@ def is_bad_name(name):
 def fetch_url_html_playwright(url):
     script_path = os.path.join(ROOT_DIR, "core", "browser_fetch.js")
     try:
+        logger.info(f"[DEBUG] RUNNING NODE: node {script_path} {url}")
         result = subprocess.run(
             ["node", script_path, url],
             cwd=os.path.dirname(script_path),
@@ -68,6 +69,9 @@ def fetch_url_html_playwright(url):
             text=True,
             timeout=65,
         )
+        logger.info(f"[DEBUG] browser_fetch.js returncode: {result.returncode}")
+        logger.info(f"[DEBUG] browser_fetch.js stdout: {result.stdout[:500]}")
+        logger.info(f"[DEBUG] browser_fetch.js stderr: {result.stderr[:500]}")
         if result.returncode == 0:
             logger.info("Соцлинки получены через browser_fetch.js: %s", url)
             return result.stdout
@@ -197,6 +201,47 @@ def normalize_socials(socials):
     if socials.get("youtubeURL"):
         socials["youtubeURL"] = youtube_channelid_to_handle(socials["youtubeURL"])
     return socials
+
+
+# Видеоролики на главной
+def extract_youtube_featured_videos(channel_handle_url):
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        html = requests.get(channel_handle_url, headers=headers, timeout=10).text
+        m = re.search(r"ytInitialData\s*=\s*(\{.*?\});", html, re.DOTALL)
+        if not m:
+            logger.warning("ytInitialData не найден на %s", channel_handle_url)
+            return []
+        data = _json.loads(m.group(1))
+        featured = []
+
+        try:
+            tabs = data["contents"]["twoColumnBrowseResultsRenderer"]["tabs"]
+            for tab in tabs:
+                tabRenderer = tab.get("tabRenderer")
+                if not tabRenderer or not tabRenderer.get("selected"):
+                    continue
+                content = tabRenderer.get("content", {})
+                sectionList = content.get("sectionListRenderer", {}).get("contents", [])
+                for section in sectionList:
+                    items = section.get("itemSectionRenderer", {}).get("contents", [])
+                    for item in items:
+                        player = item.get("channelVideoPlayerRenderer")
+                        if player:
+                            video_id = player.get("videoId")
+                            title_obj = player.get("title", {})
+                            if "runs" in title_obj and title_obj["runs"]:
+                                title = title_obj["runs"][0]["text"]
+                            else:
+                                title = title_obj.get("simpleText", "")
+                            featured.append({"videoId": video_id, "title": title})
+        except Exception as e:
+            logger.warning("Ошибка парсинга JSON YouTube: %s", e)
+            return []
+        return featured
+    except Exception as e:
+        logger.warning("Ошибка запроса/parsing YouTube: %s", e)
+        return []
 
 
 # Доменное имя из URL и лог результата
@@ -349,13 +394,16 @@ def extract_social_links(html, base_url, is_main_page=False):
 
 
 # Основная функция для сбора соцсетей и docs по проекту
-def collect_social_links_main(url, main_template, storage_path=None):
+def collect_main_data(url, main_template, storage_path=None, max_internal_links=10):
+    main_data = copy.deepcopy(main_template)
     found_socials = {}
     html = fetch_url_html(url)
     socials = extract_social_links(html, url, is_main_page=True)
     found_socials.update({k: v for k, v in socials.items() if v})
+    logger.info(f"[DEBUG] found_socials (main): {found_socials}")
 
-    internal_links = get_internal_links(html, url, max_links=10)
+    # Сбор внутренних соцлинков
+    internal_links = get_internal_links(html, url, max_links=max_internal_links)
     for link in internal_links:
         try:
             page_html = fetch_url_html(link)
@@ -366,6 +414,7 @@ def collect_social_links_main(url, main_template, storage_path=None):
         except Exception as e:
             logger.warning("Ошибка парсинга %s: %s", link, e)
 
+    # Docs поиск
     found_socials = normalize_socials(found_socials)
     if found_socials.get("documentURL"):
         docs_url = found_socials["documentURL"]
@@ -377,8 +426,7 @@ def collect_social_links_main(url, main_template, storage_path=None):
                     found_socials[k] = v
         except Exception as e:
             logger.warning("Ошибка docs: %s", e)
-
-    # Автоматический поиск docs, если не найден
+    # Fallback docs
     if not found_socials.get("documentURL"):
         domain = urlparse(url).netloc
         domain_root = domain.replace("www.", "")
@@ -395,7 +443,6 @@ def collect_social_links_main(url, main_template, storage_path=None):
                     docs_url, timeout=8, headers={"User-Agent": "Mozilla/5.0"}
                 )
                 html = resp.text
-                # Простой критерий валидности: 200 OK, размер html > 2kb, в title или html есть "doc"
                 if resp.status_code == 200 and len(html) > 2200:
                     soup = BeautifulSoup(html, "html.parser")
                     title = (soup.title.string if soup.title else "").lower()
@@ -413,111 +460,29 @@ def collect_social_links_main(url, main_template, storage_path=None):
             except Exception as e:
                 logger.warning("Ошибка автопоиска docs (%s): %s", docs_url, e)
 
-    project_name = ""
-    if not found_socials.get("twitterURL"):
-        soup = BeautifulSoup(html, "html.parser")
-        title = soup.title.string.strip() if soup.title and soup.title.string else ""
-        m = re.match(r"^(.+?)\s*[\(/]", title)
-        if m and m.group(1):
-            project_name = m.group(1).strip()
-            logger.info("Имя проекта по <title> (pattern): '%s'", project_name)
-        elif title:
-            project_name = title
-            logger.info("Имя проекта по <title>: '%s'", project_name)
-        else:
-            project_name = get_domain_name(url).capitalize()
-            logger.info("Имя проекта по домену: '%s'", project_name)
-    clean_name = clean_project_name(project_name)
-    if not clean_name:
-        clean_name = get_domain_name(url).capitalize()
-    return found_socials, clean_name
-
-
-# Получение и скачивание аватар и имя из X/Twitter
-def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retries=4):
-    avatar_url = ""
-    name_candidate = ""
-    for attempt in range(max_retries):
-        result = get_links_from_x_profile(twitter_url)
-        raw_name = (result.get("name") or "").strip()
-        avatar_url = (result.get("avatar") or "").strip()
-
-        logger.info(
-            "twitter_parser.js вернул имя: '%s', аватар: '%s' (попытка %d)",
-            raw_name,
-            avatar_url,
-            attempt + 1,
-        )
-        if not raw_name or len(raw_name) < 2 or is_bad_name(raw_name):
-            logger.warning(
-                "Имя из twitter_parser.js ('%s') невалидно, fallback на base_name ('%s')",
-                raw_name,
-                base_name,
-            )
-            raw_name = base_name
-        clean_name = clean_project_name(raw_name)
-        if clean_name and len(clean_name) > 2 and not is_bad_name(clean_name):
-            name_candidate = clean_name
-        if avatar_url:
-            logo_filename = f"{name_candidate.lower().replace(' ', '')}.jpg"
-            avatar_path = ""
-            for download_try in range(max_retries):
-                try:
-                    avatar_data = requests.get(avatar_url, timeout=10).content
-                    avatar_path = os.path.join(storage_path, logo_filename)
-                    with open(avatar_path, "wb") as imgf:
-                        imgf.write(avatar_data)
-                    logger.info("Скачан: %s → %s", avatar_url, avatar_path)
-                    return logo_filename, name_candidate
-                except Exception as e:
-                    logger.warning(
-                        "Ошибка скачивания аватара (попытка %d): %s",
-                        download_try + 1,
-                        e,
-                    )
-                    time.sleep(2)
-        time.sleep(3 + attempt)
-    if not name_candidate or is_bad_name(name_candidate):
-        name_candidate = clean_project_name(base_name)
-    return "", name_candidate
-
-
-# Сбор всех соц ссылок и docs, а также загрузка аватара и обновление main_data
-def collect_all_socials(url, main_template, storage_path=None, max_internal_links=10):
-    main_data = copy.deepcopy(main_template)
-    found_socials = {}
-    html = fetch_url_html(url)
-    socials = extract_social_links(html, url, is_main_page=True)
-    found_socials.update({k: v for k, v in socials.items() if v})
-
-    internal_links = get_internal_links(html, url, max_links=max_internal_links)
-    for link in internal_links:
+    # Video Slider
+    main_data["videoSlider"] = []
+    youtube_url = found_socials.get("youtubeURL", "")
+    if youtube_url and (
+        "youtube.com/@" in youtube_url
+        or "/channel/" in youtube_url
+        or "/c/" in youtube_url
+    ):
         try:
-            page_html = fetch_url_html(link)
-            page_socials = extract_social_links(page_html, link)
-            for k, v in page_socials.items():
-                if v and not found_socials.get(k):
-                    found_socials[k] = v
+            yt_json = fetch_url_html_playwright(youtube_url)
+            logger.info(f"[DEBUG] YOUTUBE_URL: {youtube_url}")
+            logger.info(f"[DEBUG] YOUTUBE RAW JSON: {yt_json[:300]}")
+            yt_links = json.loads(yt_json)
+            fv = yt_links.get("featuredVideos") or []
+            logger.info(f"[DEBUG] YOUTUBE PARSED: {fv}")
+            if fv and fv[0].get("url"):
+                main_data["videoSlider"] = [fv[0]["url"]]
         except Exception as e:
-            logger.warning("Ошибка парсинга %s: %s", link, e)
+            logger.warning(f"Ошибка парса featuredVideos через browser_fetch.js: {e}")
 
-    found_socials = normalize_socials(found_socials)
-    if found_socials.get("documentURL"):
-        docs_url = found_socials["documentURL"]
-        try:
-            docs_html = fetch_url_html(docs_url)
-            docs_socials = extract_social_links(docs_html, docs_url)
-            for k, v in docs_socials.items():
-                if v and not found_socials.get(k):
-                    found_socials[k] = v
-        except Exception as e:
-            logger.warning("Ошибка docs: %s", e)
-
-    avatar_path = ""
+    # Twitter: аватар и имя
     avatar_url = ""
     twitter_name = ""
-    title_name = ""
-    # Парс имени из твиттера и bio-ссылки
     if found_socials.get("twitterURL"):
         twitter_result = get_links_from_x_profile(found_socials["twitterURL"])
         bio_links = twitter_result.get("links", [])
@@ -535,7 +500,6 @@ def collect_all_socials(url, main_template, storage_path=None, max_internal_link
     raw_title = soup.title.string.strip() if soup.title and soup.title.string else ""
     title_name = re.split(r"\||-", raw_title)[0].strip()
 
-    # Финальный выбор имени бренда
     clean_twitter = clean_project_name(twitter_name)
     clean_title = clean_project_name(title_name)
     if clean_twitter and clean_title and clean_twitter.lower() == clean_title.lower():
@@ -547,8 +511,18 @@ def collect_all_socials(url, main_template, storage_path=None, max_internal_link
     else:
         project_name = get_domain_name(url).capitalize()
 
+    # Fail-safe
+    if (
+        not project_name
+        or not isinstance(project_name, str)
+        or not project_name.strip()
+    ):
+        project_name = get_domain_name(url).capitalize()
+    main_data["name"] = project_name
+
     logger.info("Итоговое имя проекта: '%s'", project_name)
 
+    # Аватар
     logo_filename = f"{project_name.lower().replace(' ', '')}.jpg"
     if found_socials.get("twitterURL") and avatar_url and storage_path:
         avatar_path = os.path.join(storage_path, logo_filename)
@@ -562,8 +536,10 @@ def collect_all_socials(url, main_template, storage_path=None, max_internal_link
     else:
         main_data["svgLogo"] = logo_filename
 
+    # Финальная сборка main_data
     social_keys = list(main_template["socialLinks"].keys())
     final_socials = {k: found_socials.get(k, "") for k in social_keys}
     main_data["socialLinks"] = final_socials
-    main_data["name"] = project_name
-    return main_data, avatar_path
+
+    logger.info(f"[DEBUG] ВОЗВРАТ main_data: {json.dumps(main_data)[:600]}")
+    return main_data

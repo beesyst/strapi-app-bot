@@ -20,8 +20,9 @@ console.error('>>> browser_fetch.js запущен для: ' + url);
             'a[href*="twitter.com"],a[href*="discord.gg"],a[href*="t.me"],a[href*="github.com"],a[href*="linkedin.com"],a[href*="youtube.com"],a[href*="medium.com"]',
             { timeout: 12000 }
         );
-    } catch (e) { /* бывает, идем дальше */ }
+    } catch (e) { /* для React/Vue/SPA */ }
 
+    // Соцсети
     const socials = await page.evaluate(() => {
         const patterns = {
             twitterURL: /twitter\.com|x\.com/i,
@@ -39,7 +40,7 @@ console.error('>>> browser_fetch.js запущен для: ' + url);
             const href = a.getAttribute("href");
             for (const [key, rx] of Object.entries(patterns)) {
                 if (rx.test(href) && !links[key]) {
-                    links[key] = href;
+                    links[key] = href.startsWith("http") ? href : "https://www.youtube.com" + href;
                 }
             }
         });
@@ -47,6 +48,81 @@ console.error('>>> browser_fetch.js запущен для: ' + url);
     });
 
     socials.websiteURL = url;
+
+    // Парс featured-видео только если это YouTube канал
+    let featuredVideos = [];
+    if (
+        /^https:\/\/(www\.)?youtube\.com\/(@|channel\/)[^/]+/i.test(url)
+    ) {
+        try {
+            featuredVideos = await page.evaluate(() => {
+                let featured = [];
+                // Через ytInitialData
+                let data;
+                try {
+                    data = window.ytInitialData;
+                } catch (e) {}
+                if (!data) {
+                    // Иногда ytInitialData лежит только в <script>
+                    for (const s of Array.from(document.scripts)) {
+                        if (s.textContent && s.textContent.includes('ytInitialData')) {
+                            const match = s.textContent.match(/ytInitialData\s*=\s*(\{.*?\});/s);
+                            if (match) {
+                                try { data = JSON.parse(match[1]); } catch {}
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (data) {
+                    try {
+                        const tabs = data.contents?.twoColumnBrowseResultsRenderer?.tabs || [];
+                        for (const tab of tabs) {
+                            if (!tab.tabRenderer || !tab.tabRenderer.selected) continue;
+                            const sections = tab.tabRenderer.content?.sectionListRenderer?.contents || [];
+                            for (const section of sections) {
+                                const items = section.itemSectionRenderer?.contents || [];
+                                for (const item of items) {
+                                    const player = item.channelVideoPlayerRenderer;
+                                    if (player && player.videoId) {
+                                        featured.push({
+                                            videoId: player.videoId,
+                                            title: player.title?.runs?.[0]?.text || "",
+                                            url: `https://www.youtube.com/watch?v=${player.videoId}`
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {}
+                }
+                // Если ничего не нашли - fallback на DOM
+                if (!featured.length) {
+                    // Найти <a href="/watch?v=..."> в трейлере
+                    const a = document.querySelector('ytd-channel-video-player-renderer a[href*="/watch"]');
+                    const title = a?.textContent?.trim() || "";
+                    const href = a?.getAttribute("href") || "";
+                    if (href && href.startsWith("/watch?v=")) {
+                        const videoId = href.split('v=')[1].split('&')[0];
+                        featured.push({
+                            videoId,
+                            title,
+                            url: "https://www.youtube.com" + href
+                        });
+                    }
+                }
+                return featured;
+            });
+        } catch (e) {
+            console.error('Ошибка парсинга featured видео:', e);
+            featuredVideos = [];
+        }
+    }
+
+
+    if (featuredVideos && featuredVideos.length) {
+        socials.featuredVideos = featuredVideos;
+    }
 
     console.log(JSON.stringify(socials));
     await browser.close();

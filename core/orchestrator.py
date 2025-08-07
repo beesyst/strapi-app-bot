@@ -28,8 +28,7 @@ from core.status import (
     log_mainjson_status,
 )
 from core.web_parser import (
-    collect_social_links_main,
-    fetch_twitter_avatar_and_name,
+    collect_main_data,
     get_domain_name,
 )
 
@@ -110,7 +109,7 @@ async def process_partner(
 
         loop = asyncio.get_event_loop()
         socials_future = loop.run_in_executor(
-            executor, collect_social_links_main, url, main_template, storage_path
+            executor, collect_main_data, url, main_template, storage_path
         )
         main_data_for_ai = dict(main_template)
         main_data_for_ai["name"] = domain.capitalize()
@@ -124,22 +123,12 @@ async def process_partner(
         )
         coin_future = asyncio.create_task(enrich_coin_async(main_data_for_ai, executor))
 
-        # Асинх сбор соцсетей
-        found_socials, clean_name = await socials_future
+        # Асинхронно получаем все соцсети и общие данные по проекту
+        main_data = await socials_future
+        if isinstance(main_data, tuple):
+            main_data = main_data[0]
 
-        # Запрашиваем твиттер-аву и имя
-        if found_socials.get("twitterURL"):
-            twitter_future = loop.run_in_executor(
-                executor,
-                fetch_twitter_avatar_and_name,
-                found_socials["twitterURL"],
-                storage_path,
-                clean_name,
-            )
-        else:
-            twitter_future = None
-
-        # Контент и coin одновременно
+        # Параллельно ждём AI контент и coin
         coin_result, content_md = await asyncio.gather(coin_future, ai_content_future)
 
         # Генерация шорт описания по content_md
@@ -152,20 +141,7 @@ async def process_partner(
             content_md, prompts, ai_cfg, executor, allowed_categories
         )
 
-        if twitter_future:
-            logo_filename, real_name = await twitter_future
-        else:
-            logo_filename, real_name = None, clean_name
-
-        social_keys = list(main_template["socialLinks"].keys())
-        final_socials = {k: found_socials.get(k, "") for k in social_keys}
-
-        main_data = dict(main_template)
-        main_data["socialLinks"] = final_socials
-        main_data["name"] = real_name
-        logger.info(f"Итоговое имя проекта: '{main_data['name']}'")
-        main_data["svgLogo"] = logo_filename
-
+        # coinData, shortDescription, contentMarkdown
         if coin_result and "coinData" in coin_result:
             main_data["coinData"] = coin_result["coinData"]
         if short_desc:
