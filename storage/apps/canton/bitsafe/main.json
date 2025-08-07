@@ -1,0 +1,42 @@
+{
+  "name": "BitSafe",
+  "shortDescription": "Bitsafe enhances Bitcoin yields and offers institutional-grade custody within DeFi ecosystem, supporting private transactions and advanced hedging tools.",
+  "svgLogo": "bitsafe.jpg",
+  "project_categories": [
+    3,
+    24,
+    20
+  ],
+  "socialLinks": {
+    "websiteURL": "https://www.bitsafe.finance/",
+    "twitterURL": "https://x.com/BitSafe_Finance",
+    "discordURL": "",
+    "githubURL": "",
+    "mediumURL": "",
+    "youtubeURL": "https://www.youtube.com/@iBTC.Network",
+    "telegramURL": "https://t.me/BitSafeFinance",
+    "documentURL": "https://docs.bitsafe.finance/",
+    "linkedinURL": "https://www.linkedin.com/company/bitsafefinance",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": ""
+  },
+  "seo": {
+    "metaTitle": "BitSafe",
+    "metaDescription": "Bitsafe enhances Bitcoin yields and offers institutional-grade custody within DeFi ecosystem, supporting private transactions and advanced hedging tools.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "BitSafe",
+        "description": "Bitsafe boosts Bitcoin yields, custody, and privacy.",
+        "image": null
+      }
+    ],
+    "keywords": "bitcoin defi, institutional bitcoin custody, bitcoin wrapped tokens",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nBitsafe is a foundational project within the Bitcoin DeFi ecosystem, primarily targeting institutional investors and aiming to enhance Bitcoin yields beyond traditional holding strategies. Established in Hungary in 2021, the platform initially operated under the name dlcBTC until November 2024, when both the platform and core product were rebranded as iBTC. The main goal of Bitsafe is to equip professional market participants with tools to utilize and hedge Bitcoin within the decentralized finance space while maintaining institutional-grade security standards. Key milestones include raising $2 million in a pre-seed funding round on October 2, 2023, with participation from ABCDE Capital, Bixin Ventures, Waterdrip Capital, Trust Machines, and others. Furthermore, the project received investments from OKX Ventures and Cryptogram Venture in March and May 2024, respectively. Bitsafe's product suite features solutions such as iBTC, siBTC, CBTC, and BitSafe Vaults, providing access to DeFi protocols, private transactions, and hedge fund strategies centered on Bitcoin. As of November 25, 2024, Bitsafe is actively evolving as an infrastructure provider tailored to institutional Bitcoin investors.\n\n## Functionality\n\nBitsafe specializes in issuing \"wrapped\" Bitcoin tokens like iBTC and siBTC, which conform to standards suitable for DeFi use and are facilitated through interoperability infrastructure between Bitcoin and smart contract networks. The platform focuses on delivering yield through automated strategies, trade execution, and collateral provision for decentralized applications. Institutional custody is managed via BitSafe Vaults—a transparent, risk-managed custody solution that ensures secure storage and compliance. Users can transfer assets between different products to access services such as decentralized lending, DeFi protocol participation, and private transfers via privacy-preserving networks. Technically, Bitsafe ensures compatibility with external protocols, seamless integration with DeFi applications, and the execution of custom hedging strategies. This positions Bitsafe as a comprehensive aggregator of tools connecting Bitcoin to DeFi ecosystems, supporting both custodial and non-custodial architectures suitable for various user classes and operational needs.\n\n## Features\n\n- **Institutional-Grade Custody**: Professional custody solutions for institutional clients with transparent risk management\n- **Bitcoin DeFi Access**: Enables direct participation of Bitcoin in DeFi protocols without wrapping via third parties\n- **Yield Aggregation**: Offers automated yield strategies using products like iBTC and siBTC\n- **Private Settlement**: Supports confidential transaction networks for large-scale settlements\n- **Multi-Asset Support**: Includes CBTC, siBTC, and other Bitcoin-based assets\n- **Hedge Fund Strategies**: Provides access to advanced hedging tools directly on Bitcoin\n- **Explicit Risk Disclosure**: All products offer transparent risk documentation and disclosures\n- **Proven Fundraising Track Record**: $2M pre-seed raised in October 2023, with follow-up rounds in March and May 2024\n- **Rebranding Milestone**: Transition from dlcBTC to iBTC finalized on November 25, 2024\n- **Direct DeFi Integration**: Designed to interact seamlessly with existing DeFi protocols and liquidity platforms\n\n## Canton x Bitsafe\n\nA strategic partnership has been established between Canton Network and Bitsafe to integrate Bitcoin into infrastructure tailored for institutional derivatives trading and margin flows. The partnership was officially announced on March 24, 2025, with the launch of CBTC (bridgeless wrapped Bitcoin) on Canton as the key milestone.\n\nCurrently, Bitsafe provides an infrastructure allowing Bitcoin (CBTC) to serve as collateral for margin requirements—initial and variation margins—in over-the-counter (OTC) derivative transactions within Canton Network. This represented the industry's first publicly confirmed case where Bitcoin can be employed for margin flows in OTC agreements while preserving transaction privacy.\n\nKey aspects of this solution include:\n\n- Institutional traders can deposit BTC into Canton, converting it to CBTC, which then can be used for collateral in options and structured products transactions.\n- Canton ensures “flexible confidentiality”: all movements of BTC are visible only to selected counterparties, enhancing security and compliance with institutional standards.\n- Bitsafe acts as a validator within the Canton Network, enabling participation in transaction validation, earning network incentives, and reinforcing infrastructure robustness, ultimately supporting faster and more secure transaction finalization for institutional users.\n- The initial phase aims to connect a limited number of institutional participants, with plans to expand to 10-20 firms and daily trading volumes of approximately $20–50 million.\n\nAccording to Bitsafe, the goal is to foster an ecosystem for institutional Bitcoin usage that combines high standards of security, privacy, regulatory compliance, and opens new revenue streams such as staking and application rewards via Canton. No prior announcements, early partnership news, or additional phases were publicly available before March 2025. The official press release by Canton Network and statements from project leaders confirm these developments and articulate the benefits for participating institutions.\n\nThere are no publicly confirmed details regarding further phases or initiatives outside of this official partnership announcement. All information is based on open sources, including the Canton press release from March 24, 2025, and publicly available project statements."
+}

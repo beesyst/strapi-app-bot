@@ -1,0 +1,42 @@
+{
+  "name": "Bcw",
+  "shortDescription": "BCW Group is a global tech firm specializing in blockchain, Web3, cloud computing, AI, and payments, supporting over 60 networks and processing $22 billion.",
+  "svgLogo": "bcw.jpg",
+  "project_categories": [
+    3,
+    24,
+    25
+  ],
+  "socialLinks": {
+    "websiteURL": "https://www.bcw.group/",
+    "twitterURL": "https://x.com/bcw_llc",
+    "discordURL": "",
+    "githubURL": "",
+    "mediumURL": "https://medium.com/bcw-group/achievement-unlocked-bcw-is-now-soc-2-type-1-certified-bc86fe1ca25f",
+    "youtubeURL": "https://www.youtube.com/channel/UCH-Sg1t4FH2XJ0IoYdkkOwg",
+    "telegramURL": "",
+    "documentURL": "",
+    "linkedinURL": "https://www.linkedin.com/company/bcw-group2025/",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": ""
+  },
+  "seo": {
+    "metaTitle": "Bcw",
+    "metaDescription": "BCW Group is a global tech firm specializing in blockchain, Web3, cloud computing, AI, and payments, supporting over 60 networks and processing $22 billion.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "Bcw",
+        "description": "BCW Group: global tech in blockchain, AI, payments.",
+        "image": null
+      }
+    ],
+    "keywords": "blockchain infrastructure services, Web3 solutions for enterprises, cloud computing for crypto",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nBCW Group is a global technology firm specializing in blockchain infrastructure, Web3, cloud computing, and generative AI solutions tailored for enterprises and institutional investors. According to their official website, the company has been operating since 2017, functioning as both a venture studio and a managed services provider—although the site's content does not specify an exact founding date, references to their activities date back to that year. The organization is deeply embedded in the Web3 ecosystem: as of August 5, 2025, BCW launched six of its own venture projects, supports more than 60 blockchain and Web3 networks, and has processed over $22 billion in fiat and crypto transactions via various payment channels. \n\nBCW’s core areas include investing in decentralized finance infrastructure, payment technologies, Layer 1 and Layer 2 solutions, staking services, cybersecurity, data oracles, mining, as well as ventures in the metaverse and gaming sectors. Furthermore, BCW Group holds official partnerships as Build, Premier Service, and Premier Sell with Google Cloud within the Web3 segment, evidencing their access to specialized services and infrastructure tailored for corporate clients—payable both in fiat currency and cryptocurrencies. Strategic collaborations with Cronos Labs and Worldpay, established between 2024 and 2025, facilitate their solutions' integration into leading blockchain projects and international payment systems, backed by endorsements from top management of these companies.\n\n## Functionality\n\nThe company offers a comprehensive portfolio of products and services: cloud solutions, Web3 infrastructure, managed services, consulting, and generative AI tools designed to enhance business operations. As of August 2025, BCW enables migration and deployment of Web3 applications on Google Cloud, offers internal audits, performance testing, and assists with listing dApps on Google Cloud Marketplace, providing end-to-end support throughout these processes. \n\nA key feature is their implementation of a public blockchain-ETL pipeline supporting both EVM and non-EVM networks, which broadens access to on-chain data and analytical capabilities. BCW also pioneers the “Cloud-with-Crypto” model, enabling clients to pay for cloud services using popular stablecoins and digital assets. Their cybersecurity services encompass continuous monitoring, protection, and configuration of enterprise cloud environments, reducing attack risks and simplifying compliance audits. In fintech, BCW holds offerings such as card issuance, card-to-crypto acquiring, cross-border transfers using digital assets, and rapid stablecoin settlements. \n\nSupporting innovation is their investment in numerous startups, including Supra—where BCW was among the key investors alongside Coinbase Ventures and Animoca Brands, with funding completed on September 28, 2023. On the AI front, the focus is on deploying custom models and integrating AI within the Web3 framework, leveraging Google Cloud’s infrastructure for scalable solutions.\n\n## Features\n\n- **Cloud-with-Crypto Payment**: Enable payment for Google Cloud services using stablecoins and other cryptocurrencies.\n- **Google Cloud Marketplace Deployment**: Facilitate the listing and publication of Web3 applications directly in Google Cloud Marketplace.\n- **Blockchain Public Data Pipeline**: Open-source ETL framework for collecting, processing, and distributing blockchain data across EVM and non-EVM networks.\n- **Managed Security Services**: 24/7 monitoring, cloud protection, security audits, and enterprise cloud configuration.\n- **Performance Benchmarking**: Testing and optimizing cloud infrastructure based on latency, scalability, and cost metrics.\n- **Debit Card Issuance for Digital Assets**: Issuance of debit cards for transactions using digital assets.\n- **Card-to-Crypto Processing**: Technology enabling instant conversion and payment processing with crypto when using traditional cards.\n- **Digital Asset Remittances**: Cross-border transactions utilizing digital currencies for quick settlements.\n- **Stablecoin Settlement**: Fast payments and settlements using stablecoins tailored for corporate clients.\n- **AI Services Integration**: Deployment of generative AI and custom machine learning models within Web3 infrastructure.\n- **Google Cloud Affiliate Program**: Opportunities for discounts and expense management through a partner channel.\n- **Web3 Infrastructure Engineering**: Development and deployment of custom blockchain infrastructure complying with client requirements, certification standards, and scalability needs.\n- **Cross-network Support**: Technical support for over 60 blockchain and DeFi networks, including major Layer 1 and Layer 2 solutions.\n- **Venture Studio Model**: Launch and support of proprietary and partner-funded startup projects, with access to BCW’s infrastructure.\n- **Compliance Assistance**: Support with certifications, adhering to international standards, and preparing for audits."
+}

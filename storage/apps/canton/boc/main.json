@@ -1,0 +1,42 @@
+{
+  "name": "Boc",
+  "shortDescription": "BOCOIN (BOC) is a BEP-20 token on Binance Smart Chain for cross-chain transfers, with a cap of 10.5 billion tokens and a current price of $0.0015.",
+  "svgLogo": null,
+  "project_categories": [
+    22,
+    3,
+    25
+  ],
+  "socialLinks": {
+    "websiteURL": "https://www.boc.cn/",
+    "twitterURL": "",
+    "discordURL": "",
+    "githubURL": "",
+    "mediumURL": "",
+    "youtubeURL": "",
+    "telegramURL": "",
+    "documentURL": "",
+    "linkedinURL": "",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": "first-bitcoin-atm"
+  },
+  "seo": {
+    "metaTitle": "Boc",
+    "metaDescription": "BOCOIN (BOC) is a BEP-20 token on Binance Smart Chain for cross-chain transfers, with a cap of 10.5 billion tokens and a current price of $0.0015.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "Boc",
+        "description": "BOCOIN (BOC): BEP-20, 10.5B cap, $0.0015",
+        "image": null
+      }
+    ],
+    "keywords": "cross-chain asset transfer,BOCOIN BEP-20 token price,cryptocurrency bridging solutions",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nBOCOIN (BOC) is a cryptocurrency token operating on the Binance Smart Chain (BSC) in BEP-20 format. As of August 7, 2025, the token's price is at $0.0015, showing a 3.15% increase from the previous day. The total maximum supply is capped at 10.5 billion BOC tokens. However, details regarding the circulating supply and market capitalization are not available. Launched in March 2022, as evidenced by the registration date of its official Twitter account, BOCOIN positions itself as an innovative player in the decentralized finance (DeFi) space, aiming to provide users with fast and secure asset swaps across blockchain networks. Information about the team, partnerships, or investments remains undisclosed in accessible sources.\n\n## Functionality\n\nThe core functionality of BOCOIN is centered around facilitating cross-chain asset transfers through integrated bridge technology. This allows users to transfer tokens seamlessly between different blockchains without relying on centralized exchanges. The platform supports multiple blockchain networks, including Ethereum and Binance Smart Chain, automating the transfer process to reduce human error and mitigate risks associated with fraud. This makes BOCOIN a versatile tool for decentralized asset management and trading.\n\n## Features\n\n- **Multi-chain Compatibility**: Enables seamless data exchange across different blockchain networks.\n- **High Performance**: Capable of processing thousands of transactions per second.\n- **Security**: Employs advanced encryption algorithms to secure transactions.\n- **User-Friendly Interface**: Designed with an intuitive and accessible user interface.\n- **Scalability**: Supports growth and increased transaction loads without sacrificing performance.\n- **Decentralization**: Operates without a central authority, ensuring autonomy and resilience.\n- **Low Transaction Fees**: Offers economical transaction costs to users.\n- **Interoperability**: Ensures compatibility across various blockchain ecosystems.\n- **Smart Contract Support**: Allows integration and execution of smart contracts for automation.\n- **Community Driven**: Development and evolution are guided by active community participation."
+}

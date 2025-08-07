@@ -161,10 +161,41 @@ def get_internal_links(html, base_url, max_links=10):
     return links_list
 
 
-# Привод соцссылок к единому виду (например, twitter → x)
+# Преобразование youtube-ссылки
+def youtube_channelid_to_handle(channel_url):
+    m = re.match(
+        r"^https?://(www\.)?youtube\.com/channel/([A-Za-z0-9_\-]+)", channel_url
+    )
+    if not m:
+        return channel_url
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        html = requests.get(channel_url, headers=headers, timeout=10).text
+
+        # Поиск handle в "canonicalBaseUrl":"\/@handle"
+        handle_match = re.search(r'"canonicalBaseUrl":"\\?/(@[a-zA-Z0-9_.-]+)"', html)
+        if handle_match:
+            handle = handle_match.group(1)
+            return f"https://www.youtube.com/{handle}"
+
+        # Fallback: ищем в ссылках меню
+        menu_match = re.search(r'href="/(@[a-zA-Z0-9_.-]+)"', html)
+        if menu_match:
+            handle = menu_match.group(1)
+            return f"https://www.youtube.com/{handle}"
+
+        return channel_url
+    except Exception as e:
+        logger.warning("youtube_channelid_to_handle error for %s: %s", channel_url, e)
+        return channel_url
+
+
+# Привод соцссылок к единому виду
 def normalize_socials(socials):
     if socials.get("twitterURL"):
         socials["twitterURL"] = socials["twitterURL"].replace("twitter.com", "x.com")
+    if socials.get("youtubeURL"):
+        socials["youtubeURL"] = youtube_channelid_to_handle(socials["youtubeURL"])
     return socials
 
 
@@ -273,49 +304,41 @@ def find_best_docs_link(soup, base_url):
 
 # Извлечение всех соц ссылок и docs с html страницы
 def extract_social_links(html, base_url, is_main_page=False):
-    # Попытка распарсить JSON (из browser_fetch.js)
-    links = {}
-    is_json = False
+    # Парс JSON из browser_fetch.js
     try:
         links = json.loads(html)
         if isinstance(links, dict) and "websiteURL" in links:
-            is_json = True
-            if any(links.get(k) for k in links if k != "websiteURL"):
-                logger.info("Соцлинки из browser_fetch.js: %s", links)
-                return links
+            logger.info("Соцлинки из browser_fetch.js: %s", links)
+            return links
     except Exception:
         pass
+
     # Обычный HTML-парсинг через BeautifulSoup
     soup = BeautifulSoup(html, "html.parser")
     links = {k: "" for k in SOCIAL_PATTERNS if k != "documentURL"}
     for a in soup.find_all("a", href=True):
         href = a["href"]
+        abs_href = urljoin(base_url, href)
         for key, pattern in SOCIAL_PATTERNS.items():
             if key == "documentURL":
                 continue
-            if pattern.search(href):
-                links[key] = href
+            if pattern.search(abs_href):
+                links[key] = abs_href
     links["websiteURL"] = base_url
     document_url = find_best_docs_link(soup, base_url)
     if document_url:
         links["documentURL"] = document_url
     else:
         links["documentURL"] = ""
-    # Если все соцсети пустые - повторно через browser_fetch.js
-    if not is_json and all(not links[k] for k in links if k != "websiteURL"):
+
+    if is_main_page and all(not links[k] for k in links if k != "websiteURL"):
         logger.info(
             f"extract_social_links: ни одной соцссылки не найдено для {base_url}, повтор через browser_fetch.js"
         )
         html_browser = fetch_url_html_playwright(base_url)
         try:
             browser_links = json.loads(html_browser)
-            if (
-                isinstance(browser_links, dict)
-                and "websiteURL" in browser_links
-                and any(
-                    browser_links.get(k) for k in browser_links if k != "websiteURL"
-                )
-            ):
+            if isinstance(browser_links, dict) and "websiteURL" in browser_links:
                 logger.info(
                     "Соцлинки из browser_fetch.js (fallback): %s", browser_links
                 )

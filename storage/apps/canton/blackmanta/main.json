@@ -1,0 +1,42 @@
+{
+  "name": "Blackmanta",
+  "shortDescription": "Black Manta Capital Partners is a licensed EU platform specializing in asset tokenization and regulated security tokens for real estate, funds, and more.",
+  "svgLogo": "blackmanta.jpg",
+  "project_categories": [
+    24,
+    25,
+    3
+  ],
+  "socialLinks": {
+    "websiteURL": "https://blackmanta.capital/",
+    "twitterURL": "https://x.com/BlackMantaCap",
+    "discordURL": "",
+    "githubURL": "",
+    "mediumURL": "",
+    "youtubeURL": "//www.youtube.com/channel/UCXSQc2o2b1XgC0kwBDdFjnw",
+    "telegramURL": "",
+    "documentURL": "",
+    "linkedinURL": "https://www.linkedin.com/company/blackmantacapitalpartners/",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": ""
+  },
+  "seo": {
+    "metaTitle": "Blackmanta",
+    "metaDescription": "Black Manta Capital Partners is a licensed EU platform specializing in asset tokenization and regulated security tokens for real estate, funds, and more.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "Blackmanta",
+        "description": "Black Manta: EU platform for asset tokens.",
+        "image": null
+      }
+    ],
+    "keywords": "blockchain tokenization services, regulation of security tokens in Europe, legal compliance for asset tokenization",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nBlack Manta Capital Partners is a licensed investment platform operating within the European Union, specializing in the tokenization of real assets through the issuance of security tokens (STOs) in compliance with BaFin and MiFID II regulatory frameworks. Founded in 2018, and officially registered as Black Manta Capital Partners S.à r.l., the company has positioned itself as a comprehensive \"turnkey\" agency providing technical, legal, and financial support for asset tokenization from day one. The platform officially launched in March 2019, marking a significant milestone. In August 2019, Black Manta received its BaFin license, making it one of the first German firms authorized to manage STOs across multiple asset classes, including securities, real estate, and startups, as registered in BaFin’s official registry. \n\nNovember 2020 saw the successful launch of its first STO for beremondo Real Estate, tokenizing a Frankfurt-based residential property. The company expanded in 2021 into the tokenization of investment funds, introducing secondary liquidity options and early exit mechanisms for investors. Strategic partnerships include collaboration with the BSFZ platform for innovation, which received regulatory approval in Germany in June 2024. As of August 7, 2025, Black Manta has established itself as a global leader in licensed STO operations, emphasizing legal compliance, international adaptability, and seamless integration with the European financial ecosystem.\n\n## Functionality\n\nBlack Manta operates under the principle \"Tokenization as a Service®,\" offering fully regulated and legally compliant services to digitize a wide range of assets—including real estate, equities, funds, venture projects, bonds, and commodities—through security tokens. Each token encodes specific rights—whether equity or debt—and is executed within standardized smart contracts deployed on the Ethereum blockchain. The structuring and issuance process involves expert legal analysis, preparation of detailed investment memos, BaFin approval procedures, smart contract audits, and integration of KYC/AML protocols.\n\nInvestors from the EU and other jurisdictions can purchase fractional interests in digital assets, gaining proportional rights to profits, voting, and governance (when stipulated). Thanks to the modular architecture of the platform, token issuance can be supported by services such as issuance management, revenue distribution, secondary trading, investor reporting, and custodial solutions. For fund managers, Black Manta offers specialized products for on-chain tokenization of funding rounds and segmented investment blocks, with instant transfer of participation rights via smart contracts and options for premature exit.\n\nThe platform is integrated with banking gateways, supporting multi-currency transactions including euros and stablecoins, ensuring a seamless investment experience for a global user base.\n\n## Features\n\n- **Full BaFin licensing**: Operates as a fully regulated financial institution in Germany according to BaFin and MiFID II.\n- **Tokenization as a Service**: End-to-end service for structuring, legal clearance, issuance, and management of security tokens.\n- **Blockchain Agnostic**: Issues security tokens primarily on Ethereum, with support for other blockchain integrations as needed.\n- **Multi-Asset Coverage**: Supports tokenization of real estate, funds, debt instruments, equity, and other asset classes.\n- **Automated Compliance**: Built-in AML/KYC protocols to ensure complete regulatory adherence.\n- **Investor Rights**: Security tokens confer rights to equity, profit participation, and governance.\n- **Secondary Market Liquidity**: Facilitates secondary trading and early exit options for investors.\n- **Mezzanine and Real Estate Financing**: Structured real estate projects, such as a 36-apartment development in Frankfurt with cash flows launched in July 2024.\n- **Fund Tokenization**: Supports on-chain launch and administration of tokenized investment funds and compartments.\n- **Innovation Accreditation**: Holds the BSFZ Seal for R&D and innovation activities in Germany, confirmed in June 2024.\n- **Global Investor Reach**: Attracts institutional and retail investors from across Europe and internationally.\n- **Smart Contract Audit**: All contractual code undergoes pre-launch audits to minimize risks.\n- **Transparent Reporting**: Provides real-time disclosure and reporting via a dedicated investor portal.\n\n## Canton x Blackmanta\n\nAn official connection exists between the Canton project (canton.network) and Black Manta Capital Partners (blackmanta.capital), confirmed by public data on Canton’s ecosystem website. As of the update on September 11, 2023, Black Manta is listed as an active participant within the Canton Network, marked as “Connected” and designated as an “Issuer,” signifying their role as an integrated emitter or operator of applications/services within the ecosystem.\n\nBlack Manta is recognized as a regulated investment bank operating within Canton’s DLT ecosystem. Its presence is officially documented on Canton’s map of decentralized applications, operators, and issuers, alongside industry giants such as BNP Paribas, HSBC, Broadridge, and iCapital, who are involved in pilot projects and solutions built on Canton’s infrastructure. This confirms Black Manta’s role as both an issuer and a service provider within the Canton ecosystem.\n\nRegarding timeline and specific cooperation phases: their involvement is confirmed as of September 11, 2023. However, the precise start date of collaboration, detailed project launches, or joint solutions remain undisclosed in available sources. There are no public statements regarding pilot projects, product launches, or other joint initiatives apart from the official ecosystem listing.\n\nTo summarize confirmed facts:\n- Black Manta Capital Partners is officially listed as a “Connected Issuer” and \"Service Provider” on Canton Network’s ecosystem map as of September 11, 2023.\n- The partnership or integration details, including technical or commercial milestones, have not been publicly elaborated.\n- No unofficial or speculative information regarding additional initiatives or cooperation beyond the official listing has been detected up to August 2025.\n\nIn essence, Black Manta’s integration with Canton Network is verified as a formal part of its ecosystem participation, positioned as a regulated issuer and ecosystem participant, with ongoing operational ties documented on official Canton resources."
+}
