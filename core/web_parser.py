@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import re
@@ -11,6 +12,12 @@ from core.log_utils import get_logger
 
 # Логгер
 logger = get_logger("web_parser")
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_PATH = os.path.join(ROOT_DIR, "config", "config.json")
+with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+    CONFIG = json.load(f)
+BAD_NAME_KEYWORDS = set(map(str.lower, CONFIG.get("bad_name_keywords", [])))
 
 # Кэш для ускорения парсинга
 FETCHED_HTML_CACHE = {}
@@ -34,12 +41,24 @@ SOCIAL_PATTERNS = {
     ),
     "documentURL": re.compile(r"docs\.", re.I),
 }
-BAD_NAMES = {"", "x", "profile", "new to x"}
+
+
+def is_bad_name(name):
+    name = (name or "").strip().lower()
+    if not name or len(name) < 3:
+        return True
+    for bad_kw in BAD_NAME_KEYWORDS:
+        if not bad_kw:
+            continue
+        if name == bad_kw or bad_kw in name:
+            return True
+    if len(name.split()) > 3:
+        return True
+    return False
 
 
 # HTML через browser_fetch.js (Playwright + Fingerprint-suite)
 def fetch_url_html_playwright(url):
-    ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     script_path = os.path.join(ROOT_DIR, "core", "browser_fetch.js")
     try:
         result = subprocess.run(
@@ -298,7 +317,7 @@ def extract_social_links(html, base_url, is_main_page=False):
                 )
             ):
                 logger.info(
-                    "SOCIAL LINKS из browser_fetch.js (fallback): %s", browser_links
+                    "Соцлинки из browser_fetch.js (fallback): %s", browser_links
                 )
                 return browser_links
         except Exception as e:
@@ -404,7 +423,7 @@ def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retr
             "twitter_parser.js вернул имя: '%s' (попытка %d)", raw_name, attempt + 1
         )
         # Если имя плохое - берем base_name
-        if not raw_name or len(raw_name) < 2 or raw_name.lower() in BAD_NAMES:
+        if not raw_name or len(raw_name) < 2 or is_bad_name(raw_name):
             logger.warning(
                 "Имя из twitter_parser.js ('%s') невалидно, fallback на base_name ('%s')",
                 raw_name,
@@ -412,13 +431,13 @@ def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retr
             )
             raw_name = base_name
         clean_name = clean_project_name(raw_name)
-        if clean_name and len(clean_name) > 2 and clean_name.lower() not in BAD_NAMES:
+        if clean_name and len(clean_name) > 2 and not is_bad_name(clean_name):
             name_candidate = clean_name
             break
         time.sleep(2)
 
     # fallback на base_name
-    if not name_candidate or name_candidate.lower() in BAD_NAMES:
+    if not name_candidate or is_bad_name(name_candidate):
         name_candidate = clean_project_name(base_name)
 
     # Качаем лого
@@ -444,8 +463,6 @@ def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retr
 
 # Сбор всех соц ссылок и docs, а также загрузка аватара и обновление main_data
 def collect_all_socials(url, main_template, storage_path=None, max_internal_links=10):
-    import copy
-
     main_data = copy.deepcopy(main_template)
     found_socials = {}
     html = fetch_url_html(url)
@@ -476,45 +493,42 @@ def collect_all_socials(url, main_template, storage_path=None, max_internal_link
             logger.warning("Ошибка docs: %s", e)
 
     avatar_path = ""
-    project_name = ""
     avatar_url = ""
+    twitter_name = ""
+    title_name = ""
+    # Парс имени из твиттера и bio-ссылки
     if found_socials.get("twitterURL"):
         twitter_result = get_links_from_x_profile(found_socials["twitterURL"])
         bio_links = twitter_result.get("links", [])
         avatar_url = twitter_result.get("avatar", "")
-        project_name = twitter_result.get("name", "")
-
+        raw_twitter_name = twitter_result.get("name", "")
+        twitter_name = re.split(r"\||-", (raw_twitter_name or "").strip())[0].strip()
         for bio_url in bio_links:
             for k in main_template["socialLinks"].keys():
                 if k.endswith("URL") and not found_socials.get(k):
                     if bio_url.lower().startswith(k.replace("URL", "").lower()):
                         found_socials[k] = bio_url
 
-    def is_bad_name(name):
-        name = (name or "").strip()
-        return (
-            not name
-            or len(name) < 3
-            or name.lower() in BAD_NAMES
-            or name.lower() == "twitter"
-        )
+    # Имя из title
+    soup = BeautifulSoup(html, "html.parser")
+    raw_title = soup.title.string.strip() if soup.title and soup.title.string else ""
+    title_name = re.split(r"\||-", raw_title)[0].strip()
 
-    if is_bad_name(project_name):
-        soup = BeautifulSoup(html, "html.parser")
-        title = soup.title.string.strip() if soup.title and soup.title.string else ""
-        m = re.match(r"^(.+?)\s*[\(/]", title)
-        if m and m.group(1) and not is_bad_name(m.group(1)):
-            project_name = m.group(1).strip()
-        elif title and not is_bad_name(title):
-            project_name = title
-        else:
-            project_name = get_domain_name(url).capitalize()
-    clean_name = clean_project_name(project_name)
-    if not clean_name:
-        clean_name = get_domain_name(url).capitalize()
-    logger.info("Итоговое имя проекта: '%s'", clean_name)
+    # Финальный выбор имени бренда
+    clean_twitter = clean_project_name(twitter_name)
+    clean_title = clean_project_name(title_name)
+    if clean_twitter and clean_title and clean_twitter.lower() == clean_title.lower():
+        project_name = clean_twitter
+    elif clean_twitter and not is_bad_name(clean_twitter):
+        project_name = clean_twitter
+    elif clean_title and not is_bad_name(clean_title):
+        project_name = clean_title
+    else:
+        project_name = get_domain_name(url).capitalize()
 
-    logo_filename = f"{clean_name.lower().replace(' ', '')}.jpg"
+    logger.info("Итоговое имя проекта: '%s'", project_name)
+
+    logo_filename = f"{project_name.lower().replace(' ', '')}.jpg"
     if found_socials.get("twitterURL") and avatar_url and storage_path:
         avatar_path = os.path.join(storage_path, logo_filename)
         try:
@@ -526,11 +540,9 @@ def collect_all_socials(url, main_template, storage_path=None, max_internal_link
             logger.warning("Ошибка скачивания аватара: %s", e)
     else:
         main_data["svgLogo"] = logo_filename
-    logger.info(
-        "Итоговый svgLogo: %s (avatar_url: %s)", main_data["svgLogo"], avatar_url
-    )
+
     social_keys = list(main_template["socialLinks"].keys())
     final_socials = {k: found_socials.get(k, "") for k in social_keys}
     main_data["socialLinks"] = final_socials
-    main_data["name"] = clean_name
+    main_data["name"] = project_name
     return main_data, avatar_path

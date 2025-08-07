@@ -1,0 +1,41 @@
+{
+  "name": "Magpie",
+  "shortDescription": "Magpie XYZ is a multi-chain DeFi protocol boosting yields through veTokenomics and SubDAO integrations across major blockchains.",
+  "svgLogo": "magpie.jpg",
+  "project_categories": [
+    22,
+    23
+  ],
+  "socialLinks": {
+    "websiteURL": "https://www.magpiexyz.io/",
+    "twitterURL": "https://x.com/magpiexyz_io",
+    "discordURL": "https://discord.com/invite/magpiexyz",
+    "githubURL": "",
+    "mediumURL": "",
+    "youtubeURL": "",
+    "telegramURL": "https://t.me/Official_MagpieMegaDao/101118",
+    "documentURL": "https://docs.magpiexyz.io/",
+    "linkedinURL": "",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": ""
+  },
+  "seo": {
+    "metaTitle": "Magpie",
+    "metaDescription": "Magpie XYZ is a multi-chain DeFi protocol boosting yields through veTokenomics and SubDAO integrations across major blockchains.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "Magpie",
+        "description": "Magpie XYZ boosts yields via veTokenomics & SubDAOs.",
+        "image": null
+      }
+    ],
+    "keywords": "multi-chain yield farming, veTokenomics DeFi protocols, liquid restaking platforms",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nMagpie XYZ is a multi-chain DeFi protocol focused on boosting yields for holders of management tokens and liquidity providers through integration with leading veTokenomics platforms such as Wombat Exchange, Pendle, Radiant, and PancakeSwap. Launched in August 2022 as an incubate of Wombat Exchange, it aims to refine veToken model mechanics and offer broader, more lucrative opportunities for DeFi ecosystem participants. One of Magpie’s primary goals is to address core veTokenomics challenges—namely, limited user engagement and low returns for long-term holders—which have been persistent issues for platforms like Curve and its derivatives. Over its first year and a half, Magpie expanded its product coverage to include BNB Chain, Ethereum, Arbitrum, and Avalanche, and developed a SubDAO model to facilitate the onboarding of new protocols. Major milestones include the June 2023 launch of SubDAO Cakepie for PancakeSwap, the January 2024 announcement of collaboration with EigenLayer and the subsequent launch of SubDAO Eigenpie for liquid restaking, and the planned integration with Babylon for BTC staking (Babypie) in spring 2025. As of April 8, 2025, the total platform TVL exceeds $190 million, with the MGP token trading around $0.07. The maximum supply is 1 billion tokens, corresponding to a market cap of approximately $22.5 million.\n\n## Functionality\n\nMagpie constructs its ecosystem around key pillars. Initially, it aggregates governance tokens from various DeFi protocols and converts them into veTokens through collective staking pools. This process allows retail users to enjoy increased APR and governance voting power without having to lock large amounts of underlying assets on their own. For instance, on Wombat Exchange, Magpie locks WOM tokens to accrue veWOM, redistributing staking rewards among community participants and amplifying collective rewards and governance influence. Similar mechanics are implemented for PancakeSwap (via Cakepie/veCAKE) and other partner protocols. The SubDAO model, implemented by 2024, expanded to include liquid restaking services — notably EigenLayer-based Eigenpie launched in January 2024, which allows users to receive LRT tokens based on LST (like stETH) without locking, and the Babypie staking on Babylon for BTC in 2025. Governance is managed through the MGP/vMGP system: long-term locking of MGP tokens increases vMGP holdings, which in turn grants voting rights, a share in protocol revenues, and access to the bribery market—an incentive marketplace for governance and strategic partnerships. Revenue from protocol activities is fairly distributed among LPs and token stakers, and LPs can contribute without mandatory lock-ups, lowering participation barriers. The native MGP token is ERC-20 with a fixed supply of 1 billion, playing a central role in governance and rewards distribution. The platform emphasizes transparency, with comprehensive documentation detailing core mechanics, vaults, tokenomics, and SubDAO integrations. Its strategy involves continuous addition of new veToken and restaking protocols via its modular SubDAO architecture.\n\n## Features\n\n- **Multi-chain Support**: Provides yield and governance enhancement services across BNB Chain, Ethereum, Arbitrum, and Avalanche\n- **Yield Aggregation**: Consolidates rewards from liquidity provisioning via veTokens to maximize APR for users\n- **veTokenomics Enablement**: Implements collective veTokenomics to overcome the limitations of traditional veToken models\n- **SubDAO Model**: Facilitates integration with diverse protocols like Cakepie for PancakeSwap, EigenLayer, and Babylon/BTC staking\n- **Liquid Restaking**: Allows staking of ETH derivatives via EigenLayer without lock-up, issuing isolated LRT tokens based on staked assets\n- **Governance Power Accumulation**: Users lock MGP tokens to increase vMGP holdings and gain voting rights, profit-sharing, and influence in bribery markets\n- **Reward Sharing**: Protocol revenues are equitably distributed among liquidity providers and governance token stakers\n- **No Lock-up for LPs**: Liquidity providers can participate without mandatory long-term lock-up periods, lowering barriers to entry\n- **Native Token (MGP)**: ERC-20 fixed supply token (1 billion) central to protocol governance and rewards\n- **Transparency and Open Documentation**: All core protocols, vaults, tokenomics, and SubDAO integrations are openly documented\n- **Expanding Protocol Integrations**: Continual addition of new veToken and restaking protocols via its modular architecture\n\n## Celestia x Magpiexyz\n\nAs of August 2025, there are no official, confirmed integrations, announced collaborations, joint launches, or technical partnerships between Celestia (https://celestia.org/) and Magpie XYZ (https://www.magpiexyz.io/), according to publicly available sources. Celestia is a first-layer modular blockchain focused on Data Availability, built atop CometBFT and Cosmos SDK, and aims to provide infrastructure solutions for blockchains and rollups by enabling data storage and access through innovations like Data Availability Sampling and Namespaced Merkle Trees. Its adoption involves integrations with popular L2/L3 stacks such as OP Stack, Polygon CDK, Starknet, and ZK Stack, with confirmed partnerships including Starknet announced in January 2024. Magpie XYZ, on the other hand, primarily serves the Ethereum ecosystem and various rollups (such as Arbitrum, Optimism, zkSync, Polygon), with core operations centered around protocols like Curve and Convex, and recent activity on platforms like Blast. No public documentation or statements indicate any native support, deployment, or technical collaboration involving Celestia infrastructure within Magpie’s ecosystem. Moreover, industry analysis and community reports confirm Magpie’s active participation in launching new liquidity pools and protocol upgrades within L2 environments, but without any references to Celestia as an infrastructure partner. Therefore, at this time, there is no verified information suggesting any existing or planned integration, joint project, or strategic partnership between Celestia and Magpie XYZ. Future announcements would be duly communicated via official channels on their blogs, social media, or technical documentation."
+}
