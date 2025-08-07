@@ -301,12 +301,24 @@ def load_content_template(template_path="templates/content_template.json"):
         return json.load(f)
 
 
+# Валидация секции связи
+def ai_verify_connection_section(section_text, name1, name2, prompts, ai_cfg):
+    context = {
+        "name1": name1,
+        "name2": name2,
+        "text": section_text,
+    }
+    prompt = render_prompt(prompts["connection_verification"], context)
+    result = call_ai_with_config(prompt, ai_cfg, prompt_type="connection_verification")
+    return result.strip().upper() == "YES"
+
+
 # Асинх генерация полного markdown-контент проекта
 async def ai_generate_content_markdown(
     data, app_name, domain, prompts, ai_cfg, executor
 ):
     def sync_ai_content():
-        # Генерация "сырого" markdown
+        # Генерация обзора
         context1 = {
             "name": data.get("name", domain),
             "website": data.get("socialLinks", {}).get("websiteURL", ""),
@@ -316,7 +328,7 @@ async def ai_generate_content_markdown(
             prompt1, ai_cfg, prompt_type=PROMPT_TYPE_REVIEW_FULL
         )
 
-        # Связь между проектами
+        # Генерация связки
         main_app_config_path = os.path.join("config", "apps", f"{app_name}.json")
         if os.path.exists(main_app_config_path):
             with open(main_app_config_path, "r", encoding="utf-8") as f:
@@ -340,11 +352,23 @@ async def ai_generate_content_markdown(
                 prompt2, ai_cfg, prompt_type=PROMPT_TYPE_CONNECTION
             )
 
+        # Проверка
         all_content = content1
         if content2:
-            all_content = (
-                f"{content1}\n\n## {main_name} x {context1['name']}\n\n{content2}"
+            is_valid = ai_verify_connection_section(
+                content2, main_name, context1["name"], prompts, ai_cfg
             )
+            if is_valid:
+                all_content = (
+                    f"{content1}\n\n## {main_name} x {context1['name']}\n\n{content2}"
+                )
+            else:
+                logger.info(
+                    f"Connection section rejected by LLM for {main_name} x {context1['name']}"
+                )
+                all_content = content1
+        else:
+            all_content = content1
 
         # Финализация и перевод
         context3 = {"connection_with": main_name if content2 else ""}
@@ -385,11 +409,23 @@ async def ai_generate_content_markdown(
                 content2 = call_ai_with_config(
                     prompt2, ai_cfg, prompt_type=PROMPT_TYPE_CONNECTION
                 )
+
+            # Проверка-ретрай
             all_content = content1
             if content2:
-                all_content = (
-                    f"{content1}\n\n## {main_name} x {context1['name']}\n\n{content2}"
+                is_valid = ai_verify_connection_section(
+                    content2, main_name, context1["name"], prompts, ai_cfg
                 )
+                if is_valid:
+                    all_content = f"{content1}\n\n## {main_name} x {context1['name']}\n\n{content2}"
+                else:
+                    logger.info(
+                        f"Connection section rejected by LLM for {main_name} x {context1['name']}"
+                    )
+                    all_content = content1
+            else:
+                all_content = content1
+
             finalize_instruction = render_prompt(prompts["finalize"], context3)
             final_content = call_ai_with_config(
                 all_content,
@@ -535,12 +571,22 @@ async def process_all_projects(executor):
                     prompt2, ai_cfg, prompt_type=PROMPT_TYPE_CONNECTION
                 )
 
-            # Финализация и перевод
+            # Проверка
             all_content = content1
             if content2:
-                all_content = (
-                    f"{content1}\n\n## {main_name} x {context1['name']}\n\n{content2}"
+                is_valid = ai_verify_connection_section(
+                    content2, main_name, context1["name"], prompts, ai_cfg
                 )
+                if is_valid:
+                    all_content = f"{content1}\n\n## {main_name} x {context1['name']}\n\n{content2}"
+                else:
+                    logger.info(
+                        f"Connection section rejected by LLM for {main_name} x {context1['name']}"
+                    )
+                    all_content = content1
+            else:
+                all_content = content1
+
             context3 = {"connection_with": main_name if content2 else ""}
             prompt3 = render_prompt(prompts["finalize"], context3)
             final_content = call_ai_with_config(
