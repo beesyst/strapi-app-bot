@@ -411,18 +411,20 @@ def collect_social_links_main(url, main_template, storage_path=None):
 
 
 # Получение и скачивание аватар и имя из X/Twitter
-def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retries=3):
+def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retries=4):
     avatar_url = ""
     name_candidate = ""
     for attempt in range(max_retries):
         result = get_links_from_x_profile(twitter_url)
         raw_name = (result.get("name") or "").strip()
         avatar_url = (result.get("avatar") or "").strip()
-        # Лог
+
         logger.info(
-            "twitter_parser.js вернул имя: '%s' (попытка %d)", raw_name, attempt + 1
+            "twitter_parser.js вернул имя: '%s', аватар: '%s' (попытка %d)",
+            raw_name,
+            avatar_url,
+            attempt + 1,
         )
-        # Если имя плохое - берем base_name
         if not raw_name or len(raw_name) < 2 or is_bad_name(raw_name):
             logger.warning(
                 "Имя из twitter_parser.js ('%s') невалидно, fallback на base_name ('%s')",
@@ -433,31 +435,27 @@ def fetch_twitter_avatar_and_name(twitter_url, storage_path, base_name, max_retr
         clean_name = clean_project_name(raw_name)
         if clean_name and len(clean_name) > 2 and not is_bad_name(clean_name):
             name_candidate = clean_name
-            break
-        time.sleep(2)
-
-    # fallback на base_name
+        if avatar_url:
+            logo_filename = f"{name_candidate.lower().replace(' ', '')}.jpg"
+            avatar_path = ""
+            for download_try in range(max_retries):
+                try:
+                    avatar_data = requests.get(avatar_url, timeout=10).content
+                    avatar_path = os.path.join(storage_path, logo_filename)
+                    with open(avatar_path, "wb") as imgf:
+                        imgf.write(avatar_data)
+                    logger.info("Скачан: %s → %s", avatar_url, avatar_path)
+                    return logo_filename, name_candidate
+                except Exception as e:
+                    logger.warning(
+                        "Ошибка скачивания аватара (попытка %d): %s",
+                        download_try + 1,
+                        e,
+                    )
+                    time.sleep(2)
+        time.sleep(3 + attempt)
     if not name_candidate or is_bad_name(name_candidate):
         name_candidate = clean_project_name(base_name)
-
-    # Качаем лого
-    logo_filename = f"{name_candidate.lower().replace(' ', '')}.jpg"
-    avatar_path = ""
-    if avatar_url and storage_path:
-        for attempt in range(max_retries):
-            try:
-                avatar_data = requests.get(avatar_url, timeout=10).content
-                avatar_path = os.path.join(storage_path, logo_filename)
-                with open(avatar_path, "wb") as imgf:
-                    imgf.write(avatar_data)
-                logger.info("Скачан: %s → %s", avatar_url, avatar_path)
-                return logo_filename, name_candidate
-            except Exception as e:
-                logger.warning(
-                    "Ошибка скачивания аватара (попытка %d): %s", attempt + 1, e
-                )
-                time.sleep(1)
-        return "", name_candidate
     return "", name_candidate
 
 
