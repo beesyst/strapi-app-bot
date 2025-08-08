@@ -1,0 +1,46 @@
+{
+  "name": "Blackmanta",
+  "shortDescription": "Black Manta Capital Partners is a German-regulated tokenization platform for security tokens across assets.",
+  "svgLogo": "blackmanta.jpg",
+  "project_categories": [
+    38,
+    22,
+    41
+  ],
+  "socialLinks": {
+    "websiteURL": "https://blackmanta.capital/",
+    "twitterURL": "https://x.com/BlackMantaCap",
+    "discordURL": "",
+    "githubURL": "",
+    "mediumURL": "",
+    "youtubeURL": "https://www.youtube.com/@blackmantacapitalpartners",
+    "telegramURL": "",
+    "documentURL": "",
+    "linkedinURL": "https://www.linkedin.com/company/blackmantacapitalpartners/",
+    "redditURL": ""
+  },
+  "videoSlider": [
+    {
+      "video": "https://www.youtube.com/watch?v=taQIx_iGIN0"
+    }
+  ],
+  "coinData": {
+    "coin": ""
+  },
+  "seo": {
+    "metaTitle": "Blackmanta",
+    "metaDescription": "Black Manta Capital Partners is a German-regulated tokenization platform for security tokens across assets.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "Blackmanta",
+        "description": "German-regulated tokenization for security tokens.",
+        "image": null
+      }
+    ],
+    "keywords": "BaFin licensed security token offering platform Europe, MiFID II compliant tokenization as a service for real estate and funds, Luxembourg-based STO platform for startups and SMEs",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nBlack Manta Capital Partners (BMCP) is a licensed financial company specializing in asset tokenization and security token offerings (STOs) under European regulatory oversight. Founded in Luxembourg, the company received BaFin authorization on August 1, 2019, after a nine-month review of the application, making it one of the first fully regulated platforms in Europe for issuing digital investment contracts—tokens that represent rights to equity, income, and governance participation. The initial products—STOs and tokenization services—were planned for launch in Q4 2019. By early 2025, BMCP positions itself as a comprehensive tokenization provider serving startups, small and medium-sized enterprises, real estate, commodity markets, and investment funds, while continuing to roll out its platform to new markets: services in Austria, a listing on the Malta Stock Exchange, and a license in Singapore were identified among upcoming milestones. BMCP operates in strict accordance with MiFID II and emphasizes the legal cleanliness of all operations, enabling it to serve institutional investors to European standards.\n\n## Functionality\n\nBMCP's platform implements a tokenization-as-a-service model, delivering a complete set of technical, financial, and legal tools for issuing, selling, and managing security tokens. In BMCP's ecosystem, tokenization means converting asset rights (equity, debt, income, governance) into a digital token via blockchain-based smart contracts; this fundamentally simplifies the investment process, expands entrepreneurs' options, and broadens investors' access to securities. The project covers the full STO lifecycle: structuring the investment, automating compliant KYC/AML, issuing and distributing tokens, ensuring deal discipline and secondary trading, with almost the entire workflow handled by BMCP's in-house solutions—a distinctive feature for the European market. The platform supports real and digital assets, handles issuances on BMCP's own blockchain and on third-party blockchains, and offers integration with traditional investment and banking services. For investors, BMCP provides a low entry threshold, clearing protections, and new liquidity opportunities through tokenization of non-traditional assets. A core operational hallmark is strict regulatory compliance: all offerings pass through BaFin and meet EU standards for securities issuance.\n\n## Features\n\n- **BaFin Regulation**: Operating under a full BaFin license since August 1, 2019, for security token offerings.\n- **Tokenization as a Service**: Full-cycle solution for legally compliant tokenization of equity, funds, real estate, and more.\n- **MiFID II Compliance**: Services and offerings conform to EU financial regulations and investment directives.\n- **Cross-asset Flexibility**: Supports tokenization for startups, SMEs, funds, real estate, and commodity markets.\n- **On-chain Smart Contracts**: Uses blockchain-based smart contracts to govern investor rights and asset management.\n- **Secondary Market Liquidity**: Provides options for secondary trading and early investor exits via transferable security tokens.\n- **Integrated KYC/AML**: Automated, regulatory-compliant identity verification and anti-money-laundering procedures.\n- **Expansion Initiatives**: Announced plans for market entry in Austria, Malta (via Malta Stock Exchange), and Singapore as of August 2019.\n- **Tokenized Funds Offering**: Specialized product line for tokenized fund shares and compartments, targeting fund and asset managers.\n- **Transparency and Legal Assurance**: All investments structured for maximum legal and tax transparency within the EU.\n- **Customizable Investment Products**: Structuring support for debt, mezzanine, or hybrid tokenized instruments.\n- **Industry Partnerships**: Recognized with the BSFZ innovation seal in Germany for R&D activities.\n\n## Celestia x Blackmanta\n\nDetails about x Celestia are not provided in the source material."
+}

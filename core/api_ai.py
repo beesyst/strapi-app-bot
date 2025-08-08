@@ -95,11 +95,19 @@ def call_ai_api(
     if api_url.endswith("/responses"):
         payload = {
             "model": model,
-            "input": prompt,
+            "instructions": system_prompt if system_prompt else None,
+            "input": [
+                {"role": "user", "content": prompt},
+            ],
         }
-        if system_prompt:
-            payload["system"] = system_prompt
-        # Perplexity не использует /responses endpoint
+        payload = {k: v for k, v in payload.items() if v is not None}
+
+        if web_search_options:
+            payload["tools"] = [{"type": "web_search", **web_search_options}]
+
+        payload["tool_choice"] = "auto"
+        payload["max_tool_calls"] = 6
+
     else:
         payload = {
             "model": model,
@@ -115,22 +123,22 @@ def call_ai_api(
         logger.info(f"[request] {prompt_type} prompt ({model}): {prompt}")
         logger.debug(f"[payload] {json.dumps(payload, ensure_ascii=False, indent=2)}")
 
-        resp = requests.post(api_url, headers=headers, json=payload, timeout=60)
-        # Если нужно выводить и полный ответ (response)
+        resp = requests.post(api_url, headers=headers, json=payload, timeout=180)
+
         if resp.status_code == 200:
             result = resp.json()
             text = ""
 
             if api_url.endswith("/responses"):
-                # Новый AI /responses: dict c output (list of actions)
                 if isinstance(result, dict) and "output" in result:
                     for item in result["output"]:
                         if item.get("type") == "message":
-                            content = item.get("content", [])
-                            if content and isinstance(content, list):
-                                text = content[0].get("text", "")
-                                break
-                # Старый/альтернативный формат (верхний уровень - список)
+                            for block in item.get("content", []):
+                                if block.get("type") == "output_text":
+                                    text = block.get("text", "")
+                                    break
+
+                # Старый/альтернативный формат
                 elif isinstance(result, list):
                     for item in result:
                         if item.get("type") == "message":
@@ -138,7 +146,7 @@ def call_ai_api(
                             if content and isinstance(content, list):
                                 text = content[0].get("text", "")
                                 break
-                # В случае unexpected result — логируем для отладки
+                # В случае unexpected result - лог
                 if not text:
                     logger.error(
                         "[error] No message found in responses result: %s",
