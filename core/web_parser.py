@@ -61,7 +61,6 @@ def is_bad_name(name):
 def fetch_url_html_playwright(url):
     script_path = os.path.join(ROOT_DIR, "core", "browser_fetch.js")
     try:
-        logger.info(f"[DEBUG] RUNNING NODE: node {script_path} {url}")
         result = subprocess.run(
             ["node", script_path, url],
             cwd=os.path.dirname(script_path),
@@ -69,9 +68,6 @@ def fetch_url_html_playwright(url):
             text=True,
             timeout=65,
         )
-        logger.info(f"[DEBUG] browser_fetch.js returncode: {result.returncode}")
-        logger.info(f"[DEBUG] browser_fetch.js stdout: {result.stdout[:500]}")
-        logger.info(f"[DEBUG] browser_fetch.js stderr: {result.stderr[:500]}")
         if result.returncode == 0:
             logger.info("Соцлинки получены через browser_fetch.js: %s", url)
             return result.stdout
@@ -400,7 +396,7 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
     html = fetch_url_html(url)
     socials = extract_social_links(html, url, is_main_page=True)
     found_socials.update({k: v for k, v in socials.items() if v})
-    logger.info(f"[DEBUG] found_socials (main): {found_socials}")
+    logger.info(f"Соцлинков найдено: {found_socials}")
 
     # Сбор внутренних соцлинков
     internal_links = get_internal_links(html, url, max_links=max_internal_links)
@@ -470,13 +466,13 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
     ):
         try:
             yt_json = fetch_url_html_playwright(youtube_url)
-            logger.info(f"[DEBUG] YOUTUBE_URL: {youtube_url}")
-            logger.info(f"[DEBUG] YOUTUBE RAW JSON: {yt_json[:300]}")
+            logger.info(f"Youtube-url: {youtube_url}")
             yt_links = json.loads(yt_json)
             fv = yt_links.get("featuredVideos") or []
-            logger.info(f"[DEBUG] YOUTUBE PARSED: {fv}")
             if fv and fv[0].get("url"):
-                main_data["videoSlider"] = [fv[0]["url"]]
+                main_data["videoSlider"] = [
+                    {"video": v["url"]} for v in fv if v.get("url")
+                ]
         except Exception as e:
             logger.warning(f"Ошибка парса featuredVideos через browser_fetch.js: {e}")
 
@@ -540,6 +536,4 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
     social_keys = list(main_template["socialLinks"].keys())
     final_socials = {k: found_socials.get(k, "") for k in social_keys}
     main_data["socialLinks"] = final_socials
-
-    logger.info(f"[DEBUG] ВОЗВРАТ main_data: {json.dumps(main_data)[:600]}")
     return main_data

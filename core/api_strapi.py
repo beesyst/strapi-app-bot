@@ -156,6 +156,7 @@ def create_project(
             "metaImage": data.get("seo", {}).get("metaImage", ""),
             "keywords": data.get("seo", {}).get("keywords", ""),
             "project_categories": data.get("project_categories", []),
+            "videoSlider": data.get("videoSlider", []),
         }
     }
     headers = get_strapi_headers(api_token)
