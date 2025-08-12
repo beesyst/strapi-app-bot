@@ -190,12 +190,31 @@ def youtube_channelid_to_handle(channel_url):
         return channel_url
 
 
+# Хелпер принудительного перевода http в https
+def force_https(url: str) -> str:
+    if not url or not isinstance(url, str):
+        return url
+    u = url.strip()
+    if u.startswith("//"):
+        return "https:" + u
+    if u.lower().startswith("http://"):
+        return "https://" + u[7:]
+    return u
+
+
 # Привод соцссылок к единому виду
 def normalize_socials(socials):
+    # Twitter -> X
     if socials.get("twitterURL"):
         socials["twitterURL"] = socials["twitterURL"].replace("twitter.com", "x.com")
+    # YouTube: channel id -> @handle
     if socials.get("youtubeURL"):
         socials["youtubeURL"] = youtube_channelid_to_handle(socials["youtubeURL"])
+    # Принудительный перевод url в https
+    for k, v in list(socials.items()):
+        if not v:
+            continue
+        socials[k] = force_https(v)
     return socials
 
 
@@ -535,5 +554,6 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
     # Финальная сборка main_data
     social_keys = list(main_template["socialLinks"].keys())
     final_socials = {k: found_socials.get(k, "") for k in social_keys}
+    final_socials = normalize_socials(final_socials)
     main_data["socialLinks"] = final_socials
     return main_data
