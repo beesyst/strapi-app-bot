@@ -162,32 +162,66 @@ def get_internal_links(html, base_url, max_links=10):
 
 
 # Преобразование youtube-ссылки
-def youtube_channelid_to_handle(channel_url):
-    m = re.match(
-        r"^https?://(www\.)?youtube\.com/channel/([A-Za-z0-9_\-]+)", channel_url
-    )
-    if not m:
-        return channel_url
+def youtube_to_handle(url: str) -> str:
+    u = force_https(url)
+    if not u or not isinstance(u, str):
+        return u
+
+    # @handle
+    if re.search(r"^https://(www\.)?youtube\.com/@[A-Za-z0-9_.-]+/?$", u, re.I):
+        return u
+
+    # Поддержка youtube.com и youtu.be
+    if not (("youtube.com" in u) or ("youtu.be" in u)):
+        return u
+
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
-        html = requests.get(channel_url, headers=headers, timeout=10).text
+        resp = requests.get(u, headers=headers, timeout=10, allow_redirects=True)
+        final_url = force_https(resp.url or u)
+        html = resp.text or ""
 
-        # Поиск handle в "canonicalBaseUrl":"\/@handle"
-        handle_match = re.search(r'"canonicalBaseUrl":"\\?/(@[a-zA-Z0-9_.-]+)"', html)
-        if handle_match:
-            handle = handle_match.group(1)
-            return f"https://www.youtube.com/{handle}"
+        # Если редирект на @handle
+        m_final = re.search(
+            r"https://(www\.)?youtube\.com/(@[A-Za-z0-9_.-]+)", final_url, re.I
+        )
+        if m_final:
+            return f"https://www.youtube.com/{m_final.group(2)}"
 
-        # Fallback: ищем в ссылках меню
-        menu_match = re.search(r'href="/(@[a-zA-Z0-9_.-]+)"', html)
-        if menu_match:
-            handle = menu_match.group(1)
-            return f"https://www.youtube.com/{handle}"
+        # Канонический URL в <link rel="canonical" ...>
+        m_canon = re.search(
+            r'rel=["\']canonical["\']\s+href=["\'](https?://(www\.)?youtube\.com/(@[A-Za-z0-9_.-]+))',
+            html,
+            re.I,
+        )
+        if m_canon:
+            return force_https(m_canon.group(1))
 
-        return channel_url
+        # canonicalBaseUrl в встраиваемых скриптах
+        m_base = re.search(r'"canonicalBaseUrl":"\\?/(@[A-Za-z0-9_.-]+)"', html)
+        if m_base:
+            return f"https://www.youtube.com/{m_base.group(1)}"
+
+        # og:url тоже часто содержит @handle
+        m_og = re.search(
+            r'property=["\']og:url["\']\s+content=["\'](https?://(www\.)?youtube\.com/(@[A-Za-z0-9_.-]+))',
+            html,
+            re.I,
+        )
+        if m_og:
+            return force_https(m_og.group(1))
+
+        # Спец-кейс для /channel/ID: попытка извлечь @handle из HTML
+        if re.match(
+            r"^https://(www\.)?youtube\.com/channel/[A-Za-z0-9_\-]+", final_url, re.I
+        ):
+            return final_url
+
+        # Прочие форматы (/c/..., /user/..., /citi)
+        return final_url
     except Exception as e:
-        logger.warning("youtube_channelid_to_handle error for %s: %s", channel_url, e)
-        return channel_url
+        logger.warning("youtube_to_handle error for %s: %s", u, e)
+        return u
 
 
 # Хелпер принудительного перевода http в https
@@ -207,10 +241,10 @@ def normalize_socials(socials):
     # Twitter -> X
     if socials.get("twitterURL"):
         socials["twitterURL"] = socials["twitterURL"].replace("twitter.com", "x.com")
-    # YouTube: channel id -> @handle
+    # YouTube -> @handle (универсально: /c, /user, /channel, произвольные пути)
     if socials.get("youtubeURL"):
-        socials["youtubeURL"] = youtube_channelid_to_handle(socials["youtubeURL"])
-    # Принудительный перевод url в https
+        socials["youtubeURL"] = youtube_to_handle(socials["youtubeURL"])
+    # Принудительный https для всех URL
     for k, v in list(socials.items()):
         if not v:
             continue
@@ -478,6 +512,8 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
     # Video Slider
     main_data["videoSlider"] = []
     youtube_url = found_socials.get("youtubeURL", "")
+    if youtube_url:
+        youtube_url = youtube_to_handle(youtube_url)
     if youtube_url and (
         "youtube.com/@" in youtube_url
         or "/channel/" in youtube_url

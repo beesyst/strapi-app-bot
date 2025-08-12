@@ -1,5 +1,9 @@
 {
   "name": "Canton",
   "url": "https://www.canton.network/",
-  "partners": ["https://www.citigroup.com/"]
+  "partners": [
+    "https://www.citigroup.com/",
+    "https://group.bnpparibas/",
+    "https://www.bp.com/"
+  ]
 }
