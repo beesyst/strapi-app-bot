@@ -362,6 +362,7 @@ async def ai_generate_content_markdown(
 
         # Проверка
         all_content = content1
+        connection_included = False
         if content2:
             is_valid = ai_verify_connection_section(
                 content2, main_name, context1["name"], prompts, ai_cfg
@@ -370,6 +371,7 @@ async def ai_generate_content_markdown(
                 all_content = (
                     f"{content1}\n\n## {main_name} x {context1['name']}\n\n{content2}"
                 )
+                connection_included = True
             else:
                 logger.info(
                     f"Connection section rejected by LLM for {main_name} x {context1['name']}"
@@ -379,7 +381,10 @@ async def ai_generate_content_markdown(
             all_content = content1
 
         # Финализация и перевод
-        context3 = {"connection_with": main_name if content2 else ""}
+        connection_title = (
+            f"{main_name} x {context1['name']}" if connection_included else ""
+        )
+        context3 = {"connection_with": connection_title}
         finalize_instruction = render_prompt(prompts["finalize"], context3)
 
         final_content = call_ai_with_config(
@@ -389,11 +394,7 @@ async def ai_generate_content_markdown(
             prompt_type=PROMPT_TYPE_FINALIZE,
         )
 
-        # Нормализация markdown
-        from core.api_ai import load_content_template
-
         content_template = load_content_template()
-        connection_title = f"{main_name} x {context1['name']}" if content2 else ""
 
         # Функция-ретрай
         def ai_retry_func():
@@ -434,7 +435,12 @@ async def ai_generate_content_markdown(
             else:
                 all_content = content1
 
-            finalize_instruction = render_prompt(prompts["finalize"], context3)
+            retry_connection_title = (
+                f"{main_name} x {context1['name']}" if (content2 and is_valid) else ""
+            )
+            retry_context3 = {"connection_with": retry_connection_title}
+            finalize_instruction = render_prompt(prompts["finalize"], retry_context3)
+
             final_content = call_ai_with_config(
                 all_content,
                 ai_cfg,
@@ -581,21 +587,23 @@ async def process_all_projects(executor):
 
             # Проверка
             all_content = content1
+            connection_included = False
             if content2:
                 is_valid = ai_verify_connection_section(
                     content2, main_name, context1["name"], prompts, ai_cfg
                 )
                 if is_valid:
                     all_content = f"{content1}\n\n## {main_name} x {context1['name']}\n\n{content2}"
+                    connection_included = True
                 else:
                     logger.info(
                         f"Connection section rejected by LLM for {main_name} x {context1['name']}"
                     )
-                    all_content = content1
-            else:
-                all_content = content1
 
-            context3 = {"connection_with": main_name if content2 else ""}
+            connection_title = (
+                f"{main_name} x {context1['name']}" if connection_included else ""
+            )
+            context3 = {"connection_with": connection_title}
             prompt3 = render_prompt(prompts["finalize"], context3)
             final_content = call_ai_with_config(
                 all_content,
@@ -604,12 +612,22 @@ async def process_all_projects(executor):
                 prompt_type=PROMPT_TYPE_FINALIZE,
             )
 
-            if final_content:
-                enrich_main_json(json_path, final_content)
+            content_template = load_content_template()
+            normalized_md = normalize_content_to_template_md_with_retry(
+                final_content,
+                content_template,
+                connection_title,
+                ai_retry_func=None,
+                max_retries=1,
+            )
 
-                # Генерация shortDescription из финального markdown
+            if normalized_md:
+                normalized_md = normalized_md.strip()
+                enrich_main_json(json_path, normalized_md)
+
+                # Генерация shortDescription
                 short_desc = await ai_generate_short_desc_with_retries(
-                    final_content, prompts, ai_cfg, executor
+                    normalized_md, prompts, ai_cfg, executor
                 )
                 if short_desc:
                     enrich_short_description(json_path, short_desc)
@@ -619,6 +637,7 @@ async def process_all_projects(executor):
                         app_name,
                         domain,
                     )
+
             else:
                 logger.error(
                     "[fail] Не удалось сгенерировать финальный контент для %s/%s",

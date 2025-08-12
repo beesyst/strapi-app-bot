@@ -66,7 +66,7 @@ def fetch_url_html_playwright(url):
             cwd=os.path.dirname(script_path),
             capture_output=True,
             text=True,
-            timeout=65,
+            timeout=90,
         )
         if result.returncode == 0:
             logger.info("Соцлинки получены через browser_fetch.js: %s", url)
@@ -133,7 +133,7 @@ def fetch_url_html(url):
         return FETCHED_HTML_CACHE[url]
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        html = requests.get(url, headers=headers, timeout=10).text
+        html = requests.get(url, headers=headers, timeout=30).text
         FETCHED_HTML_CACHE[url] = html
         return html
     except Exception as e:
@@ -258,7 +258,7 @@ def get_links_from_x_profile(profile_url):
             cwd=NODE_CORE_DIR,
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=90,
         )
         if result.returncode == 0:
             logger.info("twitter_parser.js успешно обработал: %s", profile_url)

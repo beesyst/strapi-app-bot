@@ -255,7 +255,7 @@ async def orchestrate_all():
                         api_url_cat=api_url_cat,
                         api_token=api_token,
                     ),
-                    timeout=240,
+                    timeout=300,
                 )
             except asyncio.TimeoutError:
                 logger.warning(

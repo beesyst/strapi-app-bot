@@ -1,0 +1,42 @@
+{
+  "name": "Citi",
+  "shortDescription": "Citigroup advances digital assets with a unified platform for tokenization, digital money, custody and token services.",
+  "svgLogo": "citi.jpg",
+  "project_categories": [
+    32,
+    31,
+    43
+  ],
+  "socialLinks": {
+    "websiteURL": "https://www.citigroup.com/",
+    "twitterURL": "https://x.com/Citi",
+    "discordURL": "",
+    "githubURL": "",
+    "mediumURL": "",
+    "youtubeURL": "http://www.youtube.com/citi",
+    "telegramURL": "",
+    "documentURL": "",
+    "linkedinURL": "http://www.linkedin.com/company/citi",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": ""
+  },
+  "seo": {
+    "metaTitle": "Citi",
+    "metaDescription": "Citigroup advances digital assets with a unified platform for tokenization, digital money, custody and token services.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "Citi",
+        "description": "Citigroup advances digital assets on a platform.",
+        "image": null
+      }
+    ],
+    "keywords": "Citigroup CIDAP digital assets platform tokenization custody 24/7 settlement, Citi Token Services tokenized deposits programmable liquidity and smart-contract workflows, World Bank Digitally Native Note issuance Citi Issuing and Paying Agent Euroclear D-FMI 2023 2024",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nCitigroup Inc., operating under the Citi brand, was formed by the merger of Travelers Group and Citicorp, with the merger becoming effective on October 8, 1998. The formal merger filing and the commencement of trading were documented in a Form 8-K filed on October 8, 1998. The bank’s origins trace back to the City Bank of New York, founded in 1812, and the corporation publishes a chronology of key milestones from 1812 onward. As of December 31, 2024, Citigroup reported annual revenue of $81.139 billion and net income of $12.682 billion; these figures, along with related capital metrics such as a CET1 ratio of 13.6% as of December 31, 2024, are documented in the 2024 annual report and Form 10-K. Jane Fraser has served as Chief Executive Officer since February 26, 2021. Citi describes itself as a global financial platform serving clients in more than 180 countries and jurisdictions, supported by a large-scale network and custodial infrastructure.\n\n## Functionality\n\nCiti’s digital assets and distributed ledger technology initiatives are integrated through a dedicated technology program and a suite of client solutions under the Citi Integrated Digital Assets Platform (CIDAP). The aim is to provide a unified set of DLT capabilities for asset tokenization, digital money, custody, and post‑trade services within Citi’s existing regulatory and operating framework.\n\nSpecific product and pilot implementations include:\n\na) A custody capabilities partnership with METACO announced on June 22, 2022, with Harmonize integrated into Citi’s custody infrastructure to deliver bank‑grade custody within Citi’s global custody network.\n\nb) A formal Citi Token Services initiative announced on September 18, 2023, described as services for tokenized deposits, tokenization of liquidity, and smart‑contract execution for cash and trade financing, enabling 24/7 programmable liquidity and automated workflows.\n\nc) Pilot and joint projects applying DLT in real market scenarios, including Citi’s participation in the Euroclear D‑FMI program as Issuing and Paying Agent for a World Bank Digitally Native Note (DNN) issuance valued at EUR 100 million, demonstrating the integration of DLT settlements with traditional markets.\n\nd) A project on testing on‑chain execution and pricing for foreign exchange within the Monetary Authority of Singapore Project Guardian, announced on November 15, 2023, using a private permissioned Avalanche instance for streaming quotes and on‑chain trade confirmations.\n\ne) A private markets tokenization proof‑of‑concept completed on February 14, 2024, in partnership with Wellington Management and WisdomTree on the institutional Avalanche Spruce test Subnet, encoding fund distribution rules in smart contracts and exploring transfers, credentials, token collateral, and simulations with DTCC Digital Assets.\n\nf) All listed initiatives are announced and described by Citi as aligned with local regulatory frameworks and designed for phased integration with traditional settlement and custody infrastructures.\n\n## Features\n\n- **Enterprise custody partnership (METACO Harmonize)**: Integration announced June 22, 2022 to pilot and develop bank‑grade institutional digital asset custody using METACO’s Harmonize platform, intended to integrate with Citi’s global custody network.\n- **Citi Integrated Digital Assets Platform (CIDAP)**: A unified platform described on Citi’s official Digital Assets page to expose DLT capabilities for tokenization, digital money, securities servicing and collateral mobility across Citi applications.\n- **Citi Token Services (cash & trade)**: Announced September 18, 2023 — tokenized deposits, programmable liquidity and smart‑contract based trade finance and cash management pilots enabling 24/7 settlement and automated workflows.\n- **Euroclear D‑FMI Issuing/Paying Agent for World Bank DNN**: Citi acted as Issuing and Paying Agent on October 24, 2023 for a EUR 100M 3‑year Digitally Native Note listed on the Luxembourg Stock Exchange, demonstrating T0 issuance/settlement integration with DLT.\n- **On‑chain FX (Project Guardian)**: Blockchain FX pricing and execution application developed under MAS Project Guardian announced November 15, 2023, using a private Avalanche instance for streaming quotes and recording bilateral trade confirmations on‑chain.\n- **Private markets tokenization PoC**: Proof‑of‑concept completed February 14, 2024 with Wellington Management, WisdomTree and DTCC Digital Assets on Avalanche Spruce institutional test Subnet encoding fund distribution rules into smart contracts and simulating transfers and lending scenarios.\n- **Regulatory / market‑interoperability focus**: Citi’s public materials emphasize interoperability with traditional post‑trade infrastructure and compliance with regulatory requirements when deploying DLT solutions.\n\n## Canton x Citigroup\n\nOfficial Canton Network and Digital Asset documents state the Canton Network announcement occurred on May 9, 2023, with a New York attribution. A Digital Asset press release describing the Canton Network pilot completion dated March 12, 2024 lists participating organizations and participants; Citi (Citi) is not named among the pilot participants. The Canton Network Ecosystem page, in its public catalog of participants and apps, includes an entry for Citi with a note that Citi uses applications such as HKEX Synapse and Versana. Citi’s own press releases describe tokenization and DLT initiatives but do not identify Canton Network as a partner or integration platform. The ecosystem listing confirms Citi’s involvement as a user of Canton apps, while major pilot announcements do not list Citi as a participant. Additional related public materials from the ecosystem and Digital Asset indicate Canton Network’s existence as of May 9, 2023, the completion of a major pilot on March 12, 2024 without Citi among the listed participants, and Citi’s separate activities in tokenization and DLT. Further public disclosures in 2025 related to Canton Network funding and Citi’s collaboration with SDX do not indicate a direct Canton‑Citi partnership."
+}
