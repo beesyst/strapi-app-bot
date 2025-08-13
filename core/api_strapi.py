@@ -11,6 +11,11 @@ from core.status import (
     check_strapi_status,
     log_strapi_status,
 )
+from core.web_parser import (
+    force_https,
+    youtube_oembed_title,
+    youtube_watch_to_embed,
+)
 
 # Логгер
 logger = get_logger("strapi")
@@ -31,6 +36,47 @@ def get_strapi_headers(api_token, extra=None, skip_content_type=False):
 # Markdown → HTML для Strapi
 def markdown_to_html(md_text):
     return markdown.markdown(md_text, extensions=["extra"])
+
+
+# Нормализация videoSlider к JSON-строке со структурой url/title/embed
+def normalize_video_slider(slides):
+    out = []
+    for item in slides or []:
+        v = item.get("video") if isinstance(item, dict) else item
+        payload = None
+
+        if isinstance(v, str):
+            # уже JSON?
+            try:
+                j = json.loads(v)
+                if isinstance(j, dict) and ("url" in j or "embed" in j):
+                    payload = j
+            except Exception:
+                # это URL
+                url = force_https(v)
+                if not url:  # <-- ГАРД: пустая строка/None — пропускаем
+                    continue
+                payload = {
+                    "url": url,
+                    "title": youtube_oembed_title(url),
+                    "embed": youtube_watch_to_embed(url),
+                }
+
+        elif isinstance(v, dict):
+            url = force_https(v.get("url", "") or v.get("video", ""))
+            if not url:  # <-- ГАРД: пустая строка — пропускаем
+                continue
+            payload = {
+                "url": url,
+                "title": v.get("title", "") or youtube_oembed_title(url),
+                "embed": v.get("embed", "") or youtube_watch_to_embed(url),
+            }
+
+        # добавляем только если в payload есть URL (и/или embed)
+        if payload and (payload.get("url") or payload.get("embed")):
+            out.append({"video": json.dumps(payload, ensure_ascii=False)})
+
+    return out
 
 
 # Проверка существования проекта в Strapi
@@ -156,7 +202,7 @@ def create_project(
             "metaImage": data.get("seo", {}).get("metaImage", ""),
             "keywords": data.get("seo", {}).get("keywords", ""),
             "project_categories": data.get("project_categories", []),
-            "videoSlider": data.get("videoSlider", []),
+            "videoSlider": normalize_video_slider(data.get("videoSlider", [])),
         }
     }
     headers = get_strapi_headers(api_token)

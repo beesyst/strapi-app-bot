@@ -293,6 +293,45 @@ def extract_youtube_featured_videos(channel_handle_url):
         return []
 
 
+# Хелпер Youtube
+def youtube_watch_to_embed(url: str) -> str:
+    u = force_https(url or "")
+    # youtu.be/ID -> embed/ID
+    m = re.search(r"https?://(?:www\.)?youtu\.be/([A-Za-z0-9_-]{6,})", u, re.I)
+    if m:
+        return f"https://www.youtube.com/embed/{m.group(1)}?feature=oembed"
+    # youtube.com/watch?v=ID -> embed/ID
+    m = re.search(r"[?&]v=([A-Za-z0-9_-]{6,})", u)
+    if m:
+        return f"https://www.youtube.com/embed/{m.group(1)}?feature=oembed"
+    return ""
+
+
+# title через oEmbed; fallback — og:title из HTML
+def youtube_oembed_title(url: str) -> str:
+    o = ""
+    try:
+        oembed = f"https://www.youtube.com/oembed?url={requests.utils.quote(url, safe='')}&format=json"
+        r = requests.get(oembed, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+        if r.status_code == 200:
+            o = (r.json() or {}).get("title", "") or ""
+    except Exception:
+        pass
+    if o:
+        return o
+    # fallback: og:title из HTML
+    try:
+        r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+        m = re.search(
+            r'property=["\']og:title["\']\s+content=["\']([^"\']+)', r.text or "", re.I
+        )
+        if m:
+            return m.group(1).strip()
+    except Exception:
+        pass
+    return ""
+
+
 # Доменное имя из URL и лог результата
 def get_domain_name(url):
     domain = urlparse(url).netloc
@@ -514,19 +553,29 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
     youtube_url = found_socials.get("youtubeURL", "")
     if youtube_url:
         youtube_url = youtube_to_handle(youtube_url)
+
+
+    def _pack_slide(url: str, title: str = "") -> dict:
+        url = force_https(url or "")
+        title = title or youtube_oembed_title(url)
+        embed = youtube_watch_to_embed(url)
+        payload = {"url": url, "title": title or "", "embed": embed or ""}
+        return {"video": json.dumps(payload, ensure_ascii=False)}
+
+
     if youtube_url and (
-        "youtube.com/@" in youtube_url
-        or "/channel/" in youtube_url
-        or "/c/" in youtube_url
+        "youtube.com/@" in youtube_url or "/channel/" in youtube_url or "/c/" in youtube_url
     ):
         try:
             yt_json = fetch_url_html_playwright(youtube_url)
             logger.info(f"Youtube-url: {youtube_url}")
             yt_links = json.loads(yt_json)
             fv = yt_links.get("featuredVideos") or []
-            if fv and fv[0].get("url"):
+            if fv:
                 main_data["videoSlider"] = [
-                    {"video": v["url"]} for v in fv if v.get("url")
+                    _pack_slide(v.get("url", ""), v.get("title", ""))
+                    for v in fv
+                    if v.get("url")
                 ]
         except Exception as e:
             logger.warning(f"Ошибка парса featuredVideos через browser_fetch.js: {e}")

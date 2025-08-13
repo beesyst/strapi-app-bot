@@ -1,26 +1,5 @@
 {
   "name": "Canton",
   "url": "https://www.canton.network/",
-  "partners": [
-    "https://www.gemini.com/",
-    "https://www.gbbc.io/",
-    "https://sync.global/",
-    "https://gravityteam.co/",
-    "https://www.gsr.io/",
-    "https://www.hkma.gov.hk/",
-    "https://www.hsbc.com/",
-    "https://icapital.com/",
-    "https://www.jpmorgan.com/",
-    "https://www.kaiko.com/",
-    "https://www.kaleido.io/",
-    "https://www.kiln.fi/",
-    "https://kochenergyservices.com/",
-    "https://kpmg.com/",
-    "https://lab6174.com/",
-    "https://www.lw.com/",
-    "https://www.lendos.io/",
-    "https://www.libertycityventures.com/",
-    "https://www.lightshift.xyz/",
-    "https://lukka.tech/"
-  ]
+  "partners": ["https://hyperledger-foundation.net/"]
 }
