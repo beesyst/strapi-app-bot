@@ -1,0 +1,42 @@
+{
+  "name": "Accountable",
+  "shortDescription": "Accountable is a crypto trust layer offering private, verifiable solvency and credit reports via zero-knowledge proofs on chains.",
+  "svgLogo": "accountable.jpg",
+  "project_categories": [
+    49,
+    44,
+    48
+  ],
+  "socialLinks": {
+    "websiteURL": "https://accountable.capital/",
+    "twitterURL": "https://x.com/accountabledata",
+    "discordURL": "",
+    "githubURL": "",
+    "mediumURL": "",
+    "youtubeURL": "",
+    "telegramURL": "https://t.me/accountable_community",
+    "documentURL": "https://docs.accountable.capital/",
+    "linkedinURL": "https://www.linkedin.com/company/accountablecapital/posts/?feedView=all",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": ""
+  },
+  "seo": {
+    "metaTitle": "Accountable",
+    "metaDescription": "Accountable is a crypto trust layer offering private, verifiable solvency and credit reports via zero-knowledge proofs on chains.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "Accountable",
+        "description": "Accountable: crypto zk solvency and credit reports",
+        "image": null
+      }
+    ],
+    "keywords": "privacy-preserving credit risk reports for crypto lenders, zero-knowledge proof based solvency verification for exchanges and stablecoins, selective data sharing of crypto attestations without centralized data storage",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nAccountable is a startup positioned as a trust layer for digital finance, building a private platform layer to verify financial data and credit reports within the crypto ecosystem. It employs cryptographic techniques, including zero-knowledge proofs and protocols such as zkTLS, together with trusted execution environments to confirm assets, liabilities, and trading exposure without disclosing confidential details. The company enables cryptographically verifiable credit risk reports and allows selective sharing with lenders without maintaining a centralized store of sensitive data. Seed funding was closed on December 30, 2024, totaling $2.3 million and led by MitonC and Zee Prime Capital, with participation from Maven 11, CMCC Global, Moonhill Capital, Aquanow and other investors. At the time, The Block noted that the product iteration had been under development for about sixteen months and the team comprised roughly eight employees; the company planned an additional funding round in the second quarter of 2025.\n\n## Functionality\n\nAt its core, Accountable aggregates and cryptographically validates financial data through connectors to custodians, exchanges, and other accounts, after which the platform generates solvency and credit-exposure reports that can be shared with third parties at the data holder’s discretion. The platform asserts the ability to provide proof-of-solvency and related reports for centralized exchanges and stablecoin issuers without revealing underlying balance figures, utilizing zero-knowledge proofs and private channels. The design aims to keep user data under the user’s control and to avoid centralized data storage.\n\nTechnically, the solution combines on-chain and off-chain components: data aggregation and normalization via custodial and exchange connectors on one side, and a layer of cryptographic verification and proof issuance (ZK primitives, zkTLS, and secure enclaves) on the other. This architecture is intended to enable multi-chain compatibility, with reports mentioning support for more than thirty blockchains, and to support use cases such as non-collateralized lending and transparency of organizational and trading-pool resilience. The platform also emphasizes selective data sharing, allowing holders to decide which attestations or reports to share with which counterparties without exposing API keys or full account access.\n\n## Features\n\n- **Privacy-Preserving Verification**: Verifies assets, liabilities and exposures using zero-knowledge proofs so the prover does not disclose raw balances.\n- **zkTLS and Secure Enclaves**: Employs zkTLS and trusted execution environments to authenticate data sources and produce non-revealing proofs of state.\n- **Real-time / Near-real-time Reporting**: Generates live or near real-time verifiable credit risk reports for lenders and counterparties.\n- **Proof-of-Solvency / Proof-of-Reserves**: Provides proof-of-solvency tooling for exchanges and stablecoin issuers without exposing underlying holdings.\n- **Multi-custodial Connectors**: Connects to custodial accounts, exchanges and other off-chain sources to aggregate on- and off-chain exposures.\n- **Multi-chain Support (>30)**: Product materials and reviews claim compatibility with more than 30 blockchain networks.\n- **Selective Data Sharing**: Allows users to control which attestations/reports to share and with whom, without transferring API keys or full account access.\n- **Undercollateralized Lending Use Case**: Aims to revive the non-collateralized lending market by providing private, verifiable loan reports.\n- **Investor Backing / Seed (30.12.2024)**: Seed round closed on December 30, 2024, led by MitonC and Zee Prime Capital; participants included Maven 11, CMCC Global, Moonhill Capital, Aquanow.\n\n## Monad x Accountable\n\nAccountable’s site presents the project as the Trust Layer for Digital Finance, with its page accessible under accountable.capital. The Gate.io ecosystem overview describes Accountable as a platform for creditworthiness verification within the Monad ecosystem, targeted at markets for crypto-asset lending and offering verifiable real-time data on borrowers’ assets and liabilities. PANews/PA News includes Accountable in a list of projects being built within the Monad ecosystem and cites the project’s official X account and the reported funding volume; the article was reviewed as of August 14, 2025. The official Monad blog published a post introducing the Monad Foundation on December 16, 2024 and another on February 5, 2025 announcing the first Monad hackathon, noting that these publications do not constitute an explicit public partnership or integration with Accountable."
+}

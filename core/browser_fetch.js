@@ -40,7 +40,7 @@ console.error('>>> browser_fetch.js запущен для: ' + url);
             const href = a.getAttribute("href");
             for (const [key, rx] of Object.entries(patterns)) {
                 if (rx.test(href) && !links[key]) {
-                    links[key] = href.startsWith("http") ? href : "https://www.youtube.com" + href;
+                    links[key] = href.startsWith("http") ? href : new URL(href, location.origin).href;
                 }
             }
         });

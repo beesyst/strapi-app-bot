@@ -18,92 +18,97 @@ async function main() {
     const page = await context.newPage();
 
     try {
-        await page.goto(url, { timeout: 45000, waitUntil: 'domcontentloaded' });
-        // Ожидание динамики X
-        await page.waitForTimeout(3500);
+        await page.goto(
+        url.endsWith('/photo') ? url : (url.replace(/^https:\/\/twitter\.com/i,'https://x.com').replace(/\/+$/,'') + '/photo'),
+        { timeout: 45000, waitUntil: 'domcontentloaded' }
+        );
+
+        // Ожидание появления аватара в любом из вариантов
+        await page.waitForSelector(
+        'img[src*="pbs.twimg.com/profile_images/"],' +
+        'div[style*="pbs.twimg.com/profile_images/"],' +
+        'meta[property="og:image"][content*="pbs.twimg.com/profile_images/"]',
+        { timeout: 12000 }
+        ).catch(() => { /* не критично - попытка вытащить без ожидания */ });
+
+        // Небольшая задержка, чтобы дом дорисовался
+        await page.waitForTimeout(1000);
 
         const result = await page.evaluate(() => {
-            let links = [];
-            let name = "";
+        let links = [];
+        let name = "";
 
-            // Имя профиля (display name)
-            const nameEl =
-                document.querySelector('[data-testid="UserName"] span') ||
-                document.querySelector('h2[role="heading"] > div > span');
-            if (nameEl && nameEl.textContent) {
-                name = nameEl.textContent.trim();
+        // display name
+        const nameEl =
+            document.querySelector('[data-testid="UserName"] span') ||
+            document.querySelector('h2[role="heading"] > div > span');
+        if (nameEl && nameEl.textContent) name = nameEl.textContent.trim();
+
+        if (!name) {
+            const t = (document.title || "").trim();
+            const m = t.match(/^(.+?)\s*\(/) || t.match(/^(.+?)\s*\/\s/);
+            name = (m && m[1]) ? m[1].trim() : t;
+        }
+
+        // BIO‑ссылки
+        const bio = document.querySelector('[data-testid="UserDescription"]');
+        if (bio) {
+            const urls = bio.innerHTML.match(/https?:\/\/[^\s"<]+/g);
+            if (urls) links = links.concat(urls);
+            const naked = bio.textContent.match(/([a-zA-Z0-9-]+\.[a-zA-Z]{2,}\/[^\s]+)/g);
+            if (naked) {
+            naked.forEach(u => { if (!links.find(l => l.includes(u))) links.push('https://' + u); });
             }
+        }
 
-            // Если не ннайдено, fallback - из <title>
-            if (!name) {
-                const titleEl = document.querySelector('title');
-                if (titleEl && titleEl.textContent) {
-                    // До первой скобки или " / "
-                    let t = titleEl.textContent.trim();
-                    let match = t.match(/^(.+?)\s*\(/) || t.match(/^(.+?)\s*\/\s/);
-                    if (match && match[1]) {
-                        name = match[1].trim();
-                    } else {
-                        name = t;
-                    }
-                }
+        // Ссылки под профилем
+        document.querySelectorAll('[data-testid="UserProfileHeader_Items"] a, a[role="link"]').forEach(a => {
+            const href = a.getAttribute('href') || '';
+            if (!href) return;
+            if (href.startsWith('http') && !/x\.com|twitter\.com/.test(href)) links.push(href);
+            if (href.startsWith('https://t.co/')) {
+            const span = a.querySelector('span');
+            const text = (span?.textContent || a.textContent || "").trim();
+            if (/^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}\/[^\s]+$/.test(text)) links.push('https://' + text);
             }
-
-            // BIO (https:// и "linktr.ee/xxx"-стайл)
-            const bio = document.querySelector('[data-testid="UserDescription"]');
-            if (bio) {
-                const urls = bio.innerHTML.match(/https?:\/\/[^\s"<]+/g);
-                if (urls) links = links.concat(urls);
-                const nakedUrls = bio.textContent.match(/([a-zA-Z0-9-]+\.[a-zA-Z]{2,}\/[^\s]+)/g);
-                if (nakedUrls) {
-                    nakedUrls.forEach(u => {
-                        if (!links.find(l => l.includes(u))) {
-                            links.push('https://' + u);
-                        }
-                    });
-                }
-            }
-
-            // Ссылки под профилем (обычно t.co, linktr.ee и т.п.)
-            const linkBlock = document.querySelectorAll('[data-testid="UserProfileHeader_Items"] a, a[role="link"]');
-            for (const a of linkBlock) {
-                const href = a.getAttribute('href');
-                if (!href) continue;
-                // Ссылка сразу нормальная
-                if (href.startsWith('http') && !href.includes('x.com') && !href.includes('twitter.com')) {
-                    links.push(href);
-                }
-                // t.co редирект, а текст содержит видимую ссылку
-                if (href.startsWith('https://t.co/')) {
-                    const span = a.querySelector('span');
-                    let naked = null;
-                    if (span && span.textContent.match(/^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}\/[^\s]+$/)) {
-                        naked = span.textContent;
-                    } else if (a.textContent && a.textContent.match(/^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}\/[^\s]+$/)) {
-                        naked = a.textContent.trim();
-                    }
-                    if (naked && !links.includes('https://' + naked)) {
-                        links.push('https://' + naked);
-                    }
-                }
-            }
-
-            // Уникализируем ссылки
-            links = Array.from(new Set(links));
-
-            // Аватар
-            let avatar = '';
-            const imgs = Array.from(document.querySelectorAll('img'));
-            for (const img of imgs) {
-                if (img.src.includes('pbs.twimg.com/profile_images/')) {
-                    avatar = img.src;
-                    break;
-                }
-            }
-
-            // Возврат ссылки, аватар и имя (name)
-            return { links, avatar, name };
         });
+        links = Array.from(new Set(links));
+
+        // Ава: 3 источника
+        let avatar = '';
+
+        // <img src=".../profile_images/...">
+        const img = Array.from(document.querySelectorAll('img'))
+            .find(i => (i.src || '').includes('pbs.twimg.com/profile_images/'));
+        if (img?.src) avatar = img.src;
+
+        // <div style="background-image: url('.../profile_images/...')">
+        if (!avatar) {
+            const divBG = Array.from(document.querySelectorAll('div[style*="background-image"]'))
+            .map(d => d.getAttribute('style') || '')
+            .find(s => /pbs\.twimg\.com\/profile_images\//.test(s));
+            if (divBG) {
+            const m = divBG.match(/url\(["']?(https?:\/\/[^"')]+profile_images[^"')]+)["']?\)/i);
+            if (m && m[1]) avatar = m[1];
+            }
+        }
+
+        // <meta property="og:image" content=".../profile_images/...">
+        if (!avatar) {
+            const meta = document.querySelector('meta[property="og:image"]');
+            const og = meta?.getAttribute('content') || '';
+            if (/pbs\.twimg\.com\/profile_images\//.test(og)) avatar = og;
+        }
+
+        // Нормализация протокола и чистка HTML‑entities
+        if (avatar) {
+            avatar = avatar.replace(/^\/\//,'https://').replace(/&amp;/g,'&');
+        }
+
+        return { links, avatar, name };
+        });
+
+
 
         // Вывод результата в stdout
         console.log(JSON.stringify(result));
