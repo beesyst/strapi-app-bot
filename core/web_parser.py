@@ -346,58 +346,100 @@ def get_domain_name(url):
     return result
 
 
-# Ссылки и имя/аватар из X/Twitter через Node-скрипт
+PARSED_X_PROFILE_CACHE = {}
+
+
+# Первый валидный JSON-объект
+def _extract_first_json_object(s: str) -> dict:
+    if not s:
+        return {}
+    start = s.find("{")
+    if start == -1:
+        return {}
+    depth = 0
+    for i in range(start, len(s)):
+        if s[i] == "{":
+            depth += 1
+        elif s[i] == "}":
+            depth -= 1
+            if depth == 0:
+                chunk = s[start : i + 1]
+                try:
+                    return json.loads(chunk)
+                except Exception:
+                    break
+    return {}
+
+
 def get_links_from_x_profile(profile_url):
     NODE_CORE_DIR = os.path.join(ROOT_DIR, "core")
     script_path = os.path.join(NODE_CORE_DIR, "twitter_parser.js")
 
-    # twitter.com -> x.com
+    # twitter.com -> x.com + без "/photo"
     orig_url = profile_url.strip()
     safe_url = re.sub(r"^https://twitter\.com", "https://x.com", orig_url, flags=re.I)
-    if not re.search(r"/photo/?$", safe_url, re.I):
-        safe_url = safe_url.rstrip("/") + "/photo"
-    if safe_url != orig_url:
-        logger.info("twitter_parser.js: нормализовал URL %s -> %s", orig_url, safe_url)
+    safe_url = force_https(safe_url.rstrip("/"))
 
-    try:
-        result = subprocess.run(
-            ["node", script_path, safe_url],
-            cwd=NODE_CORE_DIR,
-            capture_output=True,
-            text=True,
-            timeout=90,
+    # кэш
+    if safe_url in PARSED_X_PROFILE_CACHE:
+        return PARSED_X_PROFILE_CACHE[safe_url]
+
+    def _run_once(url_):
+        try:
+            return subprocess.run(
+                ["node", script_path, url_],
+                cwd=NODE_CORE_DIR,
+                capture_output=True,
+                text=True,
+                timeout=90,
+            )
+        except Exception as e:
+            logger.warning("Ошибка запуска twitter_parser.js для %s: %s", url_, e)
+            return None
+
+    # запуск + 1 ретрай
+    tries = [safe_url, safe_url + "/photo"]
+    data = {}
+    for idx, u in enumerate(tries):
+        if u != orig_url:
+            logger.info("twitter_parser.js: нормализовал URL %s -> %s", orig_url, u)
+        result = _run_once(u)
+        if not result:
+            continue
+
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+
+        # парс stdout
+        data = _extract_first_json_object(stdout)
+        if data:
+            logger.info("twitter_parser.js успешно обработал: %s", u)
+            break
+
+        # в stderr
+        data = _extract_first_json_object(stderr)
+        if data:
+            logger.info("twitter_parser.js: JSON был в stderr: %s", u)
+            break
+
+        # лог ошибки для отладки
+        logger.warning(
+            "twitter_parser.js error for %s: %s", u, (stderr or "no-stderr")[:300]
         )
-        if result.returncode == 0:
-            logger.info("twitter_parser.js успешно обработал: %s", safe_url)
-            data = safe_json_loads(result.stdout) or {}
-            if not (data.get("avatar") or "").strip():
-                logger.warning(
-                    "twitter_parser.js: avatar пустой для %s; raw=%s",
-                    safe_url,
-                    result.stdout[:200],
-                )
-            return (
-                data
-                if isinstance(data, dict)
-                else {"links": [], "avatar": "", "name": ""}
-            )
-        else:
-            logger.warning(
-                "twitter_parser.js error for %s: %s", safe_url, result.stderr
-            )
-            return {"links": [], "avatar": "", "name": ""}
-    except Exception as e:
-        logger.warning("Ошибка запуска twitter_parser.js для %s: %s", safe_url, e)
-        return {"links": [], "avatar": "", "name": ""}
 
+    if not isinstance(data, dict):
+        data = {}
+    # нормализованный ответ
+    cleaned = {
+        "links": data.get("links") or [],
+        "avatar": data.get("avatar") or "",
+        "name": data.get("name") or "",
+    }
+    if not cleaned["avatar"] and not cleaned["links"] and not cleaned["name"]:
+        logger.warning("twitter_parser.js: пустой результат для %s", safe_url)
 
-# Безопасный json.loads с логом ошибок
-def safe_json_loads(data):
-    try:
-        return json.loads(data)
-    except Exception as e:
-        logger.warning("Ошибка при safe_json_loads: %s", e)
-        return {}
+    PARSED_X_PROFILE_CACHE[safe_url] = cleaned
+    return cleaned
 
 
 # Нормализация размера авы
@@ -573,6 +615,68 @@ def _extract_twitter_profiles(html, base_url):
     return list(profiles)
 
 
+def _host(u: str) -> str:
+    try:
+        return urlparse(u).netloc.lower().replace("www.", "")
+    except Exception:
+        return ""
+
+
+def _is_valid_x_profile(parsed: dict) -> bool:
+    if not isinstance(parsed, dict):
+        return False
+    name = (parsed.get("name") or "").strip().lower()
+    avatar = (parsed.get("avatar") or "").strip()
+    links = parsed.get("links") or []
+    if (not avatar) and (not name or "new to x" in name) and (not links):
+        return False
+    return True
+
+
+# Универсальный парс всех соцлинков со страницы (включая linktr.ee/bento.me/link3.to)
+def _extract_socials_from_html(html: str, base_url: str) -> dict:
+    soup = BeautifulSoup(html or "", "html.parser")
+    out = {k: "" for k in SOCIAL_PATTERNS if k != "documentURL"}
+    for a in soup.find_all("a", href=True):
+        abs_href = urljoin(base_url, a["href"])
+        for key, pattern in SOCIAL_PATTERNS.items():
+            if key == "documentURL":
+                continue
+            if pattern.search(abs_href):
+                out[key] = force_https(abs_href)
+    out["websiteURL"] = force_https(base_url)
+    return out
+
+
+def _verify_twitter_and_enrich(twitter_url: str, site_domain: str) -> tuple[bool, dict]:
+    data = get_links_from_x_profile(twitter_url)
+    if not _is_valid_x_profile(data):
+        return False, {}
+
+    bio_links = data.get("links") or []
+    # прямое подтверждение доменом
+    if any(_host(b).endswith(site_domain) for b in bio_links):
+        return True, {}
+
+    # подтверждение через линк‑агрегатор + обогащение соцсетей
+    aggregator_hosts = LINK_COLLECTION_DOMAINS
+    for b in bio_links:
+        if _host(b) in aggregator_hosts:
+            try:
+                agg_html = fetch_url_html(b)
+                agg_socials = _extract_socials_from_html(agg_html, b)
+                # подтверждение домена через агрегатор
+                if any(
+                    _host(v).endswith(site_domain) for v in agg_socials.values() if v
+                ):
+                    # возвращаем все найденные соцссылки для обогащения
+                    return True, {k: v for k, v in agg_socials.items() if v}
+            except Exception:
+                pass
+
+    return False, {}
+
+
 # Все ссылки на link-агрегаторы
 def _extract_link_collection_urls(html, base_url):
     soup = BeautifulSoup(html or "", "html.parser")
@@ -628,23 +732,47 @@ def _fetch_and_extract_twitter_profiles(from_url):
         return []
 
 
+# Проверка валидности данных X-профиля
+def _is_valid_x_profile(parsed: dict) -> bool:
+    if not isinstance(parsed, dict):
+        return False
+    name = (parsed.get("name") or "").strip().lower()
+    avatar = (parsed.get("avatar") or "").strip()
+    links = parsed.get("links") or []
+    if (not avatar) and (not name or "new to x" in name) and (not links):
+        return False
+    return True
+
+
 # Выбор лучшего twitter
 def _pick_best_twitter(
-    current_url, candidates, brand_token, site_domain, max_profile_checks=None
+    current_url,
+    candidates,
+    brand_token,
+    site_domain,
+    max_profile_checks=None,
+    observed_handles=None,
 ):
-    def score(handle, bio_has_domain=False):
+    observed_handles = set(observed_handles or [])
+
+    def score(handle, bio_has_domain=False, is_observed=False):
         s = 0
+        # базовый приоритет за совпадение бренда
         if brand_token and brand_token in (handle or "").lower():
             s += 100
+        # ссылка на домен в био - сильный сигнал
         if bio_has_domain:
-            s += 50
+            s += 80
+        # найден на сайте/доксах/агрегаторе - повышение доверия
+        if is_observed:
+            s += 40
+        # начинается с brand_token - небольшой бонус
         if brand_token and (handle or "").lower().startswith(brand_token.lower()):
-            s += 30
+            s += 20
         return s
 
     seen = set()
     pool = []
-
     for u in candidates:
         if u not in seen:
             pool.append(u)
@@ -664,31 +792,45 @@ def _pick_best_twitter(
             r"^https?://(?:www\.)?x\.com/([A-Za-z0-9_]{1,15})/?$", u + "/", re.I
         )
         handle = m.group(1) if m else ""
-        if handle and brand_token and brand_token.lower() in handle.lower():
-            # Моментальная победа бренд-аккаунта (например, @accountabledata)
-            return u
+        is_observed = u in observed_handles
 
         bio_has_domain = False
+        is_valid_profile = True
+
         if handle and checks < limit:
             try:
                 data = get_links_from_x_profile(u)
-                for b in data.get("links") or []:
-                    try:
-                        if (
-                            urlparse(b)
-                            .netloc.replace("www.", "")
-                            .lower()
-                            .endswith(site_domain)
-                        ):
-                            bio_has_domain = True
-                            break
-                    except:
-                        pass
-            except Exception:
-                pass
-            checks += 1
 
-        sc = score(handle, bio_has_domain)
+                # фильтр: несуществующие/пустые профили
+                if not _is_valid_x_profile(data):
+                    is_valid_profile = False
+                else:
+                    for b in data.get("links") or []:
+                        try:
+                            if (
+                                urlparse(b)
+                                .netloc.replace("www.", "")
+                                .lower()
+                                .endswith(site_domain)
+                            ):
+                                bio_has_domain = True
+                                break
+                        except Exception:
+                            pass
+            except Exception:
+                is_valid_profile = False
+            finally:
+                checks += 1
+
+        # пропуск явно невалидных (например, "New to X?")
+        if not is_valid_profile:
+            continue
+
+        if handle and brand_token and brand_token.lower() in handle.lower():
+            if is_observed or bio_has_domain:
+                return u
+
+        sc = score(handle, bio_has_domain=bio_has_domain, is_observed=is_observed)
         if sc > best[1]:
             best = (u, sc)
 
@@ -697,76 +839,111 @@ def _pick_best_twitter(
 
 # Основная функция для сбора соцсетей и docs по проекту
 def collect_main_data(url, main_template, storage_path=None, max_internal_links=10):
+    TRUST_HOME_TWITTER = True
+
     main_data = copy.deepcopy(main_template)
     found_socials = {}
+
+    # главная страница
     html = fetch_url_html(url)
     socials = extract_social_links(html, url, is_main_page=True)
     found_socials.update({k: v for k, v in socials.items() if v})
+
     site_domain = urlparse(url).netloc.replace("www.", "").lower()
     brand_token = site_domain.split(".")[0]
 
-    if found_socials.get("twitterURL"):
-        # кандидаты с главной
-        twitter_candidates = set(_extract_twitter_profiles(html, url))
+    # twitter: подтверждение + политика "доверять домашнему"
+    twitter_final = ""
+    enriched_from_agg = {}
 
-        # кандидаты с внутренних страниц
+    if found_socials.get("twitterURL"):
+        ok, extra = _verify_twitter_and_enrich(found_socials["twitterURL"], site_domain)
+        if ok:
+            twitter_final = found_socials["twitterURL"]
+            enriched_from_agg = extra
+            logger.info("Подтвержден по био/агрегатору: %s", twitter_final)
+        else:
+            logger.info(
+                "Не удалось подтвердить домашний твиттер: %s",
+                found_socials["twitterURL"],
+            )
+            if TRUST_HOME_TWITTER:
+                twitter_final = found_socials["twitterURL"]
+                logger.info(
+                    "TRUST_HOME_TWITTER: фиксирую домашний твиттер несмотря на верификацию"
+                )
+
+    # если нет подтвержденного твиттера - поиск альтернатив (сайт/внутренние/доки/агрегаторы)
+    if not twitter_final:
+        candidates = set()
+
+        # со всех видимых ссылок сайта
+        candidates |= set(_extract_twitter_profiles(html, url))
+
+        # внутренних страниц (до 5)
         for link in get_internal_links(
             html, url, max_links=min(max_internal_links, 10)
         )[:5]:
             try:
                 page_html = fetch_url_html(link)
-                twitter_candidates |= set(_extract_twitter_profiles(page_html, link))
+                candidates |= set(_extract_twitter_profiles(page_html, link))
             except Exception:
                 pass
 
-        # кандидаты с docs
-        docs_url_local = found_socials.get("documentURL")
+        # docs
         docs_html = ""
+        docs_url_local = found_socials.get("documentURL")
         if docs_url_local:
             try:
                 docs_html = fetch_url_html(docs_url_local)
-                twitter_candidates |= set(
-                    _extract_twitter_profiles(docs_html, docs_url_local)
-                )
+                candidates |= set(_extract_twitter_profiles(docs_html, docs_url_local))
             except Exception:
                 docs_html = ""
 
-        # кандидаты из линк-агрегаторов
+        # link-агрегаторы со страницы
         for coll_url in _extract_link_collection_urls(html, url):
-            twitter_candidates |= set(_fetch_and_extract_twitter_profiles(coll_url))
-        if docs_html:
+            try:
+                c_html = fetch_url_html(coll_url)
+                candidates |= set(_extract_twitter_profiles(c_html, coll_url))
+            except Exception:
+                pass
+        # и из docs (если были)
+        if docs_url_local and docs_html:
             for coll_url in _extract_link_collection_urls(docs_html, docs_url_local):
-                twitter_candidates |= set(_fetch_and_extract_twitter_profiles(coll_url))
+                try:
+                    c_html = fetch_url_html(coll_url)
+                    candidates |= set(_extract_twitter_profiles(c_html, coll_url))
+                except Exception:
+                    pass
 
-        # догадки хэндлов по бренду
-        guessed = []
-        for h in _guess_twitter_handles(brand_token):
-            guessed.append(f"https://x.com/{h}")
-        twitter_candidates |= set(guessed)
+        # валидация кандидатов
+        for u in candidates:
+            ok, extra = _verify_twitter_and_enrich(u, site_domain)
+            if ok:
+                twitter_final = u
+                enriched_from_agg = extra
+                logger.info(
+                    "[twitter] Найден и подтвержден альтернативный: %s", twitter_final
+                )
+                break
 
-        # текущий из browser_fetch.js в общий пул
-        if found_socials.get("twitterURL"):
-            twitter_candidates.add(found_socials["twitterURL"])
-
-        # выбор лучшего - проверка всех кандидатов
-        picked = _pick_best_twitter(
-            found_socials["twitterURL"],
-            list(twitter_candidates),
-            brand_token,
-            site_domain,
-            max_profile_checks=len(twitter_candidates),
+    # фикс итоговый твиттер
+    if twitter_final:
+        found_socials["twitterURL"] = twitter_final
+    else:
+        logger.info(
+            "[twitter] Итог: валидного подтверждения не найдено; оставляю исходное значение: %s",
+            found_socials.get("twitterURL", ""),
         )
-        if picked and picked != found_socials["twitterURL"]:
-            logger.info(
-                "Переопределил twitterURL: %s -> %s",
-                found_socials["twitterURL"],
-                picked,
-            )
-            found_socials["twitterURL"] = picked
 
-    logger.info(f"Соцлинков найдено: {found_socials}")
+    # обогащение соц ссылок с агрегатора (если пришло из _verify_twitter_and_enrich)
+    for k, v in (enriched_from_agg or {}).items():
+        if v and not found_socials.get(k):
+            found_socials[k] = v
 
-    # сбор внутренних соцлинков
+    logger.info("Соцлинков найдено: %s", found_socials)
+
+    # сбор внутренних соцлинков с внутренних страниц
     internal_links = get_internal_links(html, url, max_links=max_internal_links)
     for link in internal_links:
         try:
@@ -778,7 +955,7 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
         except Exception as e:
             logger.warning("Ошибка парсинга %s: %s", link, e)
 
-    # docs поиск
+    # документация: дообогащение
     found_socials = normalize_socials(found_socials)
     if found_socials.get("documentURL"):
         docs_url = found_socials["documentURL"]
@@ -790,6 +967,7 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
                     found_socials[k] = v
         except Exception as e:
             logger.warning("Ошибка docs: %s", e)
+
     # fallback docs
     if not found_socials.get("documentURL"):
         domain = urlparse(url).netloc
@@ -806,15 +984,15 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
                 resp = requests.get(
                     docs_url, timeout=8, headers={"User-Agent": "Mozilla/5.0"}
                 )
-                html = resp.text
-                if resp.status_code == 200 and len(html) > 2200:
-                    soup = BeautifulSoup(html, "html.parser")
-                    title = (soup.title.string if soup.title else "").lower()
+                html_doc = resp.text
+                if resp.status_code == 200 and len(html_doc) > 2200:
+                    soup_doc = BeautifulSoup(html_doc, "html.parser")
+                    title = (soup_doc.title.string if soup_doc.title else "").lower()
                     doc_kw = (
                         "doc" in title
                         or "documentation" in title
-                        or "sidebar" in html
-                        or "menu" in html
+                        or "sidebar" in html_doc
+                        or "menu" in html_doc
                         or "docs" in docs_url
                     )
                     if doc_kw:
@@ -824,7 +1002,7 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
             except Exception as e:
                 logger.warning("Ошибка автопоиска docs (%s): %s", docs_url, e)
 
-    # video Slider
+    # видео-слайдер YouTube (featured)
     main_data["videoSlider"] = []
     youtube_url = found_socials.get("youtubeURL", "")
     if youtube_url:
@@ -844,7 +1022,7 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
     ):
         try:
             yt_json = fetch_url_html_playwright(youtube_url)
-            logger.info(f"Youtube-url: {youtube_url}")
+            logger.info("Youtube-url: %s", youtube_url)
             yt_links = json.loads(yt_json)
             fv = yt_links.get("featuredVideos") or []
             if fv:
@@ -854,9 +1032,9 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
                     if v.get("url")
                 ]
         except Exception as e:
-            logger.warning(f"Ошибка парса featuredVideos через browser_fetch.js: {e}")
+            logger.warning("Ошибка парса featuredVideos через browser_fetch.js: %s", e)
 
-    # twitter: аватар и имя
+    # twitter: аватар и имя + добор соцлинков из био (прямые ссылки)
     avatar_url = ""
     twitter_name = ""
     if found_socials.get("twitterURL"):
@@ -869,7 +1047,7 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
         def _dom(href: str) -> str:
             try:
                 return urlparse(href).netloc.replace("www.", "").lower()
-            except:
+            except Exception:
                 return ""
 
         for bio_url in bio_links:
@@ -890,7 +1068,7 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
                 ):
                     found_socials[k] = bio_url
 
-    # имя из title
+    # имя проекта
     soup = BeautifulSoup(html, "html.parser")
     raw_title = soup.title.string.strip() if soup.title and soup.title.string else ""
 
@@ -899,7 +1077,6 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
     ]
     title_parts = [p for p in title_parts if p and not is_bad_name(p)]
 
-    # title с brand_token
     best_title = ""
     for p in title_parts:
         if brand_token and brand_token.lower() in p.lower():
@@ -940,24 +1117,21 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
 
     logger.info("Итоговое имя проекта: '%s'", project_name)
 
-    # ава
+    # аватарка X
     logo_filename = f"{project_name.lower().replace(' ', '')}.jpg"
 
     if not found_socials.get("twitterURL"):
-        logger.warning(
-            "[svgLogo] twitterURL отсутствует — пропускаю скачивание аватара"
-        )
+        logger.warning("twitterURL отсутствует — пропускаю скачивание аватара")
     elif not avatar_url:
         logger.warning(
-            "[svgLogo] avatar пуст — парсер не вернул URL для %s",
+            "avatar пуст - парсер не вернул URL для %s",
             found_socials.get("twitterURL"),
         )
     elif not storage_path:
-        logger.warning("[svgLogo] storage_path пуст — некуда сохранять аватар")
+        logger.warning("storage_path пуст - некуда сохранять аватар")
     else:
         avatar_path = os.path.join(storage_path, logo_filename)
         try:
-            # реалистичные заголовки; без принудительных параметров в URL
             headers_img = {
                 "User-Agent": (
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -971,7 +1145,6 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
                 "Cache-Control": "no-cache",
             }
 
-            # ретраи на 403/429/5xx
             def _get_image_with_retry(url_img, headers, tries=3, timeout=25):
                 last = None
                 retryable = {403, 429, 500, 502, 503, 504}
@@ -994,9 +1167,7 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
                         break
                     except Exception as e:
                         last = None
-                        logger.warning(
-                            "[svgLogo] ошибка запроса (try %s): %s", i + 1, e
-                        )
+                        logger.warning("Ошибка запроса (try %s): %s", i + 1, e)
                         import time
 
                         time.sleep(0.8)
@@ -1041,9 +1212,10 @@ def collect_main_data(url, main_template, storage_path=None, max_internal_links=
     if "svgLogo" not in main_data:
         main_data["svgLogo"] = ""
 
-    # финальная сборка main_data
+    # финальная сборка socialLinks
     social_keys = list(main_template["socialLinks"].keys())
     final_socials = {k: found_socials.get(k, "") for k in social_keys}
     final_socials = normalize_socials(final_socials)
     main_data["socialLinks"] = final_socials
+
     return main_data

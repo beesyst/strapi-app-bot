@@ -1,0 +1,42 @@
+{
+  "name": "AltLayer",
+  "shortDescription": "AltLayer offers Rollups as a Service with Active Validated Services for validation, fast finality, and decentralized sequencing.",
+  "svgLogo": "altlayer.jpg",
+  "project_categories": [
+    32,
+    33,
+    22
+  ],
+  "socialLinks": {
+    "websiteURL": "https://www.altlayer.io/",
+    "twitterURL": "https://x.com/alt_layer",
+    "discordURL": "",
+    "githubURL": "",
+    "mediumURL": "https://medium.com/altlayer/altlayer-run-eigenda-operator-is-live-on-mainnet-5e1b15a0d307",
+    "youtubeURL": "https://www.youtube.com/@altlayer7257",
+    "telegramURL": "",
+    "documentURL": "https://docs.altlayer.io/",
+    "linkedinURL": "",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": "altlayer"
+  },
+  "seo": {
+    "metaTitle": "AltLayer",
+    "metaDescription": "AltLayer offers Rollups as a Service with Active Validated Services for validation, fast finality, and decentralized sequencing.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "AltLayer",
+        "description": "AltLayer: RaaS, validated services, fast finality.",
+        "image": null
+      }
+    ],
+    "keywords": "no-code RaaS launchpad for ephemeral and persistent rollups AltLayer AVS, AltLayer VITAL MACH SQUAD state validation fast finality decentralized sequencing, multi-stack and multi-VM rollups with OP Stack Arbitrum Orbit ZKSync ZKStack Celestia Avail integrations",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nAltLayer is a commercial infrastructure developer for Rollups-as-a-Service (RaaS), focused on creating and maintaining both optimistic and ZK rollups with restaking to enhance economic security and decentralization. This product profile is reflected in the project’s official documentation. The company describes its offering around a suite of Actively Validated Services (AVS) — VITAL, MACH, and SQUAD — each addressing state validation, fast finality, and decentralized sequencing respectively.\n\nPublic materials and corporate profiles indicate that the product is built around AVS modules called VITAL, MACH and SQUAD, which handle state validation, rapid crypto-economic finality, and decentralized sequencing. AltLayer was founded in 2021, and the leadership is headed by Yaoqi (YQ) Jia, presented as founder and CEO. The visible milestones include the launch of the native ALT token and a listing through major centralized venues in January 2024, including a Binance Launchpool/TGE on January 25, 2024, and a strategic fundraising round of 14.4 million dollars announced on February 19, 2024.\n\n## Functionality\n\nAltLayer’s core offering is the RaaS launchpad alongside the AVS set, which can be deployed on demand for a specific rollup. VITAL validates state correctness and fraud proofs, MACH delivers crypto-economic fast finality, and SQUAD provides a decentralized network of sequencers with slashing mechanisms. The AVS suite is designed to work together to secure and accelerate rollup operation.\n\nThe platform is positioned as multi-stack and multi-VM, supporting popular stacks and SDKs such as OP Stack, Arbitrum Orbit, Polygon CDK, ZKSync ZKStack, Starknet SN Stack, and more, with integrations to various Data Availability layers and external sequencing networks. AltLayer also supports integrations with multiple DA layers such as Celestia and Avail and allows connectivity to diverse sequencing networks.\n\nAltLayer provides a no-code interface for deploying both ephemeral and persistent rollups. Ephemeral rollups are designed for short-lived peak workloads with end-of-life scheduled on L1, while MACH offers API/RPC access for applications and services seeking fast finality, typically described as seconds-scale finality.\n\nRoadmap and production milestones on the project’s public materials outline integration and rollout plans for 2024, including testnet and mainnet phases for OP Stack and Arbitrum Orbit, the launch of AVS products, and the BLITZ fast-finality network. BLITZ was announced as live in late November 2024, with the roadmap noting BLITZ as a testnet in Q1 2025 and a mainnet in Q3 2025.\n\n## Features\n\n- **Restaked Rollups (VITAL / MACH / SQUAD)**: A modular AVS suite for each deployed rollup, with VITAL for state validation, MACH for crypto-economic fast finality, and SQUAD for decentralized sequencing; the full set is documented in AltLayer’s official materials.\n- **No-code RaaS Launchpad**: A web dashboard and deployment factory enabling the fast launch of a custom rollup (ephemeral or persistent) within minutes, with network parameter configuration and stack/DA selection.\n- **Multi-stack & Multi-VM Support**: Support for OP Stack, Arbitrum Orbit, Polygon CDK, ZKSync ZKStack, Starknet SN Stack, and planned expansion to additional VMs (EVM/WASM/Sealevel/Move).\n- **DA & Settlement Flexibility**: Integrations with Celestia/EigenDA, Avail and other data-availability layers, with the option to select L1/L2 for settlement and finality.\n- **Fast Finality via MACH**: MACH provides RPC tools enabling block finality within seconds, designed for exchanges, bridges, and applications requiring low-latency confirmations.\n- **Ephemeral Rollups**: Support for temporary rollups intended for peak load scenarios with end-of-life on L1.\n- **AVS-as-a-Service (Wizard)**: The Wizard platform for rapid AVS deployment and management, referred to as a product in the roadmap and announcements.\n- **Ecosystem Integrations & Clients**: AltLayer names clients and integrations such as Cyber, Xterio, B² Network, and other deployments highlighted on the main site and in updates.\n- **Token & Treasury Milestones**: The native ALT token and TGE occurred on January 25, 2024 via Binance Launchpool/listing, accompanied by a strategic fundraising round of 14.4 million dollars on February 19, 2024, and subsequent grants such as a 1 million Eigen grant announced on December 19, 2024.\n\n## Monad x Altlayer\n\nAltLayer organized Rollup Day in Bangkok on November 13, 2024, featuring a fireside chat with Keone, the founder of Monad, an event documented by AltLayer. AltLayer published a recap noting that Monad’s founder discussed plans to launch a mainnet in Q1 2025, which was highlighted in AltLayer’s Outposts blog.\n\nIn AltLayer’s official Roadmap, it is stated that Monad and MegaETH support is planned for Q3 2025, reflecting an item in the roadmap that indicates intended collaboration. Monad publicly released material including “Introducing: Monad Foundation” on December 16, 2024 and a “Monad Testnet Onboarding Guide” on February 19, 2025, providing context for Monad’s activity ahead of AltLayer’s roadmap entries.\n\nPublic sources checked indicate mutual engagement limited to the participation of a Monad representative at Rollup Day, AltLayer’s coverage of Monad’s talk, and the roadmap item for Monad support in Q3 2025; there are no documented official announcements of completed technical integrations or joint launches beyond these entries."
+}
