@@ -45,7 +45,7 @@ def run_orchestrator():
 
 
 if __name__ == "__main__":
-    print("[start] Go! Go! Go!")
+    print("[start] Go-go-go!")
     try:
         run_orchestrator()
         print("[finish] Success")
