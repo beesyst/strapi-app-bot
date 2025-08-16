@@ -7,16 +7,26 @@ import re
 import subprocess
 from time import time as now
 from typing import Dict, List, Tuple
-from urllib.parse import urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 from core.log_utils import get_logger
+from core.parser_link_aggregator import (
+    find_aggregators_in_links as _find_aggs_in_links,
+)
+from core.parser_link_aggregator import (
+    is_link_aggregator,
+)
+from core.parser_link_aggregator import (
+    verify_aggregator_belongs as _verify_agg_belongs,
+)
+from core.parser_web import fetch_url_html
 
 logger = get_logger("twitter_parser")
 
 
-# Утилиты протокола/хостов
+# Нормализация протокола в https и обрезка мусора
 def force_https(url: str) -> str:
     if not url or not isinstance(url, str):
         return url
@@ -28,6 +38,7 @@ def force_https(url: str) -> str:
     return u
 
 
+# Возврат host без www
 def _host(u: str) -> str:
     try:
         return urlparse(u).netloc.lower().replace("www.", "")
@@ -35,52 +46,114 @@ def _host(u: str) -> str:
         return ""
 
 
+# Канонизация X-профиля: twitter.com -> x.com, срез query/fragment/хвостов
+def normalize_twitter_url(u: str) -> str:
+    if not u:
+        return u
+    u = force_https(u.strip())
+    u = re.sub(r"^https://twitter\.com", "https://x.com", u, flags=re.I)
+    u = re.sub(r"[?#].*$", "", u)
+    u = re.sub(
+        r"/(photo|media|with_replies|likes|lists|following|followers)/?$",
+        "",
+        u,
+        flags=re.I,
+    )
+    m = re.match(r"^https://x\.com/([A-Za-z0-9_]{1,15})/?$", u, re.I)
+    return f"https://x.com/{m.group(1)}" if m else u.rstrip("/")
+
+
+# Нормализация url аватарки
+def normalize_twitter_avatar(url: str) -> str:
+    u = force_https(url or "")
+    if not u:
+        return ""
+
+    # nitter-перенаправления и проценты
+    if u.startswith("/pic/") or "%2F" in u or "%3A" in u:
+        u = _decode_nitter_pic_url(u)
+
+    if u.startswith("pbs.twimg.com/"):
+        u = "https://" + u
+
+    # убрать query/fragment
+    u = re.sub(r"(?:\?[^#]*)?(?:#.*)?$", "", u)
+    return u
+
+
+# Декодер /pic/pbs.twimg.com%2F... или /pic/https%3A%2F%2Fpbs... в нормальный https
+def _decode_nitter_pic_url(src: str) -> str:
+    if not src:
+        return ""
+    s = src.strip()
+    if s.startswith("/pic/"):
+        s = s[len("/pic/") :]
+    s = unquote(s)
+    if s.startswith("//"):
+        s = "https:" + s
+    elif s.startswith("http://"):
+        s = "https://" + s[7:]
+    elif s.startswith("https://"):
+        pass
+    else:
+        s = "https://" + s.lstrip("/")
+    return s
+
+
 # Конфиг
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(ROOT_DIR, "config", "config.json")
 
-LINK_COLLECTION_DOMAINS = set()
 try:
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         _cfg = json.load(f)
 
-    LINK_COLLECTION_DOMAINS = {
-        (d or "").lower().replace("www.", "")
-        for d in _cfg.get("link_collections", [])
-        if d
-    }
+    # nitter
+    _nitter_cfg = _cfg.get("nitter", {})
+    for key in (
+        "nitter_enabled",
+        "nitter_instances",
+        "nitter_retry_per_instance",
+        "nitter_timeout_sec",
+        "nitter_bad_ttl_sec",
+    ):
+        if key not in _nitter_cfg:
+            raise KeyError(f"Отсутствует ключ config.json:nitter -> {key}")
 
-    _nitter_cfg = _cfg.get("nitter", {}) or {}
-    NITTER_ENABLED = bool(_nitter_cfg.get("nitter_enabled", True))
+    NITTER_ENABLED = bool(_nitter_cfg["nitter_enabled"])
     NITTER_INSTANCES = [
         force_https(str(x).strip().rstrip("/"))
-        for x in (_nitter_cfg.get("nitter_instances") or [])
+        for x in (_nitter_cfg["nitter_instances"] or [])
         if x
     ]
-    NITTER_RETRY_PER_INSTANCE = int(_nitter_cfg.get("nitter_retry_per_instance", 1))
-    NITTER_TIMEOUT_SEC = int(_nitter_cfg.get("nitter_timeout_sec", 14))
-    NITTER_BAD_TTL_SEC = int(_nitter_cfg.get("nitter_bad_ttl_sec", 600))
+    NITTER_RETRY_PER_INSTANCE = int(_nitter_cfg["nitter_retry_per_instance"])
+    NITTER_TIMEOUT_SEC = int(_nitter_cfg["nitter_timeout_sec"])
+    NITTER_BAD_TTL_SEC = int(_nitter_cfg["nitter_bad_ttl_sec"])
 
-except Exception as e:
-    logger.warning("Ошибка чтения конфигурации: %s", e)
-    LINK_COLLECTION_DOMAINS = set()
-    NITTER_ENABLED = True
-    NITTER_INSTANCES = []
-    NITTER_RETRY_PER_INSTANCE = 1
-    NITTER_TIMEOUT_SEC = 14
-    NITTER_BAD_TTL_SEC = 600
+    # Playwright
+    TW_PLAYWRIGHT_ENABLED = True
+    TW_PLAYWRIGHT_IF_NITTER_FAILED_ONLY = True
 
-# Кэш для parsed X профилей
-_PARSED_X_PROFILE_CACHE: Dict[str, Dict] = {}
+except Exception:
+    logger.exception("Не удалось прочитать конфиг из %s", CONFIG_PATH)
+    raise
 
-# Баны инстансов: {instance_url: unban_ts}
+# Кэш
+_PARSED_X_PROFILE_CACHE: Dict[str, Dict] = (
+    {}
+)  # {profile_url: {"links":[], "avatar":"", "name":""}}
+_NITTER_HTML_CACHE: Dict[str, Tuple[str, str]] = {}
+_NITTER_LOGGED_HTTP200: set[str] = set()
+_NITTER_LOGGED_PARSED: set[str] = set()
 _NITTER_BAD: Dict[str, float] = {}
 
 
+# Nitter
 def _normalize_instance(u: str) -> str:
     return force_https((u or "").strip().rstrip("/"))
 
 
+# Возврат списка живых nitter-инстансов с учетом банов
 def _alive_nitter_instances() -> List[str]:
     if not NITTER_INSTANCES:
         return []
@@ -88,66 +161,192 @@ def _alive_nitter_instances() -> List[str]:
     alive = []
     for inst in NITTER_INSTANCES:
         inst = _normalize_instance(inst)
-        if not inst:
-            continue
-        if _NITTER_BAD.get(inst, 0) > t:
-            continue
-        alive.append(inst)
-    return alive or [_normalize_instance(NITTER_INSTANCES[0])]
+        if inst and _NITTER_BAD.get(inst, 0) <= t:
+            alive.append(inst)
+    return alive
 
 
+# Бан инстанса на время
 def _ban_instance(inst: str):
     _NITTER_BAD[_normalize_instance(inst)] = now() + max(60, NITTER_BAD_TTL_SEC)
 
 
-# Возврат (HTML, инстанс) профиля через Nitter-инстансы
+# Загрузка html профиля через nitter, с кэшем и одноразовым логом http 200
 def _fetch_nitter_profile_html(handle: str) -> Tuple[str, str]:
     if not handle:
         return "", ""
+    handle_lc = (handle or "").lower()
+
+    cached = _NITTER_HTML_CACHE.get(handle_lc)
+    if cached:
+        return cached
 
     instances = _alive_nitter_instances()
     random.shuffle(instances)
 
-    headers = {"User-Agent": "Mozilla/5.0"}
     last_err = None
+    script_path = os.path.join(ROOT_DIR, "core", "browser_fetch.js")
+
+    def _run_instance(inst_url: str):
+        try:
+            u = f"{inst_url.rstrip('/')}/{handle}"
+            # raw-режим: просим чистый HTML и статус
+            return subprocess.run(
+                ["node", script_path, u, "--raw"],
+                cwd=os.path.dirname(script_path),
+                capture_output=True,
+                text=True,
+                timeout=max(NITTER_TIMEOUT_SEC + 6, 20),
+            )
+        except Exception as e:
+            logger.warning("Nitter fetch runner failed for %s: %s", inst_url, e)
+            return None
 
     for inst in instances:
-        url = f"{inst.rstrip('/')}/{handle}"
         for attempt in range(max(1, NITTER_RETRY_PER_INSTANCE)):
-            try:
-                r = requests.get(
-                    url,
-                    headers=headers,
-                    timeout=NITTER_TIMEOUT_SEC,
-                    allow_redirects=True,
-                )
-                code = r.status_code
-                if code == 200 and r.text:
-                    logger.info("Nitter: HTTP 200 для %s", url)
-                    return r.text, inst
-                if code in (429, 502, 503, 504) or code >= 500 or not r.text:
-                    logger.warning("Nitter: HTTP %s для %s", code, url)
-                    _ban_instance(inst)
-                    last_err = f"HTTP {code}"
-                    break
-                if code == 404:
-                    logger.warning("Nitter: 404 для %s", url)
-                    return "", inst
-                last_err = f"HTTP {code}"
-            except Exception as e:
-                logger.warning(
-                    "Nitter: ошибка запроса %s (attempt %s): %s", url, attempt + 1, e
-                )
-                last_err = str(e)
+            res = _run_instance(inst)
+            if not res:
                 _ban_instance(inst)
+                last_err = "runner_failed"
                 break
+            stdout = res.stdout or ""
+            stderr = res.stderr or ""
+
+            # json: { ok, html, status, antiBot: {detected, kind}, instance }
+            try:
+                data = json.loads(stdout) if stdout.strip().startswith("{") else {}
+            except Exception:
+                data = {}
+
+            if (
+                isinstance(data, dict)
+                and data.get("ok")
+                and (data.get("html") or "").strip()
+            ):
+                html = data.get("html", "")
+                if handle_lc not in _NITTER_LOGGED_HTTP200:
+                    logger.info(
+                        "Nitter: HTTP %s для %s",
+                        data.get("status", 200),
+                        data.get("instance") or inst,
+                    )
+                    _NITTER_LOGGED_HTTP200.add(handle_lc)
+                _NITTER_HTML_CACHE[handle_lc] = (html, inst)
+                return html, inst
+
+            kind = (data.get("antiBot") or {}).get("kind", "")
+            status = data.get("status", 0)
+            if kind or status in (403, 429, 503, 0):
+                _ban_instance(inst)
+            last_err = kind or f"HTTP {status}" or "no_html"
 
     if last_err:
         logger.warning("Nitter: все инстансы не дали HTML (last=%s)", last_err)
     return "", ""
 
 
-# Вспомогательные парсеры
+# Url аватарки из nitter-страницы
+def _pick_avatar_from_soup(soup: BeautifulSoup) -> str:
+    img = soup.select_one(
+        ".profile-card a.profile-card-avatar img, "
+        "a.profile-card-avatar img, "
+        ".profile-card img.avatar, "
+        "img[src*='pbs.twimg.com/profile_images/']"
+    )
+    if img and img.get("src"):
+        return _decode_nitter_pic_url(img["src"])
+
+    a = soup.select_one(".profile-card a.profile-card-avatar[href]")
+    if a and a.get("href"):
+        return _decode_nitter_pic_url(a["href"])
+
+    meta = soup.select_one("meta[property='og:image'], meta[name='og:image']")
+    if meta and meta.get("content"):
+        c = meta["content"]
+        if "/pic/" in c or "%2F" in c or "%3A" in c:
+            return _decode_nitter_pic_url(c)
+        if "pbs.twimg.com" in c:
+            return force_https(c)
+
+    return ""
+
+
+# Парс профиля через nitter (без JS): name, links, avatar
+def _parse_nitter_profile(twitter_url: str) -> Dict[str, object]:
+    try:
+        if not NITTER_ENABLED:
+            return {}
+
+        m = re.match(
+            r"^https?://(?:www\.)?x\.com/([A-Za-z0-9_]{1,15})/?$",
+            (twitter_url or "") + "/",
+            re.I,
+        )
+        handle = m.group(1) if m else ""
+        handle_lc = handle.lower()
+        if not handle:
+            return {}
+
+        html, inst_used = _fetch_nitter_profile_html(handle)
+        if not html:
+            return {}
+
+        soup = BeautifulSoup(html, "html.parser")
+
+        name_tag = soup.select_one(".profile-card .profile-name-full")
+        name = (name_tag.get_text(strip=True) if name_tag else "") or ""
+
+        links = set()
+        for a in soup.select(".profile-bio a, .profile-website a, a[href]"):
+            href = a.get("href", "") or ""
+            if href.startswith("/url/"):
+                href = href[len("/url/") :]
+            if href.startswith("/"):
+                continue
+            if href.startswith("http"):
+                links.add(force_https(href))
+
+        avatar = _pick_avatar_from_soup(soup)
+
+        # если аватар пуст - другой nitter-инстанс
+        if not avatar and inst_used:
+            _NITTER_HTML_CACHE.pop(handle_lc, None)
+            _ban_instance(inst_used)
+
+            html2, _ = _fetch_nitter_profile_html(handle)
+            if html2:
+                soup2 = BeautifulSoup(html2, "html.parser")
+                avatar = _pick_avatar_from_soup(soup2)
+                if not name:
+                    name_tag2 = soup2.select_one(".profile-card .profile-name-full")
+                    name = (name_tag2.get_text(strip=True) if name_tag2 else "") or ""
+                for a in soup2.select(".profile-bio a, .profile-website a, a[href]"):
+                    href = a.get("href", "") or ""
+                    if href.startswith("/url/"):
+                        href = href[len("/url/") :]
+                    if href.startswith("/"):
+                        continue
+                    if href.startswith("http"):
+                        links.add(force_https(href))
+
+        if handle_lc not in _NITTER_LOGGED_PARSED:
+            logger.info(
+                "X-профиль распарсен через Nitter: https://x.com/%s (инстанс: %s)",
+                handle,
+                inst_used or "-",
+            )
+            _NITTER_LOGGED_PARSED.add(handle_lc)
+
+        clean_avatar = (
+            normalize_twitter_avatar(avatar.replace("&amp;", "&")) if avatar else ""
+        )
+        return {"links": list(links), "avatar": clean_avatar, "name": name}
+    except Exception as e:
+        logger.warning("Nitter fallback error: %s", e)
+        return {}
+
+
+# Парс первый JSON-объект из stdout/stderr Node-скрипта
 def _extract_first_json_object(s: str) -> dict:
     if not s:
         return {}
@@ -169,18 +368,7 @@ def _extract_first_json_object(s: str) -> dict:
     return {}
 
 
-# Простой загрузчик HTML
-def _fetch_html(url: str, timeout: int = 30) -> str:
-    try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-        return r.text or ""
-    except Exception as e:
-        logger.warning("fetch_html error %s: %s", url, e)
-        return ""
-
-
-# Профиль: Nitter - Playwright
+# Универсальный извлекатель: ссылки, имя, аватар.
 def get_links_from_x_profile(
     profile_url: str, need_avatar: bool = True
 ) -> Dict[str, object]:
@@ -191,6 +379,7 @@ def get_links_from_x_profile(
 
     safe_url = normalize_twitter_url(orig_url)
 
+    # кэш
     cached = _PARSED_X_PROFILE_CACHE.get(safe_url)
     if cached:
         has_avatar = bool((cached.get("avatar") or "").strip())
@@ -202,216 +391,92 @@ def get_links_from_x_profile(
                 "yes" if has_avatar else "no",
             )
             return cached
-        else:
-            logger.info("Кэш без аватара, дообогащаем: %s", safe_url)
-
-    # nitter
-    parsed = _parse_nitter_profile(safe_url)
-
-    # playwright
-    use_playwright = False
-    if need_avatar and (
-        not (isinstance(parsed, dict) and (parsed.get("avatar") or "").strip())
-    ):
-        use_playwright = True
-
-    if use_playwright:
-
-        def _run_once(u: str):
-            try:
-                return subprocess.run(
-                    ["node", script_path, u],
-                    cwd=os.path.dirname(script_path),
-                    capture_output=True,
-                    text=True,
-                    timeout=90,
-                )
-            except Exception as e:
-                logger.warning("Ошибка запуска twitter_parser.js для %s: %s", u, e)
-                return None
-
-        had_nitter = bool(
-            isinstance(parsed, dict)
-            and (parsed.get("links") or parsed.get("name") or parsed.get("avatar"))
-        )
-        tries = [safe_url, safe_url + "/photo"]
-        for u in tries:
-            result = _run_once(u)
-            if not result:
-                continue
-            stdout = result.stdout or ""
-            stderr = result.stderr or ""
-            data = _extract_first_json_object(stdout) or _extract_first_json_object(
-                stderr
-            )
-            if isinstance(data, dict) and (
-                data.get("links") or data.get("avatar") or data.get("name")
-            ):
-                if isinstance(parsed, dict) and parsed:
-                    parsed = {
-                        "links": parsed.get("links") or data.get("links") or [],
-                        "avatar": data.get("avatar") or parsed.get("avatar") or "",
-                        "name": parsed.get("name") or data.get("name") or "",
-                    }
-                else:
-                    parsed = data
-                logger.info(
-                    "X-профиль распарсен через Playwright%s: %s",
-                    " (fallback после Nitter)" if had_nitter else "",
-                    safe_url,
-                )
-                break
-
-    if not isinstance(parsed, dict):
+        parsed = dict(cached)
+    else:
         parsed = {}
 
-    cleaned = {
-        "links": parsed.get("links") or [],
-        "avatar": parsed.get("avatar") or "",
-        "name": parsed.get("name") or "",
-    }
-    _PARSED_X_PROFILE_CACHE[safe_url] = cleaned
-    return cleaned
+    # nitter
+    if NITTER_ENABLED and not parsed:
+        parsed = _parse_nitter_profile(safe_url) or {}
 
+    if parsed and (parsed.get("links") or parsed.get("name") or parsed.get("avatar")):
+        cleaned = {
+            "links": parsed.get("links") or [],
+            "avatar": normalize_twitter_avatar(parsed.get("avatar") or ""),
+            "name": parsed.get("name") or "",
+        }
+        _PARSED_X_PROFILE_CACHE[safe_url] = cleaned
+        if not need_avatar:
+            return cleaned
+        if cleaned["avatar"]:
+            return cleaned
 
-def _verify_aggregator_belongs(
-    agg_url: str, site_domain: str, twitter_handle: str
-) -> Tuple[bool, dict]:
-    try:
-        html = _fetch_html(agg_url)
-        if not html:
-            return False, {}
-
-        socials = _extract_socials_from_html(html, agg_url)
-
-        # сайт совпадает по домену
-        site_match = any(_host(v).endswith(site_domain) for v in socials.values() if v)
-
-        # обратная ссылка на тот же твиттер-хэндл
-        handle = (twitter_handle or "").lower()
-        same_x = False
-        if handle:
-            p = re.compile(
-                rf"https?://(?:www\.)?(?:x\.com|twitter\.com)/{re.escape(handle)}(?:/|$)",
-                re.I,
+    def _run_once(u: str):
+        try:
+            return subprocess.run(
+                ["node", script_path, u],
+                cwd=os.path.dirname(script_path),
+                capture_output=True,
+                text=True,
+                timeout=90,
             )
-            if p.search(html):
-                same_x = True
+        except Exception as e:
+            logger.warning("Ошибка запуска twitter_parser.js для %s: %s", u, e)
+            return None
 
-        ok = bool(site_match or same_x)
-        if ok:
-            enriched = {}
-            for k, v in socials.items():
-                if not v:
-                    continue
-                if _host(v) in LINK_COLLECTION_DOMAINS:
-                    continue
-                enriched[k] = v
-            return True, enriched
-        return False, {}
-    except Exception as e:
-        logger.warning("verify aggregator error for %s: %s", agg_url, e)
-        return False, {}
+    tries = [safe_url] + ([safe_url + "/photo"] if need_avatar else [])
+    for u in tries:
+        result = _run_once(u)
+        if not result:
+            continue
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        data = _extract_first_json_object(stdout) or _extract_first_json_object(stderr)
 
+        if isinstance(data, dict) and (
+            data.get("links") or data.get("avatar") or data.get("name")
+        ):
+            merged = {
+                "links": (parsed.get("links") if isinstance(parsed, dict) else [])
+                or (data.get("links") or []),
+                "avatar": normalize_twitter_avatar(
+                    data.get("avatar")
+                    or (parsed.get("avatar") if isinstance(parsed, dict) else "")
+                    or ""
+                ),
+                "name": (parsed.get("name") if isinstance(parsed, dict) else "")
+                or (data.get("name") or ""),
+            }
+            _PARSED_X_PROFILE_CACHE[safe_url] = merged
+            logger.info("X-профиль распарсен через Playwright: %s", safe_url)
+            return merged
 
-# Парс профиль через nitter.net/<handle> без JS
-def _parse_nitter_profile(twitter_url: str) -> Dict[str, object]:
-    try:
-        if not NITTER_ENABLED:
-            return {}
-
-        m = re.match(
-            r"^https?://(?:www\.)?x\.com/([A-Za-z0-9_]{1,15})/?$",
-            (twitter_url or "") + "/",
+        # regex‑фолбэк: забираем pbs из stdout/stderr
+        blob = (stdout or "") + "\n" + (stderr or "")
+        m_img = re.search(
+            r"https://pbs\.twimg\.com/profile_images/[^\s\"']+\.(?:jpg|jpeg|png|webp)",
+            blob,
             re.I,
         )
-        handle = m.group(1) if m else ""
-        if not handle:
-            return {}
+        if m_img:
+            merged = {
+                "links": (parsed.get("links") if isinstance(parsed, dict) else [])
+                or [],
+                "avatar": normalize_twitter_avatar(m_img.group(0)),
+                "name": (parsed.get("name") if isinstance(parsed, dict) else "") or "",
+            }
+            _PARSED_X_PROFILE_CACHE[safe_url] = merged
+            logger.info(
+                "X-профиль распарсен через Playwright (regex-fallback): %s", safe_url
+            )
+            return merged
 
-        html, inst_used = _fetch_nitter_profile_html(handle)
-        if not html:
-            return {}
-
-        soup = BeautifulSoup(html, "html.parser")
-
-        # имя
-        name_tag = soup.select_one(".profile-card .profile-name-full")
-        name = (name_tag.get_text(strip=True) if name_tag else "") or ""
-
-        # ава (img.avatar) + fallback из <meta property="og:image">
-        avatar = ""
-
-        # <a class="profile-card-avatar"><img ...></a> или старый .profile-card img.avatar
-        img = soup.select_one(
-            ".profile-card a.profile-card-avatar img, "
-            "a.profile-card-avatar img, "
-            ".profile-card img.avatar"
-        )
-        if img and img.get("src"):
-            src = img["src"]
-            if src.startswith("/pic/"):
-                avatar = src[len("/pic/") :]
-                if avatar and not avatar.startswith("http"):
-                    avatar = "https://" + avatar.lstrip("/")
-            elif src.startswith("http"):
-                avatar = src
-
-        # общий fallback: любой <img> c pbs.twimg.com/profile_images/
-        if not avatar:
-            any_img = soup.select_one("img[src*='pbs.twimg.com/profile_images/']")
-            if any_img and any_img.get("src"):
-                src = any_img["src"]
-                if src.startswith("/pic/"):
-                    avatar = src[len("/pic/") :]
-                    if avatar and not avatar.startswith("http"):
-                        avatar = "https://" + avatar.lstrip("/")
-                elif src.startswith("http"):
-                    avatar = src
-
-        # og:image
-        if not avatar:
-            meta = soup.select_one("meta[property='og:image'], meta[name='og:image']")
-            og = (meta.get("content") or "") if meta else ""
-            if "pbs.twimg.com" in og:
-                avatar = og
-
-        # подчистка
-        if avatar:
-            avatar = avatar.replace("&amp;", "&")
-
-        # ссылки из BIO/Website (+ нормализация nitter redirect'ов)
-        links = set()
-        for a in soup.select(".profile-bio a, .profile-website a, a[href]"):
-            href = a.get("href", "") or ""
-            if href.startswith("/url/"):
-                href = href[len("/url/") :]
-            if href.startswith("/"):
-                continue
-            if href.startswith("http"):
-                links.add(force_https(href))
-
-        # лог-источник
-        logger.info(
-            "X-профиль распарсен через Nitter: %s (инстанс: %s)",
-            f"https://x.com/{handle}",
-            inst_used or "-",
-        )
-
-        return {"links": list(links), "avatar": avatar, "name": name}
-    except Exception as e:
-        logger.warning("Nitter fallback error: %s", e)
-        return {}
+    return _PARSED_X_PROFILE_CACHE.get(
+        safe_url, {"links": [], "avatar": "", "name": ""}
+    )
 
 
-# Хелпер: совпадение бренда по хэндлу
-def _relaxed_contains_brand(handle: str, brand_token: str) -> bool:
-    h = re.sub(r"[^a-z0-9]", "", (handle or "").lower())
-    b = re.sub(r"[^a-z0-9]", "", (brand_token or "").lower())
-    return bool(h and b and b in h)
-
-
-# Работа с профилями
+# Поиск X‑профили в html (из <a> и «голых» упоминаний)
 def extract_twitter_profiles(html: str, base_url: str) -> List[str]:
     soup = BeautifulSoup(html or "", "html.parser")
     profiles = set()
@@ -434,7 +499,7 @@ def extract_twitter_profiles(html: str, base_url: str) -> List[str]:
         if m:
             profiles.add(clean)
 
-    # "голые" упоминания в тексте/скриптах
+    # "голые" упоминания
     text = html or ""
     for m in re.finditer(
         r"https?://(?:www\.)?(?:x\.com|twitter\.com)/([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_/])",
@@ -452,26 +517,22 @@ def extract_twitter_profiles(html: str, base_url: str) -> List[str]:
 
     out = list(profiles)
     if out:
-        logger.info("Найдено X‑профилей на %s: %d", base_url, len(out))
+        logger.info("Список X-профилей на %s: %s", base_url, out)
     return out
 
 
-# Возврат всех ссылок на link-агрегаторы (linktr.ee, link3.to, …)
+# Поиск ссылок на линк‑агрегаторы на странице
 def extract_link_collection_urls(html: str, base_url: str) -> List[str]:
     soup = BeautifulSoup(html or "", "html.parser")
     urls = []
     for a in soup.find_all("a", href=True):
         href = urljoin(base_url, a["href"])
-        try:
-            host = urlparse(href).netloc.lower().replace("www.", "")
-        except Exception:
-            continue
-        if any(host == d or host.endswith("." + d) for d in LINK_COLLECTION_DOMAINS):
+        if is_link_aggregator(href):
             urls.append(force_https(href))
     return urls
 
 
-# Фильтр "пустых"/новых профилей X (без авы, без имени, без ссылок)
+# Профиль валиден, если не полностью пустой/"new to X" без ссылок и авы
 def _is_valid_x_profile(parsed: dict) -> bool:
     if not isinstance(parsed, dict):
         return False
@@ -483,65 +544,64 @@ def _is_valid_x_profile(parsed: dict) -> bool:
     return True
 
 
-# Соц-линки из HTML
-def _extract_socials_from_html(html: str, base_url: str) -> dict:
-    SOCIAL_PATTERNS = {
-        "twitterURL": re.compile(r"twitter\.com|x\.com", re.I),
-        "discordURL": re.compile(r"discord\.gg|discord\.com", re.I),
-        "telegramURL": re.compile(r"t\.me|telegram\.me", re.I),
-        "youtubeURL": re.compile(r"youtube\.com|youtu\.be", re.I),
-        "linkedinURL": re.compile(r"linkedin\.com", re.I),
-        "redditURL": re.compile(r"reddit\.com", re.I),
-        "mediumURL": re.compile(r"medium\.com", re.I),
-        "githubURL": re.compile(r"github\.com", re.I),
-        "websiteURL": re.compile(r"^https?://", re.I),
-    }
-    soup = BeautifulSoup(html or "", "html.parser")
-    out = {k: "" for k in SOCIAL_PATTERNS}
-    for a in soup.find_all("a", href=True):
-        abs_href = urljoin(base_url, a["href"])
-        for key, pattern in SOCIAL_PATTERNS.items():
-            if pattern.search(abs_href):
-                out[key] = force_https(abs_href)
-    out["websiteURL"] = out.get("websiteURL") or force_https(base_url)
-    return out
+# Проверка twitter_url по bio/агрегатору/сайту, возврат (ok, enriched_socials, agg_url)
+def verify_twitter_and_enrich(
+    twitter_url: str, site_domain: str
+) -> Tuple[bool, dict, str]:
+    if _VERIFIED_TW_URL and normalize_twitter_url(twitter_url) == normalize_twitter_url(
+        _VERIFIED_TW_URL
+    ):
+        return True, dict(_VERIFIED_ENRICHED), _VERIFIED_AGG_URL
 
-
-# Проверка twitter_url
-def verify_twitter_and_enrich(twitter_url: str, site_domain: str) -> Tuple[bool, dict]:
     data = get_links_from_x_profile(twitter_url, need_avatar=False)
     if not _is_valid_x_profile(data):
-        return False, {}
+        return False, {}, ""
 
-    # handle для обратной проверки на агрегаторе
     m = re.match(
         r"^https?://(?:www\.)?x\.com/([A-Za-z0-9_]{1,15})/?$",
         (twitter_url or "") + "/",
         re.I,
     )
     handle = m.group(1) if m else ""
-
     bio_links = [force_https(b) for b in (data.get("links") or [])]
 
-    # прямой сайт - мгновенная верификация
+    # агрегаторы из bio
+    aggs = _find_aggs_in_links(bio_links)
+    for agg_url in aggs:
+        ok, socials_raw = _verify_agg_belongs(agg_url, site_domain, handle)
+        if ok:
+            enriched = {
+                k: v for k, v in (socials_raw or {}).items() if k != "websiteURL"
+            }
+            return True, enriched, agg_url
+
+    # прямой сайт в bio
     for b in bio_links:
         try:
             if _host(b).endswith(site_domain):
-                return True, {}
+                logger.info(
+                    "BIO содержит сайт %s — X подтвержден без агрегатора", site_domain
+                )
+                return True, {}, ""
         except Exception:
             pass
 
-    # линк-агрегаторы - подтверждение принадлежности
-    for b in bio_links:
-        if _host(b) in LINK_COLLECTION_DOMAINS:
-            ok, enriched = _verify_aggregator_belongs(b, site_domain, handle)
-            if ok:
-                return True, enriched
+    if aggs:
+        return False, {}, aggs[0]
 
-    return False, {}
+    return False, {}, ""
 
 
-# Генерация кандидатов хэндлов по бренду (<=15 символов)
+# Загрузка страницы и извлечение X‑профилей
+def fetch_and_extract_twitter_profiles(from_url: str) -> List[str]:
+    try:
+        html = fetch_url_html(from_url, prefer="auto", timeout=30)
+        return extract_twitter_profiles(html, from_url)
+    except Exception:
+        return []
+
+
+# Генерация возможных хэндлов по бренду (<=15 символов)
 def guess_twitter_handles(brand_token: str) -> List[str]:
     bt = (brand_token or "").strip().lower()
     if not bt:
@@ -570,16 +630,7 @@ def guess_twitter_handles(brand_token: str) -> List[str]:
     return out
 
 
-# Утилита: загрузка страницы и парс всех X-профилей
-def fetch_and_extract_twitter_profiles(from_url: str) -> List[str]:
-    try:
-        html = _fetch_html(from_url)
-        return extract_twitter_profiles(html, from_url)
-    except Exception:
-        return []
-
-
-# Выбор "лучшего" X-профиля
+# Выбор лучшего X‑профиля по простому скорингу (с проверками bio и observed)
 def pick_best_twitter(
     current_url: str | None,
     candidates: List[str],
@@ -665,29 +716,38 @@ def pick_best_twitter(
     return best[0] or current_url
 
 
-# Аватары
-def normalize_twitter_avatar(url: str) -> str:
-    u = force_https(url or "")
+_VERIFIED_TW_URL: str = ""
+_VERIFIED_AGG_URL: str = ""
+_VERIFIED_ENRICHED: dict = {}
 
-    # nitter: /pic/https://pbs.twimg.com/...
-    if u.startswith("/pic/"):
-        u = "https://" + u[len("/pic/") :].lstrip("/")
-    # safety
-    if u.startswith("pbs.twimg.com/"):
-        u = "https://" + u
 
-    # нормализация размер до 400x400
-    u = re.sub(
-        r"(_normal|_bigger|_mini|_\d{2,4}x\d{2,4})\.(jpg|jpeg|png|webp)(\?.*)?$",
-        r"_400x400.\2",
-        u,
-        flags=re.I,
+# Верификация "домашнего" X (из found_socials)
+def decide_home_twitter(
+    home_twitter_url: str, site_domain: str, trust_home: bool = True
+):
+    global _VERIFIED_TW_URL, _VERIFIED_ENRICHED, _VERIFIED_AGG_URL
+    if not home_twitter_url:
+        return "", {}, False, ""
+
+    ok, extra, agg_url = verify_twitter_and_enrich(home_twitter_url, site_domain)
+    norm = normalize_twitter_url(home_twitter_url)
+
+    if ok:
+        logger.info("Домашний X‑профиль верифицирован: %s", norm)
+        _VERIFIED_TW_URL = norm
+        _VERIFIED_ENRICHED = dict(extra or {})
+        _VERIFIED_AGG_URL = agg_url or ""
+        return norm, (extra or {}), True, (agg_url or "")
+
+    logger.info(
+        "Домашний X‑профиль не верифицирован (игнор, даже при trust_home=%s): %s",
+        bool(trust_home),
+        norm,
     )
-    # сброс query/fragment
-    u = re.sub(r"(\.(?:jpg|jpeg|png|webp))(?:\?[^#]*)?(?:#.*)?$", r"\1", u, flags=re.I)
-    return u
+    return "", {}, False, ""
 
 
+# Поиск и фикс один верифицированный X в рамках процесса.
 def select_verified_twitter(
     found_socials: dict,
     socials: dict,
@@ -697,190 +757,151 @@ def select_verified_twitter(
     url: str,
     max_internal_links: int = 10,
     trust_home: bool = False,
-) -> tuple[str, dict]:
+) -> tuple[str, dict, str]:
+    global _VERIFIED_TW_URL, _VERIFIED_ENRICHED, _VERIFIED_AGG_URL
+
+    if _VERIFIED_TW_URL:
+        return _VERIFIED_TW_URL, dict(_VERIFIED_ENRICHED), _VERIFIED_AGG_URL
+
     twitter_final = ""
     enriched_from_agg = {}
+    aggregator_url = ""
 
-    # домашний X (верификация)
+    # проверка домашнего twitterURL
     if found_socials.get("twitterURL"):
-        twitter_final, enriched_from_agg, _verified = decide_home_twitter(
+        t_final, t_extra, _verified, agg_url = decide_home_twitter(
             home_twitter_url=found_socials["twitterURL"],
             site_domain=site_domain,
             trust_home=trust_home,
         )
+        if t_final:
+            _VERIFIED_TW_URL = twitter_final = normalize_twitter_url(t_final)
+            _VERIFIED_ENRICHED = dict(t_extra or {})
+            _VERIFIED_AGG_URL = aggregator_url = agg_url or ""
+            return twitter_final, enriched_from_agg, aggregator_url
 
-    # кандидаты из browser_fetch.js (все X‑ссылки из рендеренного DOM)
+    # сбор кандидатов
     browser_twitter_ordered = []
     if isinstance(socials, dict) and isinstance(socials.get("twitterAll"), list):
         browser_twitter_ordered = [
             u for u in socials["twitterAll"] if isinstance(u, str) and u
         ]
 
-    # если итогового X нет - сбор альтернативы
-    if not twitter_final:
-        candidates_ordered = []
+    candidates_ordered = list(browser_twitter_ordered)
 
-        # DOM‑кандидаты
-        candidates_ordered.extend(browser_twitter_ordered)
+    def _extract_twitter_profiles_from(html_text: str, base: str):
+        try:
+            return extract_twitter_profiles(html_text, base)
+        except Exception:
+            return []
 
-        # сырой HTML главной
-        candidates_ordered.extend(_extract_twitter_profiles(html, url))
+    candidates_ordered.extend(_extract_twitter_profiles_from(html, url))
 
-        # импорты отложенные
-        from core.web_parser import fetch_url_html, get_internal_links
+    # локальный импорт, чтобы избежать циклов
+    from core.parser_web import fetch_url_html, get_internal_links
 
-        # внутренние страницы (до 5)
-        for link in get_internal_links(
-            html, url, max_links=min(max_internal_links, 10)
-        )[:5]:
-            try:
-                page_html = fetch_url_html(link)
-                candidates_ordered.extend(_extract_twitter_profiles(page_html, link))
-            except Exception:
-                pass
+    for link in get_internal_links(html, url, max_links=min(max_internal_links, 10))[
+        :5
+    ]:
+        try:
+            page_html = fetch_url_html(link)
+            candidates_ordered.extend(_extract_twitter_profiles_from(page_html, link))
+        except Exception:
+            pass
 
-        # docs
-        docs_html = ""
-        docs_url_local = found_socials.get("documentURL")
-        if docs_url_local:
-            try:
-                docs_html = fetch_url_html(docs_url_local)
-                candidates_ordered.extend(
-                    _extract_twitter_profiles(docs_html, docs_url_local)
-                )
-            except Exception:
-                docs_html = ""
+    docs_html = ""
+    docs_url_local = found_socials.get("documentURL")
+    if docs_url_local:
+        try:
+            docs_html = fetch_url_html(docs_url_local)
+            candidates_ordered.extend(
+                _extract_twitter_profiles_from(docs_html, docs_url_local)
+            )
+        except Exception:
+            docs_html = ""
 
-        # линк‑агрегаторы со страницы
-        for coll_url in _extract_link_collection_urls(html, url):
+    for coll_url in extract_link_collection_urls(html, url):
+        try:
+            c_html = fetch_url_html(coll_url)
+            candidates_ordered.extend(_extract_twitter_profiles_from(c_html, coll_url))
+        except Exception:
+            pass
+
+    if docs_url_local and docs_html:
+        for coll_url in extract_link_collection_urls(docs_html, docs_url_local):
             try:
                 c_html = fetch_url_html(coll_url)
-                candidates_ordered.extend(_extract_twitter_profiles(c_html, coll_url))
+                candidates_ordered.extend(
+                    _extract_twitter_profiles_from(c_html, coll_url)
+                )
             except Exception:
                 pass
 
-        # линк‑агрегаторы из docs
-        if docs_url_local and docs_html:
-            for coll_url in _extract_link_collection_urls(docs_html, docs_url_local):
-                try:
-                    c_html = fetch_url_html(coll_url)
-                    candidates_ordered.extend(
-                        _extract_twitter_profiles(c_html, coll_url)
-                    )
-                except Exception:
-                    pass
+    # дедуп с сохранением порядка и нормализацией
+    seen = set()
+    deduped = []
+    for u in candidates_ordered:
+        if not isinstance(u, str) or not u:
+            continue
+        u_norm = normalize_twitter_url(u)
+        if u_norm not in seen:
+            deduped.append(u_norm)
+            seen.add(u_norm)
 
-        # дедуп с сохранением порядка и нормализацией
-        seen = set()
-        deduped = []
-        for u in candidates_ordered:
-            if not isinstance(u, str) or not u:
-                continue
-            u_norm = normalize_twitter_url(u)
-            if u_norm not in seen:
-                deduped.append(u_norm)
-                seen.add(u_norm)
+    def _handle_contains_brand(u: str) -> bool:
+        m = re.match(
+            r"^https?://(?:www\.)?x\.com/([A-Za-z0-9_]{1,15})/?$", (u or "") + "/", re.I
+        )
+        h = m.group(1).lower() if m else ""
+        bt = (brand_token or "").lower()
+        return bool(bt and h and bt in h)
 
-        # хелпер: "хэндл содержит brand_token"
-        def _handle_contains_brand(u: str) -> bool:
-            m = re.match(
-                r"^https?://(?:www\.)?x\.com/([A-Za-z0-9_]{1,15})/?$",
-                (u or "") + "/",
-                re.I,
+    dom_set = {normalize_twitter_url(u) for u in browser_twitter_ordered}
+
+    first_pass = [u for u in deduped if u in dom_set and _handle_contains_brand(u)]
+    second_pass = [u for u in deduped if u in dom_set and not _handle_contains_brand(u)]
+    third_pass = [u for u in deduped if u not in dom_set and _handle_contains_brand(u)]
+    fourth_pass = [
+        u for u in deduped if u not in dom_set and not _handle_contains_brand(u)
+    ]
+    ordered_checks = first_pass + second_pass + third_pass + fourth_pass
+
+    for u in ordered_checks:
+        ok, extra, agg_url = verify_twitter_and_enrich(u, site_domain)
+        if ok:
+            twitter_final = u
+            enriched_from_agg = extra or {}
+            aggregator_url = agg_url or ""
+            _VERIFIED_TW_URL = twitter_final
+            _VERIFIED_ENRICHED = dict(enriched_from_agg)
+            _VERIFIED_AGG_URL = aggregator_url
+            logger.info(
+                "X подтвержден: %s - дальнейшие проверки остановлены", twitter_final
             )
-            h = m.group(1).lower() if m else ""
-            return bool(brand_token and h and brand_token.lower() in h)
+            return twitter_final, enriched_from_agg, aggregator_url
 
-        dom_set = {normalize_twitter_url(u) for u in browser_twitter_ordered}
+    # фолбэк: брендоподобный без верификации
+    brand_like = []
+    for u in deduped:
+        m = re.match(
+            r"^https?://(?:www\.)?x\.com/([A-Za-z0-9_]{1,15})/?$", (u or "") + "/", re.I
+        )
+        handle = m.group(1) if m else ""
+        if handle and (brand_token or "").lower() in handle.lower():
+            brand_like.append(u)
 
-        # прио
-        first_pass = [u for u in deduped if u in dom_set and _handle_contains_brand(u)]
-        second_pass = [
-            u for u in deduped if u in dom_set and not _handle_contains_brand(u)
-        ]
-        third_pass = [
-            u for u in deduped if u not in dom_set and _handle_contains_brand(u)
-        ]
-        fourth_pass = [
-            u for u in deduped if u not in dom_set and not _handle_contains_brand(u)
-        ]
-        ordered_checks = first_pass + second_pass + third_pass + fourth_pass
+    twitter_final = brand_like[0] if brand_like else ""
+    if twitter_final:
+        logger.info(
+            "Фолбэк: выбран брендоподобный X без верификации: %s", twitter_final
+        )
+    else:
+        logger.info("Фолбэк: брендоподобных X не найден — twitterURL пустой.")
 
-        # верификация
-        for u in ordered_checks:
-            ok, extra = _verify_twitter_and_enrich(u, site_domain)
-            if ok:
-                twitter_final = u
-                enriched_from_agg = extra
-                break
-
-        # фолбек
-        if not twitter_final:
-            brand_like = []
-            for u in deduped:
-                m = re.match(
-                    r"^https?://(?:www\.)?x\.com/([A-Za-z0-9_]{1,15})/?$",
-                    (u or "") + "/",
-                    re.I,
-                )
-                handle = m.group(1) if m else ""
-                if _relaxed_contains_brand(handle, brand_token):
-                    brand_like.append(u)
-
-            twitter_final = brand_like[0] if brand_like else ""
-
-            if twitter_final:
-                logger.info(
-                    "Фолбэк: выбран брендоподобный X без верификации: %s", twitter_final
-                )
-            else:
-                logger.info(
-                    "Фолбэк: брендоподобных X не найдено — оставляю twitterURL пустым."
-                )
-
-    return twitter_final, enriched_from_agg
+    return twitter_final, enriched_from_agg, aggregator_url
 
 
-# Нормализация url
-def normalize_twitter_url(u: str) -> str:
-    if not u:
-        return u
-    u = force_https(u.strip())
-    u = re.sub(r"^https://twitter\.com", "https://x.com", u, flags=re.I)
-    u = re.sub(r"[?#].*$", "", u)
-    u = re.sub(
-        r"/(photo|media|with_replies|likes|lists|following|followers)/?$",
-        "",
-        u,
-        flags=re.I,
-    )
-    m = re.match(r"^https://x\.com/([A-Za-z0-9_]{1,15})/?$", u, re.I)
-    return f"https://x.com/{m.group(1)}" if m else u.rstrip("/")
-
-
-# Возврат верифицированного X-профиля
-def decide_home_twitter(
-    home_twitter_url: str, site_domain: str, trust_home: bool = True
-):
-    if not home_twitter_url:
-        return "", {}, False
-
-    ok, extra = verify_twitter_and_enrich(home_twitter_url, site_domain)
-    norm = normalize_twitter_url(home_twitter_url)
-
-    if ok:
-        logger.info("Домашний X‑профиль верифицирован: %s", norm)
-        return norm, (extra or {}), True
-
-    logger.info(
-        "Домашний X‑профиль не верифицирован (игнор, даже при trust_home=%s): %s",
-        bool(trust_home),
-        norm,
-    )
-    return "", {}, False
-
-
-# Загрузка авы
+# Скачивание авы
 def download_twitter_avatar(
     avatar_url: str | None,
     twitter_url: str | None,
@@ -898,7 +919,7 @@ def download_twitter_avatar(
         )
         return None
 
-    # если аватар не передан - попытка получить из профиля
+    # попытка получить avatar_url из профиля
     if not avatar_url:
         try:
             prof = get_links_from_x_profile(twitter_url, need_avatar=True)
@@ -909,14 +930,21 @@ def download_twitter_avatar(
             )
             avatar_url = ""
 
+    # быстрый повтор
+    if not avatar_url:
+        try:
+            prof2 = get_links_from_x_profile(twitter_url, need_avatar=True)
+            avatar_url = prof2.get("avatar", "") if isinstance(prof2, dict) else ""
+        except Exception:
+            avatar_url = ""
+
     if not avatar_url:
         logger.warning(
-            "download_twitter_avatar: avatar пуст - ни Nitter, ни Playwright не дали URL для %s",
+            "download_twitter_avatar: avatar пуст - ни Nitter/HTTP /photo, ни Playwright не дали URL для %s",
             twitter_url,
         )
         return None
 
-    # нормализация url и параметры запроса
     avatar_url_raw = normalize_twitter_avatar(force_https(avatar_url))
     logger.info("Avatar URL: %s", avatar_url_raw)
 
@@ -939,10 +967,7 @@ def download_twitter_avatar(
         for i in range(tries):
             try:
                 r = requests.get(
-                    url_img,
-                    timeout=timeout,
-                    headers=headers,
-                    allow_redirects=True,
+                    url_img, timeout=timeout, headers=headers, allow_redirects=True
                 )
                 if r.status_code == 200 and r.content:
                     return r
@@ -992,7 +1017,37 @@ def download_twitter_avatar(
         return None
 
 
-# Алиасы
+# Сброс зафиксированного состояния верификации и кэшей
+def reset_verified_state(full: bool = False) -> None:
+    global _VERIFIED_TW_URL, _VERIFIED_ENRICHED, _VERIFIED_AGG_URL
+    _VERIFIED_TW_URL = ""
+    _VERIFIED_ENRICHED = {}
+    _VERIFIED_AGG_URL = ""
+
+    if full:
+        try:
+            _PARSED_X_PROFILE_CACHE.clear()
+        except Exception:
+            pass
+        try:
+            _NITTER_HTML_CACHE.clear()
+        except Exception:
+            pass
+        try:
+            _NITTER_LOGGED_HTTP200.clear()
+        except Exception:
+            pass
+        try:
+            _NITTER_LOGGED_PARSED.clear()
+        except Exception:
+            pass
+        try:
+            _NITTER_BAD.clear()
+        except Exception:
+            pass
+
+
+# Алиасы (для обратной совместимости)
 _extract_twitter_profiles = extract_twitter_profiles
 _extract_link_collection_urls = extract_link_collection_urls
 _is_valid_x_profile = _is_valid_x_profile

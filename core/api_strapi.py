@@ -4,17 +4,14 @@ import os
 import markdown
 import requests
 from core.log_utils import get_logger
+from core.normalize import force_https
+from core.parser_youtube import youtube_oembed_title, youtube_watch_to_embed
 from core.status import (
     ADD,
     ERROR,
     SKIP,
     check_strapi_status,
     log_strapi_status,
-)
-from core.web_parser import (
-    force_https,
-    youtube_oembed_title,
-    youtube_watch_to_embed,
 )
 
 # Логгер

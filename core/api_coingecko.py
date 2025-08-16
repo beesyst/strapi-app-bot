@@ -4,6 +4,7 @@ import time
 
 import requests
 from core.log_utils import get_logger
+from core.normalize import brand_from_url, normalize_query
 
 # Логгер
 logger = get_logger("coingecko")
@@ -24,14 +25,14 @@ def load_coingecko_api_base():
 COINGECKO_API_BASE = load_coingecko_api_base()
 
 
-# Быстрый поиск coin id на Coingecko по названию или тикеру
+# Быстрый поиск coin id на coingecko по названию или тикеру
 def search_coin_id(query, retries=3):
     for attempt in range(retries):
         try:
-            logger.info(f"Поиск CoinGecko ID по имени/тикеру: {query}")
+            q_api = normalize_query(query) or (query or "").strip()
             resp = requests.get(
                 f"{COINGECKO_API_BASE}/search",
-                params={"query": query},
+                params={"query": q_api},
                 timeout=10,
                 headers={"User-Agent": "Mozilla/5.0"},
             )
@@ -46,15 +47,24 @@ def search_coin_id(query, retries=3):
             coins = data.get("coins", [])
             if not coins:
                 return ""
-            query_l = query.lower()
+            query_norm = normalize_query(query)
             for coin in coins:
-                # Прямое совпадение по имени или символу
-                if coin["name"].lower() == query_l or coin["symbol"].lower() == query_l:
-                    logger.info(f"Найдено точное совпадение: {coin['id']}")
+                if (
+                    normalize_query(coin.get("name", "")) == query_norm
+                    or normalize_query(coin.get("symbol", "")) == query_norm
+                    or normalize_query(coin.get("id", "")) == query_norm
+                ):
                     return coin["id"]
-            # Фоллбек: просто первый найденный
+            # Фоллбек: первый релевантный (по подстроке), затем первый вообще
+            for coin in coins:
+                name_n = normalize_query(coin.get("name", ""))
+                sym_n = normalize_query(coin.get("symbol", ""))
+                if query_norm and (query_norm in name_n or query_norm in sym_n):
+                    logger.info(f"Ближайшее совпадение: {coin['id']}")
+                    return coin["id"]
             logger.info(f"Используем первый найденный: {coins[0]['id']}")
             return coins[0]["id"]
+
         except Exception as e:
             logger.warning(f"Ошибка поиска по имени: {e}")
             time.sleep(3)
@@ -66,12 +76,7 @@ def search_coin_id_by_website(website_url, retries=3, max_coins=10):
     for attempt in range(retries):
         try:
             logger.info(f"Медленный поиск по сайту: {website_url}")
-            domain = (
-                website_url.lower()
-                .replace("https://", "")
-                .replace("http://", "")
-                .split("/")[0]
-            )
+            domain = brand_from_url(website_url)
             resp = requests.get(
                 f"{COINGECKO_API_BASE}/coins/list",
                 timeout=20,
@@ -105,7 +110,7 @@ def search_coin_id_by_website(website_url, retries=3, max_coins=10):
                     details_json = details.json()
                     homepage_list = details_json.get("links", {}).get("homepage", [])
                     for url in homepage_list:
-                        if url and domain in url:
+                        if url and brand_from_url(url) == domain:
                             logger.info(f"Найдено по домену: {coin_id}")
                             return coin_id
                 except Exception:
@@ -121,7 +126,17 @@ def search_coin_id_by_website(website_url, retries=3, max_coins=10):
 
 # Комбинированный поиск - сначала по имени, потом по сайту
 def get_coin_id_best(name, website_url):
-    coin_id = search_coin_id(name)
+    # по нормализованному имени (altlayer)
+    coin_id = search_coin_id(normalize_query(name))
+    # быстрый поиск по бренду из URL (altlayer)
+    if not coin_id and website_url:
+        brand = brand_from_url(website_url)
+        if brand:
+            coin_id = search_coin_id(brand)
+    # как есть (на случай бренднеймов с пробелами и пр.)
+    if not coin_id and name:
+        coin_id = search_coin_id(name)
+    # медленный обход /coins/{id} с homepage
     if not coin_id and website_url:
         coin_id = search_coin_id_by_website(website_url)
     return coin_id

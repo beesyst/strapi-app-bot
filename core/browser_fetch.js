@@ -1,12 +1,63 @@
-// core/browser_fetch.js
 const { chromium } = require('playwright');
 const { newInjectedContext } = require('fingerprint-injector');
 
 const url = process.argv[2];
-console.error('>>> browser_fetch.js запущен для: ' + url);
+const mode = (process.argv[3] || '').toLowerCase();
+const RAW = mode === '--raw' || mode === 'raw';
+console.error('>>> browser_fetch.js запущен для: ' + url + (RAW ? ' [RAW]' : ''));
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+// Анти-бот детектор (Cloudflare & co)
+const ANTI_BOT_PATTERNS = [
+  "verifying you are human",
+  "checking your browser",
+  "review the security of your connection",
+  "cf-challenge",
+  "cloudflare",
+  "attention required!",
+];
+
+async function detectAntiBot(page, response) {
+  try {
+    const server = response?.headers()?.server || "";
+    const status = response?.status?.() || null;
+
+    // status-based hint
+    if (status === 403 || status === 503) {
+      return { detected: true, kind: status === 403 ? "403" : "503", server };
+    }
+    // server header / fake-200 with cf page
+    if (server && /cloudflare/i.test(server)) {
+      const html = await page.content();
+      const low = html.slice(0, 50000).toLowerCase();
+      const hit = ANTI_BOT_PATTERNS.find(p => low.includes(p));
+      if (hit) return { detected: true, kind: "cloudflare", server };
+    }
+
+    // DOM
+    const hasCF = await page.evaluate(() => {
+      const text = (document.body?.innerText || "").toLowerCase();
+      const selectors = [
+        '#cf-challenge-running',
+        'div#cf-please-wait',
+        'div.cf-browser-verification',
+        'div[id*="challenge"]',
+      ];
+      if (selectors.some(sel => document.querySelector(sel))) return true;
+      return /verifying you are human|checking your browser|review the security|cloudflare|attention required!/i.test(text);
+    });
+    if (hasCF) {
+      return { detected: true, kind: "cloudflare", server };
+    }
+
+    return { detected: false, kind: "", server };
+  } catch (e) {
+    console.error("detectAntiBot failed:", e?.message || e);
+    return { detected: false, kind: "", server: "" };
+  }
+}
 
 async function makeContext(browser) {
   // попытка создать контекст с fingerprint-injector; при падении - безопасный fallback
@@ -34,14 +85,14 @@ async function robustGoto(page, targetUrl) {
   ];
   for (const opts of tries) {
     try {
-      await page.goto(targetUrl, opts);
+      const resp = await page.goto(targetUrl, opts);
       try { await page.waitForLoadState('networkidle', { timeout: 12000 }); } catch {}
-      return true;
+      return { ok: true, response: resp || null };
     } catch (e) {
       console.error('goto failed with', opts.waitUntil, e?.message || e);
     }
   }
-  return false;
+  return { ok: false, response: null };
 }
 
 function normalizeTwitter(u) {
@@ -76,12 +127,15 @@ function absUrl(href, base) {
     context = await makeContext(browser);
     const page = await context.newPage();
 
-    const ok = await robustGoto(page, url);
-    if (!ok) {
+    const nav = await robustGoto(page, url);
+    if (!nav.ok) {
       console.log(JSON.stringify({ websiteURL: url, error: 'goto_failed' }));
       await browser.close();
       process.exit(0);
     }
+
+    // антибот-детекция (прилетит в JSON как socials.antiBot)
+    const antiBot = await detectAntiBot(page, nav.response);
 
     // ленивая отрисовка футера/виджетов
     try {
@@ -90,6 +144,20 @@ function absUrl(href, base) {
         await new Promise(r => setTimeout(r, 600));
       });
     } catch {}
+
+    // raw mode: возврат html, статус и антибот-инфо
+    if (RAW) {
+      const status = nav.response?.status?.() || 0;
+      const html = await page.content();
+      const instance = (() => { try { return new URL(url).origin; } catch { return ''; } })();
+      try {
+        console.log(JSON.stringify({ ok: !!html, html, status, antiBot, instance }));
+      } catch {
+        console.log(JSON.stringify({ ok: false, html: '', status, antiBot, instance }));
+      }
+      await browser.close();
+      process.exit(0);
+    }
 
     // ожидание основных якорей соцсетей (включая x.com)
     try {
@@ -154,11 +222,8 @@ function absUrl(href, base) {
       socials.twitterAll = socials.twitterAll.map(normalizeTwitter);
     }
 
-
-    // нормализация twitter -> x.com
-    if (socials.twitterURL) socials.twitterURL = normalizeTwitter(socials.twitterURL);
-
     socials.websiteURL = url;
+    socials.antiBot = antiBot; // <-- добавили
 
     // YouTube featured
     let featuredVideos = [];
@@ -221,7 +286,7 @@ function absUrl(href, base) {
     try {
       console.log(JSON.stringify(socials));
     } catch {
-      console.log(JSON.stringify({ websiteURL: url }));
+      console.log(JSON.stringify({ websiteURL: url, antiBot, error: 'json_failed' }));
     }
 
     await browser.close();

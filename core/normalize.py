@@ -1,9 +1,54 @@
 import re
+from urllib.parse import urlparse
 
 from core.log_utils import get_logger
 
 # Логгер
-logger = get_logger("host")
+logger = get_logger("normalize")
+
+
+# Социальные и url нормализации
+def force_https(url: str) -> str:
+    """Приводит URL к https"""
+    if not url:
+        return url
+    url = url.strip()
+    url = re.sub(r"^http://", "https://", url, flags=re.I)
+    return url
+
+
+# Чистка имени проекта от лишних символов
+def clean_project_name(name: str) -> str:
+    if not name:
+        return ""
+    name = re.sub(r"\s+", " ", name)
+    return name.strip(" -–—_|")
+
+
+# Определение, что имя проекта мусорное
+def is_bad_name(name: str) -> bool:
+    if not name or len(name) < 2:
+        return True
+    blacklist = ["home", "index", "welcome", "untitled"]
+    return name.strip().lower() in blacklist
+
+
+# Привод соцссылок к канонике
+def normalize_socials(socials: dict) -> dict:
+    if socials.get("twitterURL"):
+        socials["twitterURL"] = socials["twitterURL"].replace("twitter.com", "x.com")
+
+    if socials.get("youtubeURL"):
+
+        from core.parser_youtube import youtube_to_handle
+
+        socials["youtubeURL"] = youtube_to_handle(socials["youtubeURL"])
+
+    for k, v in list(socials.items()):
+        if not v:
+            continue
+        socials[k] = force_https(v)
+    return socials
 
 
 # Разбивка markdown на секции по "## Title"
@@ -213,3 +258,21 @@ def normalize_content_to_template_md_with_retry(
                 return ""
         return out_md.strip()
     return out_md.strip()
+
+
+# Универсальная нормализация строки-запроса для AI/поиска/coin-id
+def normalize_query(q: str) -> str:
+    q = (q or "").strip().lower()
+    q = re.sub(r"\.(io|org|com|xyz|app|net|gg|fi|co|ai|tech)$", "", q)
+    q = re.sub(r"[^a-z0-9]+", "", q)
+    return q
+
+
+# Извлечение бренда/токена из url (altlayer.io -> altlayer)
+def brand_from_url(website_url: str) -> str:
+    try:
+        host = urlparse(website_url).netloc.lower().replace("www.", "")
+        token = host.split(":")[0].split(".")[0]
+        return token
+    except Exception:
+        return ""

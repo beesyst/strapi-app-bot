@@ -17,7 +17,9 @@ from core.api_strapi import (
     get_project_category_ids,
     try_upload_logo,
 )
+from core.collector import collect_main_data
 from core.log_utils import get_logger
+from core.normalize import brand_from_url
 from core.seo_utils import build_seo_section
 from core.status import (
     ADD,
@@ -26,10 +28,6 @@ from core.status import (
     UPDATE,
     check_mainjson_status,
     log_mainjson_status,
-)
-from core.web_parser import (
-    collect_main_data,
-    get_domain_name,
 )
 
 # Логгеры
@@ -111,8 +109,11 @@ async def process_partner(
         socials_future = loop.run_in_executor(
             executor, collect_main_data, url, main_template, storage_path
         )
+
+        # временная заготовка для AI
         main_data_for_ai = dict(main_template)
         main_data_for_ai["name"] = domain.capitalize()
+        main_data_for_ai.setdefault("socialLinks", {})
         main_data_for_ai["socialLinks"]["websiteURL"] = url
 
         # Параллельно только контент и coin
@@ -127,6 +128,15 @@ async def process_partner(
         main_data = await socials_future
         if isinstance(main_data, tuple):
             main_data = main_data[0]
+
+        # подстраховка
+        for k, v in main_template.items():
+            if k not in main_data:
+                main_data[k] = v
+
+        # websiteURL в socialLinks
+        main_data.setdefault("socialLinks", {})
+        main_data["socialLinks"].setdefault("websiteURL", url)
 
         # Параллельно ждём AI контент и coin
         coin_result, content_md = await asyncio.gather(coin_future, ai_content_future)
@@ -233,7 +243,7 @@ async def orchestrate_all():
             api_url_proj = app.get("api_url_proj", "")
             api_url_cat = app.get("api_url_cat", "")
             api_token = app.get("api_token", "")
-            domain = get_domain_name(url)
+            domain = brand_from_url(url) or "project"
             storage_path = os.path.join(STORAGE_DIR, app_name, domain)
             main_json_path = os.path.join(storage_path, "main.json")
             start_time = time.time()
