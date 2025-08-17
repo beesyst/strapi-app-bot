@@ -58,28 +58,59 @@ def is_link_aggregator(url: str) -> bool:
 
 # Соцсети из HTML без фильтрации агрегаторов
 def extract_socials_raw_from_html(html: str, base_url: str) -> Dict[str, str]:
-    PATTERNS = {
-        "twitterURL": re.compile(r"twitter\.com|x\.com", re.I),
-        "discordURL": re.compile(r"discord\.gg|discord\.com", re.I),
-        "telegramURL": re.compile(r"t\.me|telegram\.me", re.I),
-        "youtubeURL": re.compile(r"youtube\.com|youtu\.be", re.I),
-        "linkedinURL": re.compile(r"linkedin\.com", re.I),
-        "redditURL": re.compile(r"reddit\.com", re.I),
-        "mediumURL": re.compile(r"medium\.com", re.I),
-        "githubURL": re.compile(r"github\.com", re.I),
-        "websiteURL": re.compile(r"^https?://", re.I),
+    SOCIAL_PATTS = {
+        "twitterURL": re.compile(r"(?:^|//)(?:www\.)?(?:twitter\.com|x\.com)/", re.I),
+        "discordURL": re.compile(r"(?:^|//)(?:www\.)?discord\.(?:gg|com)/", re.I),
+        "telegramURL": re.compile(r"(?:^|//)(?:www\.)?(?:t\.me|telegram\.me)/", re.I),
+        "youtubeURL": re.compile(
+            r"(?:^|//)(?:www\.)?(?:youtube\.com|youtu\.be)/", re.I
+        ),
+        "linkedinURL": re.compile(r"(?:^|//)(?:www\.)?linkedin\.com/", re.I),
+        "redditURL": re.compile(r"(?:^|//)(?:www\.)?reddit\.com/", re.I),
+        "mediumURL": re.compile(r"(?:^|//)(?:www\.)?medium\.com/", re.I),
+        "githubURL": re.compile(r"(?:^|//)(?:www\.)?github\.com/", re.I),
     }
     soup = BeautifulSoup(html or "", "html.parser")
-    out = {k: "" for k in PATTERNS}
+
+    out = {k: "" for k in list(SOCIAL_PATTS.keys()) + ["websiteURL"]}
+    candidates_all: List[tuple[str, str]] = []  # (href_abs, visible_text)
+
     for a in soup.find_all("a", href=True):
-        href = a["href"]
-        abs_href = force_https(urljoin(base_url, href))
-        abs_href = _unwrap_redirect(abs_href)
-        abs_href = force_https(abs_href)
-        for key, patt in PATTERNS.items():
-            if patt.search(abs_href):
-                out[key] = abs_href
-    out["websiteURL"] = out.get("websiteURL") or force_https(base_url)
+        raw = a["href"]
+        href = force_https(urljoin(base_url, raw))
+        href = _unwrap_redirect(href)
+        href = force_https(href)
+        txt = a.get_text(" ", strip=True) or ""
+        candidates_all.append((href, txt))
+
+        # соцсети
+        for key, patt in SOCIAL_PATTS.items():
+            if not out[key] and patt.search(href):
+                out[key] = href
+
+    # website по явной метке
+    website = ""
+    for href, txt in candidates_all:
+        if (txt or "").strip().lower() in ("website", "official website", "site"):
+            website = href
+            break
+
+    if not website:
+
+        def _is_social(u: str) -> bool:
+            return any(p.search(u) for p in SOCIAL_PATTS.values())
+
+        for href, _ in candidates_all:
+            if (
+                href.startswith("http")
+                and (not _is_social(href))
+                and (not is_link_aggregator(href))
+            ):
+                website = href
+                break
+
+    # фолбэк - base_url
+    out["websiteURL"] = website or force_https(base_url)
     return out
 
 
@@ -126,29 +157,41 @@ def _host_matches_domain(h: str, site_domain: str) -> bool:
 def verify_aggregator_belongs(
     agg_url: str, site_domain: str, twitter_handle: str | None
 ) -> Tuple[bool, Dict[str, str]]:
-    html = fetch_url_html(agg_url, prefer="auto", timeout=30)  # общий fetch
+    # сырой html без браузера
+    html = fetch_url_html(agg_url, prefer="http", timeout=30)
     if not html:
         return False, {}
 
-    socials = extract_socials_raw_from_html(html, agg_url)
+    ok = False
 
-    site_match = any(
-        _host_matches_domain(_host(v), site_domain) for v in socials.values() if v
-    )
+    # простая проверка: домен донора встречается в html
+    if site_domain:
+        patt = re.compile(rf"\b{re.escape(site_domain)}\b", re.I)
+        if patt.search(html):
+            ok = True
 
-    same_x = False
-    h = (twitter_handle or "").strip().lower()
-    if h:
-        p = re.compile(
-            rf"https?://(?:www\.)?(?:x\.com|twitter\.com)/{re.escape(h)}(?:/|$)", re.I
+    # опционально: тот же твиттер-хэндл тоже подтверждает принадлежность
+    if not ok and twitter_handle:
+        patt_x = re.compile(
+            rf"https?://(?:www\.)?(?:x\.com|twitter\.com)/{re.escape(twitter_handle)}(?:/|$)",
+            re.I,
         )
-        if p.search(html):
-            same_x = True
+        if patt_x.search(html):
+            ok = True
 
-    ok = bool(site_match or same_x)
-    if ok:
-        logger.info("Агрегатор подтвержден: %s", force_https(agg_url))
-    return ok, socials
+    if not ok:
+        return False, {}
+
+    # возврат минимум: websiteURL → корень донора
+    homepage = f"https://www.{site_domain}/" if site_domain else ""
+    socials = {"websiteURL": homepage} if homepage else {}
+
+    logger.debug(
+        "Агрегатор подтвержден простой проверкой: %s (match=%s)",
+        force_https(agg_url),
+        site_domain or twitter_handle or "—",
+    )
+    return True, socials
 
 
 # Фильтр и возврат списка уникальных агрегаторов из ссылок

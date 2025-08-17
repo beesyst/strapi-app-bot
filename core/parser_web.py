@@ -248,7 +248,7 @@ def find_best_docs_link(soup: BeautifulSoup, base_url: str) -> str:
 
     if doc_url:
         if doc_url not in PARSED_DOCS_LINKS_LOGGED:
-            logger.info("Лучшая docs-ссылка найдена: %s", doc_url)
+            logger.info("docs-ссылка найдена: %s", doc_url)
             PARSED_DOCS_LINKS_LOGGED.add(doc_url)
         return doc_url
     return ""
@@ -273,19 +273,55 @@ def extract_social_links(html: str, base_url: str, is_main_page: bool = False) -
     soup = BeautifulSoup(html or "", "html.parser")
     links = {k: "" for k in SOCIAL_PATTERNS if k != "documentURL"}
 
-    for a in soup.find_all("a", href=True):
-        abs_href = urljoin(base_url, a["href"])
-        for key, pattern in SOCIAL_PATTERNS.items():
-            if key == "documentURL":
-                continue
-            if pattern.search(abs_href):
-                links[key] = abs_href
+    # кандидаты только из шапки/навигации/футера
+    zones = []
+    zones.extend(soup.select("header, nav"))
+    zones.extend(soup.select("footer"))
+    zones.append(soup.find(["div", "section"], recursive=False))
+    zones.append(soup.select_one("body > :last-child"))
 
+    def _scan_zone(node):
+        if not node:
+            return
+        for a in node.find_all("a", href=True):
+            abs_href = urljoin(base_url, a["href"])
+            for key, pattern in SOCIAL_PATTERNS.items():
+                if key == "documentURL":
+                    continue
+                if pattern.search(abs_href):
+                    if not links.get(key):
+                        links[key] = abs_href
+
+    for z in zones:
+        _scan_zone(z)
+
+    # website и docs
     links["websiteURL"] = base_url
     doc_url = find_best_docs_link(soup, base_url)
     links["documentURL"] = doc_url or ""
 
-    # браузер
+    # если docs найден - дозаполняем пустые поля со страницы docs
+    if doc_url:
+        doc_html = fetch_url_html(doc_url, prefer="auto")
+        dsoup = BeautifulSoup(doc_html or "", "html.parser")
+        dzones = []
+        dzones.extend(dsoup.select("header, nav"))
+        dzones.extend(dsoup.select("footer"))
+        dzones.append(dsoup.find(["div", "section"], recursive=False))
+        dzones.append(dsoup.select_one("body > :last-child"))
+
+        for z in dzones:
+            if not z:
+                continue
+            for a in z.find_all("a", href=True):
+                abs_href = urljoin(doc_url, a["href"])
+                for key, pattern in SOCIAL_PATTERNS.items():
+                    if key in ("documentURL",):
+                        continue
+                    if not links.get(key) and pattern.search(abs_href):
+                        links[key] = abs_href
+
+    # если главная пустая целиком - fallback на browser_fetch.js как было
     if is_main_page and all(not links[k] for k in links if k != "websiteURL"):
         logger.info(
             "extract_social_links: пусто на %s — повтор через browser_fetch.js",
@@ -311,7 +347,7 @@ def get_internal_links(html: str, base_url: str, max_links: int = 10) -> list[st
     # если json от браузера - пропуск
     if _looks_like_browser_json(html):
         PARSED_INTERNALS_CACHE[base_url] = []
-        logger.info("Внутренние ссылки для %s: пропущено (browser JSON)", base_url)
+        logger.debug("Внутренние ссылки для %s: пропущено (browser JSON)", base_url)
         return []
 
     soup = BeautifulSoup(html or "", "html.parser")
@@ -323,10 +359,9 @@ def get_internal_links(html: str, base_url: str, max_links: int = 10) -> list[st
             if len(found) >= max_links:
                 break
 
-    result = list(found)
-    PARSED_INTERNALS_CACHE[base_url] = result
-    logger.info("Внутренние ссылки для %s: %s", base_url, result)
-    return result
+    PARSED_INTERNALS_CACHE[base_url] = []
+    logger.debug("Внутренние ссылки для %s: пропуск (стратегия main+docs)", base_url)
+    return []
 
 
 # Экспорт
