@@ -66,11 +66,6 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
         # извлечение соцсетей с главной
         socials = extract_social_links(html, website_url, is_main_page=True)
         socials = normalize_socials(socials)
-        logger.info(
-            "Сайт %s: соц-ссылки (после normalize): %s",
-            website_url,
-            {k: v for k, v in socials.items() if v},
-        )
         for k in main_data["socialLinks"].keys():
             v = socials.get(k)
             if v:
@@ -94,11 +89,7 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
             if twitter_final:
                 main_data["socialLinks"]["twitterURL"] = twitter_final
             for k, v in (enriched_from_agg or {}).items():
-                if (
-                    v
-                    and k in main_data["socialLinks"]
-                    and not main_data["socialLinks"].get(k)
-                ):
+                if v and k in main_data["socialLinks"]:
                     main_data["socialLinks"][k] = v
 
         except Exception as e:
@@ -162,31 +153,24 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
                     )
                     if agg_site and site_domain and site_domain in agg_site:
                         logger.info(
-                            "Aggregator %s подтверждает сайт %s — помечаем X как официальный",
+                            "Aggregator %s подтверждает сайт %s - приоритет агрегатора",
                             aggregator_from_bio,
                             site_domain,
                         )
                         for k, v in socials_from_agg.items():
-                            if (
-                                v
-                                and k in main_data["socialLinks"]
-                                and not main_data["socialLinks"].get(k)
-                            ):
+                            if v and k in main_data["socialLinks"]:
                                 main_data["socialLinks"][k] = v
                     else:
                         logger.info(
-                            "Aggregator %s не подтвердил сайт (%s vs %s) — только мягкое обогащение",
+                            "Aggregator %s не подтвердил сайт (%s vs %s) - приоритет агрегатора",
                             aggregator_from_bio,
                             agg_site,
                             site_domain,
                         )
                         for k, v in socials_from_agg.items():
-                            if (
-                                v
-                                and k in main_data["socialLinks"]
-                                and not main_data["socialLinks"].get(k)
-                            ):
+                            if v and k in main_data["socialLinks"]:
                                 main_data["socialLinks"][k] = v
+
                 except Exception as e:
                     logger.warning(
                         "Ошибка разбора агрегатора из BIO (%s): %s",
@@ -237,13 +221,18 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
         except Exception as e:
             logger.warning("Ошибка очистки имени проекта: %s", e)
 
-        # https fix
-        for k, v in list(main_data.get("socialLinks", {}).items()):
-            if v:
-                main_data["socialLinks"][k] = force_https(v)
-
     except Exception as e:
         logger.error("collect_main_data CRASH: %s\n%s", e, traceback.format_exc())
+
+    # финальная нормализация и https-фикс
+    main_data["socialLinks"] = normalize_socials(main_data.get("socialLinks", {}))
+    for k, v in list(main_data["socialLinks"].items()):
+        if v:
+            main_data["socialLinks"][k] = force_https(v)
+
+    # единый итоговый лог со всеми источниками (веб, X, агрегатор)
+    final_socials = {k: v for k, v in main_data["socialLinks"].items() if v}
+    logger.info("Сайт %s: Итоговые соц-ссылки: %s", website_url, final_socials)
 
     return main_data
 
