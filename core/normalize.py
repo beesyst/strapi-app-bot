@@ -39,8 +39,8 @@ def normalize_socials(socials: dict) -> dict:
         socials["twitterURL"] = socials["twitterURL"].replace("twitter.com", "x.com")
 
     if socials.get("youtubeURL"):
-
-        from core.parser_youtube import youtube_to_handle
+        # обновленный путь после переноса парсера youtube
+        from core.parser.youtube import youtube_to_handle
 
         socials["youtubeURL"] = youtube_to_handle(socials["youtubeURL"])
 

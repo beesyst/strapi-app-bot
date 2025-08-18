@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from typing import Dict, List, Tuple
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 from bs4 import BeautifulSoup
 from core.log_utils import get_logger
-from core.parser_web import fetch_url_html
+from core.parser.web import fetch_url_html
+from core.paths import CONFIG_JSON
 
 logger = get_logger("link_aggregator")
 
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_PATH = os.path.join(ROOT_DIR, "config", "config.json")
+# Конфиг из core/paths.py
+CONFIG_PATH = CONFIG_JSON
 
 
 # Перевод url в https
@@ -73,7 +73,7 @@ def extract_socials_raw_from_html(html: str, base_url: str) -> Dict[str, str]:
     soup = BeautifulSoup(html or "", "html.parser")
 
     out = {k: "" for k in list(SOCIAL_PATTS.keys()) + ["websiteURL"]}
-    candidates_all: List[tuple[str, str]] = []  # (href_abs, visible_text)
+    candidates_all: List[tuple[str, str]] = []
 
     for a in soup.find_all("a", href=True):
         raw = a["href"]
@@ -88,7 +88,7 @@ def extract_socials_raw_from_html(html: str, base_url: str) -> Dict[str, str]:
             if not out[key] and patt.search(href):
                 out[key] = href
 
-    # website по явной метке
+    # website по метке
     website = ""
     for href, txt in candidates_all:
         if (txt or "").strip().lower() in ("website", "official website", "site"):
@@ -136,7 +136,7 @@ def _unwrap_redirect(u: str) -> str:
 
 # Соцсети из агрегатора, убирая другие агрегаторы
 def extract_socials_from_aggregator(agg_url: str) -> Dict[str, str]:
-    html = fetch_url_html(agg_url, prefer="auto", timeout=30)  # общий fetch
+    html = fetch_url_html(agg_url, prefer="auto", timeout=30)
     if not html:
         return {}
     socials = extract_socials_raw_from_html(html, agg_url)

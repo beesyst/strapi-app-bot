@@ -9,15 +9,14 @@ from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 from core.log_utils import get_logger
+from core.paths import CONFIG_JSON
 
 # Логгер
 logger = get_logger("parser_web")
 
 # Пути/конфиг
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_PATH = os.path.join(ROOT_DIR, "config", "config.json")
 try:
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+    with open(CONFIG_JSON, "r", encoding="utf-8") as f:
         CONFIG = json.load(f)
 except Exception:
     CONFIG = {}
@@ -87,7 +86,7 @@ def is_html_suspicious(html: str) -> bool:
         or "verifying you are human" in html.lower()
     ):
         return True
-    # Короткий HTML
+    # короткий HTML
     if len(html) < 2500:
         return True
     for dom in (
@@ -120,9 +119,24 @@ def has_social_links(html: str) -> bool:
     return False
 
 
+# Принудительный перевод любых http/протокол-relative ссылок в https
+def force_https(url: str) -> str:
+    if not url or not isinstance(url, str):
+        return url
+    u = url.strip()
+    if u.startswith("//"):
+        return "https:" + u
+    if u.lower().startswith("http://"):
+        return "https://" + u[7:]
+    return u
+
+
 # Обертка поверх browser_fetch.js
 def fetch_url_html_playwright(url: str, timeout: int = 90) -> str:
-    script_path = os.path.join(ROOT_DIR, "core", "browser_fetch.js")
+    # js-скрипт теперь лежит в этой же папке: core/parser/browser_fetch.js
+    script_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "browser_fetch.js"
+    )
     try:
         result = subprocess.run(
             ["node", script_path, url],
@@ -265,6 +279,10 @@ def extract_social_links(html: str, base_url: str, is_main_page: bool = False) -
                 if "twitterAll" in j and isinstance(j["twitterAll"], list):
                     logger.info("browser_fetch.js twitterAll: %d", len(j["twitterAll"]))
                 logger.info("Соцлинки (browser_fetch.js): %s", j)
+                # Приводим ключевые значения к https для единообразия
+                for k, v in list(j.items()):
+                    if isinstance(v, str):
+                        j[k] = force_https(v)
                 return j
     except Exception:
         pass
@@ -332,9 +350,17 @@ def extract_social_links(html: str, base_url: str, is_main_page: bool = False) -
             j2 = json.loads(browser_out)
             if isinstance(j2, dict) and "websiteURL" in j2:
                 logger.info("Соцлинки (fallback browser): %s", j2)
+                for k, v in list(j2.items()):
+                    if isinstance(v, str):
+                        j2[k] = force_https(v)
                 return j2
         except Exception as e:
             logger.warning("extract_social_links fallback JSON error: %s", e)
+
+    # Финальная нормализация - все в https
+    for k, v in list(links.items()):
+        if v and isinstance(v, str):
+            links[k] = force_https(v)
 
     return links
 

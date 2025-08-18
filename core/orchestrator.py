@@ -5,21 +5,29 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from core.api_ai import (
+from core.api.ai import (
     ai_generate_content_markdown,
     ai_generate_project_categories,
     ai_generate_short_desc_with_retries,
     load_ai_config,
     load_prompts,
 )
-from core.api_coingecko import enrich_with_coin_id
-from core.api_strapi import (
+from core.api.coingecko import enrich_with_coin_id
+from core.api.strapi import (
     get_project_category_ids,
     try_upload_logo,
 )
 from core.collector import collect_main_data
 from core.log_utils import get_logger
 from core.normalize import brand_from_url
+from core.paths import (
+    CONFIG_DIR,
+    CONFIG_JSON,
+    STORAGE_APPS_DIR,
+    # см. примечание ниже: нужен MAIN_TEMPLATE в core/paths.py
+    # если добавлен, импортируем:
+    # MAIN_TEMPLATE,
+)
 from core.seo_utils import build_seo_section
 from core.status import (
     ADD,
@@ -34,17 +42,21 @@ from core.status import (
 logger = get_logger("orchestrator")
 strapi_logger = get_logger("strapi")
 
-TEMPLATE_PATH = "templates/main_template.json"
-CENTRAL_CONFIG_PATH = "config/config.json"
-APPS_CONFIG_DIR = "config/apps"
-STORAGE_DIR = "storage/apps"
+# Пути (используем константы из core/paths.py)
+# MAIN_TEMPLATE добавьте в core/paths.py как os.path.join(TEMPLATES_DIR, "main_template.json")
+MAIN_TEMPLATE = os.path.join(
+    os.path.dirname(CONFIG_DIR), "templates", "main_template.json"
+)
+CENTRAL_CONFIG_PATH = CONFIG_JSON
+APPS_CONFIG_DIR = os.path.join(CONFIG_DIR, "apps")
+STORAGE_DIR = STORAGE_APPS_DIR
 
 spinner_frames = ["/", "-", "\\", "|"]
 
 
 # Шаблон main.json
 def load_main_template():
-    with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
+    with open(MAIN_TEMPLATE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -295,13 +307,13 @@ async def orchestrate_all():
             with open(main_json_path, "r", encoding="utf-8") as fjson:
                 main_data = json.load(fjson)
             if api_url_proj and api_token:
-                from core.api_strapi import (
+                from core.api.strapi import (
                     ERROR as STRAPI_ERROR,
                 )
-                from core.api_strapi import (
+                from core.api.strapi import (
                     SKIP as STRAPI_SKIP,
                 )
-                from core.api_strapi import (
+                from core.api.strapi import (
                     create_project,
                 )
 

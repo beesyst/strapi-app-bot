@@ -5,7 +5,8 @@ import markdown
 import requests
 from core.log_utils import get_logger
 from core.normalize import force_https
-from core.parser_youtube import youtube_oembed_title, youtube_watch_to_embed
+from core.parser.youtube import youtube_oembed_title, youtube_watch_to_embed
+from core.paths import CONFIG_DIR, CONFIG_JSON, STORAGE_APPS_DIR
 from core.status import (
     ADD,
     ERROR,
@@ -30,12 +31,12 @@ def get_strapi_headers(api_token, extra=None, skip_content_type=False):
     return headers
 
 
-# Markdown → HTML для Strapi
+# Markdown → html для strapi
 def markdown_to_html(md_text):
     return markdown.markdown(md_text, extensions=["extra"])
 
 
-# Нормализация videoSlider к JSON-строке со структурой url/title/embed
+# Нормализация videoSlider к json-строке со структурой url/title/embed
 def normalize_video_slider(slides):
     out = []
     for item in slides or []:
@@ -43,15 +44,15 @@ def normalize_video_slider(slides):
         payload = None
 
         if isinstance(v, str):
-            # уже JSON?
+            # уже json?
             try:
                 j = json.loads(v)
                 if isinstance(j, dict) and ("url" in j or "embed" in j):
                     payload = j
             except Exception:
-                # это URL
+                # url
                 url = force_https(v)
-                if not url:  # <-- ГАРД: пустая строка/None — пропускаем
+                if not url:
                     continue
                 payload = {
                     "url": url,
@@ -61,7 +62,7 @@ def normalize_video_slider(slides):
 
         elif isinstance(v, dict):
             url = force_https(v.get("url", "") or v.get("video", ""))
-            if not url:  # <-- ГАРД: пустая строка — пропускаем
+            if not url:
                 continue
             payload = {
                 "url": url,
@@ -69,14 +70,13 @@ def normalize_video_slider(slides):
                 "embed": v.get("embed", "") or youtube_watch_to_embed(url),
             }
 
-        # добавляем только если в payload есть URL (и/или embed)
         if payload and (payload.get("url") or payload.get("embed")):
             out.append({"video": json.dumps(payload, ensure_ascii=False)})
 
     return out
 
 
-# Проверка существования проекта в Strapi
+# Проверка существования проекта в strapi
 def project_exists(api_url_proj, api_token, name):
     url = f"{api_url_proj}?filters[name][$eq]={name}"
     headers = get_strapi_headers(api_token)
@@ -106,7 +106,7 @@ def log_strapi_sections(data):
     ]
     for key in sections:
         val = data.get(key)
-        # Форматированный лог по секциям
+        # aорматированный лог по секциям
         if key == "name":
             if val:
                 logger.info(f"[name] Размещено имя {val}")
@@ -165,7 +165,7 @@ def log_strapi_sections(data):
                 logger.warning(f"[{key}] не найдено")
 
 
-# Создание или обновление проекта в Strapi
+# Создание или обновление проекта в strapi
 def create_project(
     api_url_proj, api_url_cat, api_token, data, app_name=None, domain=None, url=None
 ):
@@ -302,7 +302,7 @@ def set_strapi_alt(api_url, api_token, image_id, alt_text):
     return False
 
 
-# Загрузка svgLogo проекта в Strapi
+# Загрузка svgLogo проекта в strapi
 def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
     image_name = main_data.get("svgLogo")
     project_name = main_data.get("name") or ""
@@ -359,7 +359,7 @@ def get_project_category_ids(api_url_cat, api_token, category_names):
 
 
 # Основная функция синхронизации всех проектов по шаблону
-def sync_projects(config_path, only_app=None):
+def sync_projects(config_path=CONFIG_JSON, only_app=None):
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
     for app in config["apps"]:
@@ -376,7 +376,7 @@ def sync_projects(config_path, only_app=None):
                 f"[skip] {app_name}: no api_url_proj or api_url_cat or api_token"
             )
             continue
-        partners_path = os.path.join("config", "apps", f"{app_name}.json")
+        partners_path = os.path.join(CONFIG_DIR, "apps", f"{app_name}.json")
         if not os.path.exists(partners_path):
             logger.warning(f"[skip] {app_name}: no partners config")
             continue
@@ -391,9 +391,9 @@ def sync_projects(config_path, only_app=None):
             if not domain:
                 logger.warning(f"[skip] пустой domain для partner: {partner}")
                 continue
-            json_path = os.path.join("storage", "apps", app_name, domain, "main.json")
+            json_path = os.path.join(STORAGE_APPS_DIR, app_name, domain, "main.json")
             image_path = os.path.join(
-                "storage", "apps", app_name, domain, f"{domain}.jpg"
+                STORAGE_APPS_DIR, app_name, domain, f"{domain}.jpg"
             )
             if not os.path.exists(json_path):
                 logger.warning(f"[skip] {domain}: main.json not found, skip.")
@@ -436,7 +436,7 @@ def sync_projects(config_path, only_app=None):
 
 
 # Альтернативная синхронизация без вывода в терминал
-def sync_projects_with_terminal_status(config_path):
+def sync_projects_with_terminal_status(config_path=CONFIG_JSON):
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
     for app in config["apps"]:
@@ -448,7 +448,7 @@ def sync_projects_with_terminal_status(config_path):
         api_token = app.get("api_token")
         if not api_url_proj or not api_url_cat or not api_token:
             continue
-        partners_path = os.path.join("config", "apps", f"{app_name}.json")
+        partners_path = os.path.join(CONFIG_DIR, "apps", f"{app_name}.json")
         if not os.path.exists(partners_path):
             continue
         with open(partners_path, "r", encoding="utf-8") as f2:
@@ -459,9 +459,9 @@ def sync_projects_with_terminal_status(config_path):
             domain = (
                 partner.split("//")[-1].split("/")[0].replace("www.", "").split(".")[0]
             )
-            json_path = os.path.join("storage", "apps", app_name, domain, "main.json")
+            json_path = os.path.join(STORAGE_APPS_DIR, app_name, domain, "main.json")
             image_path = os.path.join(
-                "storage", "apps", app_name, domain, f"{domain}.jpg"
+                STORAGE_APPS_DIR, app_name, domain, f"{domain}.jpg"
             )
             if not os.path.exists(json_path):
                 continue
@@ -487,4 +487,4 @@ def sync_projects_with_terminal_status(config_path):
 
 
 if __name__ == "__main__":
-    sync_projects("config/config.json")
+    sync_projects(CONFIG_JSON)

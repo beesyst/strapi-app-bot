@@ -54,28 +54,34 @@
 strapi-app-bot/
 ├── config/
 │   ├── apps/
-│   │   └── {project}.json         # Individual app configuration
-│   ├── config.json                # Central configuration for all projects
-│   └── start.py                   # Main pipeline script (entry point)
+│   │   └── {project}.json         # Config of a single application
+│   ├── config.json                # Central configuration (all projects, parameters)
+│   └── start.py                   # Main pipeline script (entry point, orchestration)
 ├── core/
-│   ├── api_ai.py                  # AI integration
-│   ├── api_strapi.py              # Strapi API integration
-│   ├── api_coingecko.py           # CoinGecko API integration
-│   ├── browser_fetch.js           # Browser-based website parser
-│   ├── install.py                 # Dependency auto-installer
-│   ├── log_utils.py               # Logging utilities
-│   ├── orchestrator.py            # Main async orchestrator
-│   ├── package.json               # Node dependencies
-│   ├── seo_utils.py               # SEO field handler
-│   ├── status.py                  # Status definitions
-│   ├── package-lock.json          # Locked Node dependency versions
-│   ├── twitter_parser.js          # X profile parser (Node)
-│   └── web_parser.py              # Link parsing module
+│   ├── api/                       # Integrations with external APIs
+│   │   ├── ai.py                  # Integration with AI
+│   │   ├── coingecko.py           # Integration with CoinGecko
+│   │   └── strapi.py              # Integration with Strapi CMS
+│   ├── parser/                    # All content parsers
+│   │   ├── browser_fetch.js       # Playwright + Fingerprint Suite (anti-bot bypass)
+│   │   ├── link_aggregator.py     # Linktree, Read.cv and other aggregators
+│   │   ├── twitter_scraper.js     # X/Twitter scraper (Node.js)
+│   │   ├── twitter.py             # Python logic for X/Twitter (Nitter-first, fallback Playwright)
+│   │   ├── web.py                 # Universal web parser (requests + BeautifulSoup)
+│   │   └── youtube.py             # YouTube parser
+│   ├── collector.py               # Data collection and aggregation (central coordinator)
+│   ├── install.py                 # Auto-install of dependencies (Python + Node + Playwright)
+│   ├── log_utils.py               # Centralized logging
+│   ├── normalize.py               # Data normalization (common rules)
+│   ├── orchestrator.py            # Orchestration (main async pipeline)
+│   ├── paths.py                   # Absolute project paths
+│   ├── seo_utils.py               # SEO data enrichment
+│   └── status.py                  # Pipeline status management
 ├── logs/
-│   ├── ai.log                     # AI logs
-│   ├── host.log                   # Pipeline execution log
-│   ├── setup.log                  # Setup and installation logs
-│   └── strapi.log                 # Strapi upload logs
+│   ├── ai.log                     # AI log
+│   ├── host.log                   # Main host pipeline log
+│   ├── setup.log                  # Dependency installation log
+│   └── strapi.log                 # Strapi publishing log
 ├── storage/
 │   └── apps/
 │       └── {project}/
@@ -84,40 +90,46 @@ strapi-app-bot/
 │   └── main_template.json         # Template structure for main.json
 ├── requirements.txt               # Python dependencies
 ├── README.md                      # Documentation
-└── start.sh                       # Bash script for quick startup
+└── start.sh                       # Bash script for quick pipeline launch
 ```
 
 ## Pipeline: How It Works
 
-1. **System Launch**:
-   * `start.sh` → `config/start.py` → `core/orchestrator.py`
-2. **Automatic Dependency Installation**:
-   * `config/start.py` → `core/install.py`:
-     * Installs all Python packages (from `requirements.txt`)
-     * Installs Node.js modules (for anti-bot and Twitter parsing)
-     * Playwright auto-downloads required browsers for headless parsing
-3. **Load Configuration and Templates**:
-   * Loads the main config (`config/config.json`): targets, settings, categories, API keys
-   * Loads the data template `templates/main_template.json` (defines main.json structure)
-4. **Asynchronous Data Collection for Each Target**:
-   * **Fast Web Parsing:** via `requests` + `BeautifulSoup` for most websites
-   * **Site Protection Bypass:** if protection is detected (Cloudflare, JS, anti-bot), switches to `Playwright` + Fingerprint Suite (`core/browser_fetch.js`)
-   * **Twitter/X:** always parsed using a dedicated browser module (`core/twitter_parser.js`) to mimic real behavior
-   * **Docs, Collection Services, Internal Links:** (e.g. linktr.ee, read.cv) parsed via requests or Playwright
-   * **Social and Docs Link Normalization:** detects and standardizes GitHub, Discord, Telegram, Medium, YouTube, LinkedIn, Reddit, and more
-   * **HTML Caching:** in-memory caching for speed and reduced load
-   * **Asynchronous Parallelism:** all per-project processes (AI generation, CoinGecko, parsing, enrichment) run in parallel (`asyncio` + `ThreadPool`)
-   * **Retries and Error Handling:** automatic retries with full logging of each step
-5. **AI Generation, Enrichment, and Auto-Categorization**:
-   * Auto-generation of short and full descriptions via AI
-   * Token/coin info lookup via CoinGecko API (fallback to manual template)
-   * **Automatic category generation via AI** → mapping to Strapi IDs and creation of missing categories if needed
-6. **Saving Results**:
-   * All data is saved to `storage/apps/{app}/{project}/main.json` (or to `storage/total/` if using batch mode)
-7. **Publishing and Integration**:
-   * Final `main.json` files are **automatically** uploaded to Strapi via API
-   * Logos/images are automatically attached in Strapi, SEO fields updated
-> **Only run `start.sh` — the bot does the rest!**
+1. **System startup**:  
+   * `start.sh` → `config/start.py` → `core/orchestrator.py`  
+2. **Automatic dependency installation**:  
+   * `config/start.py` calls `core/install.py`:  
+      * Checks for `venv`, creates it if missing.  
+      * Installs Python dependencies (`requirements.txt`).  
+      * Installs Node.js modules (`core/package.json`).  
+      * Downloads Playwright browsers (`npx playwright install`).  
+3. **Loading configuration and templates**:  
+   * Loads the main config (`config/config.json`): targets, parameters, API keys.  
+   * Loads the template `templates/main_template.json` for a unified `main.json` structure.  
+4. **Asynchronous parsing and data collection**:  
+   * **Web parsing:** `core/parser/web.py` (requests + BeautifulSoup).  
+   * **Anti-bot bypass:** `core/parser/browser_fetch.js` (Playwright + Fingerprint Suite).  
+   * **Twitter/X:**  
+     - `core/parser/twitter.py` (Nitter-first, fallback Playwright).  
+     - `core/parser/twitter_scraper.js` (Node.js scraper).  
+   * **Link aggregators:** `core/parser/link_aggregator.py`.  
+   * **YouTube and docs:** `core/parser/youtube.py` and others.  
+   * **Collector:** `core/collector.py` aggregates results into a single flow.  
+   * **Asynchronous execution:** powered by asyncio + ThreadPool.  
+   * **HTML caching and retries:** built-in for speed and fault tolerance.  
+5. **AI generation and enrichment**:  
+   * AI creates short and full descriptions.  
+   * CoinGecko API enriches token data (fallback — manual templates).  
+   * AI selects categories, which are automatically mapped to Strapi IDs.  
+6. **Result storage**:  
+   * All data is saved in `storage/apps/{app}/{project}/main.json`.  
+   * Logos/avatars from Twitter are stored in `storage/apps/{app}/{project}/`.  
+7. **Strapi integration**:  
+   * `main.json` is uploaded via Strapi API.  
+   * Images/logos are attached automatically.  
+   * SEO fields are updated.  
+
+**You only need to run `start.sh` — the bot will handle everything else!**
 
 ## Installation and Launch
 

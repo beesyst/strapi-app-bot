@@ -6,6 +6,13 @@ import os
 import requests
 from core.log_utils import get_logger
 from core.normalize import normalize_content_to_template_md_with_retry
+from core.paths import (
+    CONFIG_DIR,
+    CONFIG_JSON,
+    CONTENT_TEMPLATE,
+    PROMPT_JSON,
+    STORAGE_APPS_DIR,
+)
 
 # Константы
 PROMPT_TYPE_REVIEW_FULL = "review_full"
@@ -21,7 +28,7 @@ logger = get_logger("ai")
 
 
 # Загрузка AI-конфига
-def load_ai_config(config_path="config/config.json"):
+def load_ai_config(config_path=CONFIG_JSON):
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
     return config["ai"]
@@ -36,7 +43,7 @@ def find_provider_by_model(ai_cfg, model_name):
 
 
 # Загрузка промптов из файла
-def load_prompts(prompt_path="config/prompt.json"):
+def load_prompts(prompt_path=PROMPT_JSON):
     with open(prompt_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -60,8 +67,10 @@ def call_ai_with_config(
 ):
     group_cfg = get_group_for_prompt_type(ai_cfg, prompt_type)
     model = group_cfg["model"]
-    provider_name, provider_cfg = find_provider_by_model(ai_cfg, model)
-    api_url = provider_cfg.get("api_url")
+    _, provider_cfg = find_provider_by_model(ai_cfg, model)
+
+    # приоритет: api_url из группы → из провайдера
+    api_url = group_cfg.get("api_url") or provider_cfg.get("api_url")
     api_key = provider_cfg.get("api_key")
     web_search_options = group_cfg.get("web_search_options")
 
@@ -260,7 +269,7 @@ async def ai_generate_short_desc_with_retries(content, prompts, ai_cfg, executor
     return cutoff
 
 
-def load_allowed_categories(config_path="config/config.json"):
+def load_allowed_categories(config_path=CONFIG_JSON):
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
     return config.get("categories", [])
@@ -304,7 +313,8 @@ async def ai_generate_project_categories(
     return await loop.run_in_executor(executor, sync_ai_categories)
 
 
-def load_content_template(template_path="templates/content_template.json"):
+# Шаблон контента
+def load_content_template(template_path=CONTENT_TEMPLATE):
     with open(template_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -337,7 +347,7 @@ async def ai_generate_content_markdown(
         )
 
         # Генерация связки
-        main_app_config_path = os.path.join("config", "apps", f"{app_name}.json")
+        main_app_config_path = os.path.join(CONFIG_DIR, "apps", f"{app_name}.json")
         if os.path.exists(main_app_config_path):
             with open(main_app_config_path, "r", encoding="utf-8") as f:
                 main_app_cfg = json.load(f)
@@ -528,8 +538,7 @@ async def ai_generate_keywords(content, prompts, ai_cfg, executor):
 async def process_all_projects(executor):
     ai_cfg = load_ai_config()
     prompts = load_prompts()
-    base_dir = os.path.join("storage", "apps")
-
+    base_dir = STORAGE_APPS_DIR
     for app_name in os.listdir(base_dir):
         app_path = os.path.join(base_dir, app_name)
         if not os.path.isdir(app_path):
@@ -562,7 +571,7 @@ async def process_all_projects(executor):
             )
 
             # Генерация связки
-            main_app_config_path = os.path.join("config", "apps", f"{app_name}.json")
+            main_app_config_path = os.path.join(CONFIG_DIR, "apps", f"{app_name}.json")
             if os.path.exists(main_app_config_path):
                 with open(main_app_config_path, "r", encoding="utf-8") as f:
                     main_app_cfg = json.load(f)

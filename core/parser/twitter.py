@@ -12,16 +12,17 @@ from urllib.parse import unquote, urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 from core.log_utils import get_logger
-from core.parser_link_aggregator import (
+from core.parser.link_aggregator import (
     find_aggregators_in_links as _find_aggs_in_links,
 )
-from core.parser_link_aggregator import (
+from core.parser.link_aggregator import (
     is_link_aggregator,
 )
-from core.parser_link_aggregator import (
+from core.parser.link_aggregator import (
     verify_aggregator_belongs as _verify_agg_belongs,
 )
-from core.parser_web import fetch_url_html
+from core.parser.web import fetch_url_html
+from core.paths import CONFIG_JSON, PROJECT_ROOT
 
 logger = get_logger("twitter_parser")
 
@@ -118,8 +119,8 @@ def _decode_nitter_pic_url(src: str) -> str:
 
 
 # Конфиг
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_PATH = os.path.join(ROOT_DIR, "config", "config.json")
+ROOT_DIR = PROJECT_ROOT
+CONFIG_PATH = CONFIG_JSON
 
 try:
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -200,12 +201,12 @@ def _fetch_nitter_profile_html(handle: str) -> Tuple[str, str]:
     random.shuffle(instances)
 
     last_err = None
-    script_path = os.path.join(ROOT_DIR, "core", "browser_fetch.js")
+    script_path = os.path.join(ROOT_DIR, "core", "parser", "browser_fetch.js")
 
     def _run_instance(inst_url: str):
         try:
             u = f"{inst_url.rstrip('/')}/{handle}"
-            # raw-режим: просим чистый HTML и статус
+            # raw-режим: просим чистый html и статус
             return subprocess.run(
                 ["node", script_path, u, "--raw"],
                 cwd=os.path.dirname(script_path),
@@ -370,7 +371,7 @@ def _parse_nitter_profile(twitter_url: str) -> Dict[str, object]:
         return {}
 
 
-# Парс первый JSON-объект из stdout/stderr Node-скрипта
+# Парс первпервого json-объекта из stdout/stderr Node-скрипта
 def _extract_first_json_object(s: str) -> dict:
     if not s:
         return {}
@@ -396,7 +397,7 @@ def _extract_first_json_object(s: str) -> dict:
 def get_links_from_x_profile(
     profile_url: str, need_avatar: bool = True
 ) -> Dict[str, object]:
-    script_path = os.path.join(ROOT_DIR, "core", "twitter_parser.js")
+    script_path = os.path.join(ROOT_DIR, "core", "parser", "twitter_scraper.js")
     orig_url = (profile_url or "").strip()
     if not orig_url:
         return {"links": [], "avatar": "", "name": ""}
@@ -433,7 +434,7 @@ def get_links_from_x_profile(
         if not need_avatar:
             return cleaned
 
-        # Если nitter дал аву — playwright не нужен
+        # Если nitter дал аву - playwright не нужен
         if cleaned.get("avatar"):
             return cleaned
 
@@ -473,7 +474,7 @@ def get_links_from_x_profile(
                     timeout=90,
                 )
             except Exception as e:
-                logger.warning("Ошибка запуска twitter_parser.js для %s: %s", u, e)
+                logger.warning("Ошибка запуска twitter_scraper.js для %s: %s", u, e)
                 return None
 
         tries = [safe_url]
@@ -535,7 +536,7 @@ def get_links_from_x_profile(
     )
 
 
-# Поиск X‑профили в html (из <a> и «голых» упоминаний)
+# Поиск X-профили в html (из <a> и "голых" упоминаний)
 def extract_twitter_profiles(html: str, base_url: str) -> List[str]:
     soup = BeautifulSoup(html or "", "html.parser")
     profiles = set()
@@ -580,7 +581,7 @@ def extract_twitter_profiles(html: str, base_url: str) -> List[str]:
     return out
 
 
-# Поиск ссылок на линк‑агрегаторы на странице
+# Поиск ссылок на линк-агрегаторы на странице
 def extract_link_collection_urls(html: str, base_url: str) -> List[str]:
     soup = BeautifulSoup(html or "", "html.parser")
     urls = []
@@ -629,7 +630,7 @@ def verify_twitter_and_enrich(
     for agg_url in aggs:
         ok, _ = _verify_agg_belongs(agg_url, site_domain, handle)
         if ok:
-            from core.parser_link_aggregator import extract_socials_from_aggregator
+            from core.parser.link_aggregator import extract_socials_from_aggregator
 
             socials_clean = extract_socials_from_aggregator(agg_url) or {}
             if site_domain:
@@ -683,7 +684,7 @@ def _agg_has_site_and_handle(agg_url: str, site_domain: str, handle: str) -> str
     return site_hit if (site_hit and handle_ok) else ""
 
 
-# Загрузка страницы и извлечение X‑профилей
+# Загрузка страницы и извлечение X-профилей
 def fetch_and_extract_twitter_profiles(from_url: str) -> List[str]:
     try:
         html = fetch_url_html(from_url, prefer="auto", timeout=30)
@@ -721,7 +722,7 @@ def guess_twitter_handles(brand_token: str) -> List[str]:
     return out
 
 
-# Выбор лучшего X‑профиля по простому скорингу (с проверками bio и observed)
+# Выбор лучшего X-профиля по простому скорингу (с проверками bio и observed)
 def pick_best_twitter(
     current_url: str | None,
     candidates: List[str],
@@ -824,7 +825,7 @@ def decide_home_twitter(
     norm = normalize_twitter_url(home_twitter_url)
 
     if ok:
-        logger.info("Домашний X‑профиль верифицирован: %s", norm)
+        logger.info("Домашний X-профиль верифицирован: %s", norm)
         _VERIFIED_TW_URL = norm
         _VERIFIED_ENRICHED = dict(extra or {})
         _VERIFIED_AGG_URL = agg_url or ""
@@ -956,7 +957,14 @@ def select_verified_twitter(
             _VERIFIED_TW_URL = twitter_final = u
             _VERIFIED_ENRICHED = {}
             _VERIFIED_AGG_URL = ""
-            return twitter_final, {}, "", (prof or {}).get("avatar", "") or ""
+            # вернуть аватар, если есть
+            avatar_url = ""
+            try:
+                prof = get_links_from_x_profile(u, need_avatar=True)
+                avatar_url = (prof or {}).get("avatar", "") or ""
+            except Exception:
+                avatar_url = ""
+            return twitter_final, {}, "", avatar_url
 
     # обычный порядок проверок (bio/агрегатор/скоринг)
     def _handle_contains_brand(u: str) -> bool:

@@ -1,25 +1,24 @@
 import json
-import os
 import time
 
 import requests
 from core.log_utils import get_logger
 from core.normalize import brand_from_url, normalize_query
+from core.paths import CONFIG_JSON  # используем единый файл путей
 
 # Логгер
 logger = get_logger("coingecko")
 
-CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "config.json"
-)
 
-
+# Базовый url API CoinGecko из config.json
 def load_coingecko_api_base():
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+    with open(CONFIG_JSON, "r", encoding="utf-8") as f:
         config = json.load(f)
-    return config.get("coingecko", {}).get(
-        "api_base", "https://api.coingecko.com/api/v3"
-    )
+    coingecko_cfg = config.get("coingecko", {})
+    api_base = coingecko_cfg.get("api_base")
+    if not api_base:
+        raise ValueError("Не задан coingecko.api_base в config/config.json")
+    return api_base
 
 
 COINGECKO_API_BASE = load_coingecko_api_base()

@@ -2,9 +2,9 @@ import logging
 import os
 from datetime import datetime
 
+from core.paths import CONFIG_JSON, LOGS_DIR
+
 # Пути к директориям и лог-файлам
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LOGS_DIR = os.path.join(ROOT_DIR, "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
 
 # Карта имен логгеров и их файлов
@@ -61,11 +61,10 @@ def init_setup_log():
 
 # Авто-очистка логов при запуске, если выставлен clear_logs в config.json
 def auto_clear_logs_if_needed():
-    CONFIG_PATH = os.path.join(ROOT_DIR, "config", "config.json")
     try:
         import json
 
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        with open(CONFIG_JSON, "r", encoding="utf-8") as f:
             config = json.load(f)
         if config.get("clear_logs", False):
             clear_all_logs()

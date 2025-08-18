@@ -56,21 +56,27 @@ strapi-app-bot/
 │   ├── apps/
 │   │   └── {project}.json         # Конфиг отдельного приложения
 │   ├── config.json                # Центральная конфигурация (все проекты, параметры)
-│   └── start.py                   # Главный скрипт пайплайна (точка входа)
+│   └── start.py                   # Главный скрипт пайплайна (точка входа, orchestration)
 ├── core/
-│   ├── api_ai.py                  # Интеграция с AI
-│   ├── api_strapi.py              # Интеграция с API Strapi
-│   ├── api_coingecko.py           # Интеграция с API Coingecko
-│   ├── browser_fetch.js           # Парсер сайтов через браузер
-│   ├── install.py                 # Скрипт автоустановки зависимостей
-│   ├── log_utils.py               # Логирование
-│   ├── orchestrator.py            # Оркестрация (main async pipeline)
-│   ├── package.json               # Зависимости парсеров (Node)
-│   ├── seo_utils.py               # Заполнение SEO
-│   ├── status.py                  # Статусы
-│   ├── package-lock.json          # Лок-файл зависимостей
-│   ├── twitter_parser.js          # Парсер X профилей (Node)
-│   └── web_parser.py              # Модуль парсинга ссылок
+│   ├── api/                       # Интеграции с внешними API
+│   │   ├── ai.py                  # Интеграция с AI
+│   │   ├── coingecko.py           # Интеграция с CoinGecko
+│   │   └── strapi.py              # Интеграция с Strapi CMS
+│   ├── parser/                    # Все парсеры контента
+│   │   ├── browser_fetch.js       # Playwright + Fingerprint Suite (обход защиты)
+│   │   ├── link_aggregator.py     # Linktree, Read.cv и другие агрегаторы
+│   │   ├── twitter_scraper.js     # X/Twitter scraper (Node.js)
+│   │   ├── twitter.py             # Python-логика X/Twitter (Nitter-first, fallback Playwright)
+│   │   ├── web.py                 # Универсальный веб-парсер (requests + BeautifulSoup)
+│   │   └── youtube.py             # YouTube-парсер
+│   ├── collector.py               # Сбор и агрегация данных (централизатор)
+│   ├── install.py                 # Автоустановка зависимостей (Python + Node + Playwright)
+│   ├── log_utils.py               # Централизованное логирование
+│   ├── normalize.py               # Нормализация данных (общие правила)
+│   ├── orchestrator.py            # Оркестрация (главный async pipeline)
+│   ├── paths.py                   # Абсолютные пути
+│   ├── seo_utils.py               # Заполнение SEO-данных
+│   └── status.py                  # Управление статусами пайплайна
 ├── logs/
 │   ├── ai.log                     # Лог AI
 │   ├── host.log                   # Хостовой лог пайплайна
@@ -92,31 +98,36 @@ strapi-app-bot/
 1. **Запуск системы**:
    * `start.sh` → `config/start.py` → `core/orchestrator.py`
 2. **Автоустановка зависимостей**:
-   * `config/start.py` →`core/install.py`:
-      * Устанавливаются все Python-пакеты (requirements.txt).
-      * Устанавливаются Node.js-модули (для антибот-парсинга и Twitter/X).
-      * Playwright автоматически загружает браузеры для headless-парсинга.
+   * `config/start.py` вызывает `core/install.py`:
+      * Проверяет наличие `venv`, создаёт при отсутствии.
+      * Устанавливает Python-зависимости (`requirements.txt`).
+      * Устанавливает Node.js-модули (`core/package.json`).
+      * Загружает Playwright-браузеры (`npx playwright install`).
 3. **Загрузка конфигурации и шаблонов**:
-   * Загружается основной конфиг (`config/config.json`): список целей, настройки, категории, ключи API.
-   * Подгружается шаблон данных `templates/main_template.json` (структура и ключи main.json).
-4. **Асинхронный парсинг и сбор данных для каждой цели**:
-   * **Быстрый web-парсинг:** через `requests` + `BeautifulSoup` для большинства сайтов.
-   * **Обход защиты (Cloudflare, JS, антибот):** при обнаружении защиты автоматический переход на `Playwright` + Fingerprint Suite (`core/browser_fetch.js`).
-   * **Twitter/X:** всегда отдельный браузерный парсер (`core/twitter_parser.js`) с реальным поведением.
-   * **Обработка docs, коллекционных и внутренних ссылок:** (linktr.ee, read.cv и др.) — либо requests, либо Playwright.
-   * **Детект и нормализация всех соц-ссылок и docs:** GitHub, Discord, Telegram, Medium, YouTube, LinkedIn, Reddit, docs и т.д.
-   * **Кэширование HTML:** in-memory кэш для ускорения и снижения нагрузки.
-   * **Асинхронность и параллелизм:** все процессы по каждому проекту (AI-генерация, CoinGecko, web-парсинг, enrichment) выполняются параллельно (asyncio + ThreadPool).
-   * **Ретраи и обработка ошибок:** автоматические повторы при ошибках, логирование каждого шага.
-5. **AI-генерация описаний, enrichment и автоматизация категорий**:
-   * Автоматический запуск AI-генерации краткого и полного описания.
-   * Поиск информации о токене/коине через CoinGecko API (c fallback на ручной шаблон).
-   * **Автоматическая генерация релевантных категорий через AI** — далее маппинг в Strapi-ID с созданием недостающих категорий автоматически.
+   * Загружается основной конфиг (`config/config.json`): цели, параметры, API-ключи.
+   * Подтягивается шаблон `templates/main_template.json` для унифицированной структуры `main.json`.
+4. **Асинхронный парсинг и сбор данных**:
+   * **Web-парсинг:** `core/parser/web.py` (requests + BeautifulSoup).
+   * **Обход защиты:** `core/parser/browser_fetch.js` (Playwright + Fingerprint Suite).
+   * **Twitter/X:**  
+     - `core/parser/twitter.py` (Nitter-first, fallback Playwright).  
+     - `core/parser/twitter_scraper.js` (Node.js парсер).  
+   * **Link-агрегаторы:** `core/parser/link_aggregator.py`.
+   * **YouTube и docs:** `core/parser/youtube.py` и др.
+   * **Collector:** `core/collector.py` собирает результаты в единый поток.
+   * **Асинхронность:** всё работает через asyncio + ThreadPool.
+   * **Кэширование HTML и ретраи:** встроено для ускорения и отказоустойчивости.
+5. **AI-генерация и enrichment**:
+   * AI создаёт краткие/полные описания.
+   * CoinGecko API обогащает токен-данные (fallback — ручные шаблоны).
+   * AI подбирает категории, которые автоматически мапятся на Strapi-ID.
 6. **Сохранение результата**:
-   * Все данные по каждому проекту сохраняются в `storage/apps/{app}/{project}/main.json` (или storage/total, если используется общий сбор).
-7. **Публикация и интеграция**:
-   * Готовые `main.json` **автоматически** заливаются в Strapi через API.
-   * Картинки/лого автоматически прикрепляются к проекту в Strapi, SEO поля обновляются.
+   * Все данные сохраняются в `storage/apps/{app}/{project}/main.json`.
+   * Лого/аватары Twitter — в `storage/apps/{app}/{project}/`.
+7. **Интеграция со Strapi**:
+   * `main.json` заливается через Strapi API.
+   * Картинки/лого прикрепляются автоматически.
+   * SEO-поля обновляются.
 
 **Запускать нужно только `start.sh` — все остальное сделает бот!**
 

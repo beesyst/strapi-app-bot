@@ -48,7 +48,7 @@ def log_mainjson_status(status, app, domain, url, error_msg=""):
         logger.error(f"[invalid_status] {status} for {app} - {domain} - {url}")
 
 
-# Лог статуса Strapi
+# Лог статуса strapi
 def log_strapi_status(status, app, domain, url, error_msg=""):
     if status == ERROR:
         strapi_logger.critical(f"[{status}] {app} - {domain} - {url} [{error_msg}]")
@@ -66,7 +66,7 @@ def check_mainjson_status(old_data, new_data):
         return UPDATE
 
 
-# Проверка обновления Strapi
+# Проверка обновления strapi
 def check_strapi_status(main_data, strapi_data):
     if compare_main_fields(main_data, strapi_data):
         return SKIP

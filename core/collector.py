@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import os
 import re
 import traceback
 
@@ -14,33 +12,27 @@ from core.normalize import (
     is_bad_name,
     normalize_socials,
 )
-from core.parser_link_aggregator import (
+
+# Парс агрегаторов ссылок (перенесено в core/parser/)
+from core.parser.link_aggregator import (
     is_link_aggregator,
 )
-from core.parser_web import extract_social_links, fetch_url_html, get_domain_name
 
-# Парс сайтов
-
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_PATH = os.path.join(ROOT_DIR, "config", "config.json")
-try:
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        CONFIG = json.load(f)
-except Exception:
-    CONFIG = {}
-
-# YouTube
-from core.parser_youtube import (
-    youtube_oembed_title,
-    youtube_to_handle,
-    youtube_watch_to_embed,
-)
-
-# Twitter
-from core.twitter_parser import (
+# Twitter-парсинг/био/аватар (перенесено в core/parser/)
+from core.parser.twitter import (
     download_twitter_avatar,
     get_links_from_x_profile,
     select_verified_twitter,
+)
+
+# Парс сайтов (перенесено в core/parser/)
+from core.parser.web import extract_social_links, fetch_url_html, get_domain_name
+
+# Пути проекта
+from core.parser.youtube import (
+    youtube_oembed_title,
+    youtube_to_handle,
+    youtube_watch_to_embed,
 )
 
 # Логгер
@@ -162,10 +154,10 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
             # если select_verified_twitter уже дал aggregator_url — bio-агрегатор не трогаем
             if (not aggregator_url) and aggregator_from_bio:
                 try:
-                    from core.parser_link_aggregator import (
+                    from core.parser.link_aggregator import (
                         extract_socials_from_aggregator,
                     )
-                    from core.parser_link_aggregator import (
+                    from core.parser.link_aggregator import (
                         verify_aggregator_belongs as _verify_belongs,
                     )
 

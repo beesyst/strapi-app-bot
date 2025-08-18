@@ -1,0 +1,46 @@
+{
+  "name": "",
+  "shortDescription": "Accountable provides privacy-preserving credit verification for crypto lending, with real-time reserves and verifiable yield.",
+  "svgLogo": "",
+  "project_categories": [
+    49,
+    44,
+    30
+  ],
+  "socialLinks": {
+    "websiteURL": "https://accountable.capital/",
+    "twitterURL": "",
+    "discordURL": "",
+    "githubURL": "",
+    "mediumURL": "",
+    "youtubeURL": "",
+    "telegramURL": "",
+    "documentURL": "",
+    "linkedinURL": "",
+    "redditURL": ""
+  },
+  "videoSlider": [
+    {
+      "video": ""
+    }
+  ],
+  "coinData": {
+    "coin": ""
+  },
+  "seo": {
+    "metaTitle": "",
+    "metaDescription": "Accountable provides privacy-preserving credit verification for crypto lending, with real-time reserves and verifiable yield.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "",
+        "description": "Privacy crypto lending: realtime reserves, yield",
+        "image": null
+      }
+    ],
+    "keywords": "privacy-preserving proof of reserves for crypto exchanges, zero-knowledge based real-time asset and liability verification in DeFi, verifiable yield with cryptographic proofs",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nAccountable is a startup that positions itself as a trust layer for digital finance. It provides a platform for private verification of financial data with a focus on undercollateralized lending in the crypto ecosystem and continuous verification of reserves. The goal is to enable verifiable risk insights without exposing sensitive information.\n\nFounded in 2024, the company lists Wojtek Pawlowski as CEO and Ioan Moldovan as CTO. Official profiles place the organization at different locations, with LinkedIn indicating headquarters in Tortola, British Virgin Islands and other databases tying it to Europe, notably Amsterdam; nevertheless, all sources confirm the 2024 founding year.\n\nThe seed round totaled 2.3 million dollars and was announced at the end of December 2024. The round was led by MitonC and Zee Prime Capital, with participation from several angel investors and funds. In 2025 Accountable publicly announced strategic integrations and partnerships, including a collaboration with an infrastructure provider to enable continuous proof of reserves and verifiable yield.\n\n## Functionality\n\nThe core concept is to allow institutions and individual borrowers to cryptographically verify and share data about assets, liabilities, and trading exposure in real time while preserving the privacy of the underlying data. The platform connects custodial accounts, exchanges and other sources, generates credit risk reports, and allows sharing of these reports with the data owner.\n\nTechnical mechanisms include the use of Zero-Knowledge Transport Layer Security, zero-knowledge proofs, and elements of fully homomorphic encryption and secure enclaves for transmitting and verifying data without disclosing sensitive information. Accountable also positions its solutions for onchain proof of reserves for exchanges and stablecoin issuers, and for building verifiable yield products, including YieldApp, an aggregator of verified yields, as part of its offerings. The platform advertises multi-chain support and modular integration with external verification providers, including integration with vlayer to enable zk-WebProofs and Time Travel / Teleport functionalities.\n\n## Features\n\n- **Privacy‑Preserving Verification**: Uses zkTLS, zero‑knowledge proofs and secure enclaves to attest assets and liabilities without revealing raw user data.\n- **Real‑Time Proof‑of‑Reserve**: Continuous, live solvency dashboards aimed at exchanges, stablecoin issuers and protocols to show backing without exposing detailed holdings.\n- **Verifiable Yield (YieldApp)**: Yield aggregator product that surfaces yield opportunities with cryptographic proofs of backing and strategy performance.\n- **Advanced Cryptography Stack**: Incorporates zkTLS, zero‑knowledge proofs and fully homomorphic encryption as part of the data‑privacy toolkit.\n- **Multi‑Chain Coverage**: Public materials and press coverage indicate support for a broad set of chains, with references to more than 30 networks.\n- **Enterprise Integrations & Partnerships**: Public cooperation with vlayer for Web Proofs (zkTLS) and Time Travel/Teleport functionality and downstream integrations.\n- **Seed Funding & Investors**: Seed round of 2.3 million dollars closed in late December 2024, led by MitonC and Zee Prime Capital with participation from Maven 11 Group, CMCC Global, Summer Ventures, Moonhill Capital and Aquanow.\n- **Public / Developer Footprint**: Organization maintains a GitHub presence under Accountable‑SA with developer activity and public repository updates.\n\n## Monad x Accountable\n\nThe official Monad ecosystem page lists Accountable among the applications and infrastructure components as part of the Monad ecosystem. Monad launched a public testnet on February 19, 2025, inviting developers and users to interact with dApps in the test network, creating a context in which projects within the Monad ecosystem could deploy and test services.\n\nIndependent reviews and ecosystem reports also connect Accountable with Monad, describing it as a project in the Monad ecosystem focused on credit verification for crypto lending. Others reference Accountable within ecosystem roundups, describing it as an active application in the Monad environment.\n\nSeveral articles and testnet guides mention practical tasks and interactions with Accountable on the Monad testnet, and PANews cites an official project account and an interactive page for YieldApp activities, confirming public mentions and access to Accountable services within the Monad context."
+}

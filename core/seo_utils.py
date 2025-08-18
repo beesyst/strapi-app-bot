@@ -1,6 +1,6 @@
 import asyncio
 
-from core.api_ai import (
+from core.api.ai import (
     ai_generate_keywords,
     ai_generate_seo_desc_with_retries,
 )
@@ -15,7 +15,7 @@ async def build_seo_section(main_data, prompts, ai_cfg, executor):
     short_desc = main_data.get("shortDescription") or ""
     content_md = main_data.get("contentMarkdown") or ""
 
-    # Асинх получение seo_desc (через retries) и keywords
+    # асинх получение seo_desc (через retries) и keywords
     seo_desc_task = asyncio.create_task(
         ai_generate_seo_desc_with_retries(short_desc, prompts, ai_cfg, executor)
     )

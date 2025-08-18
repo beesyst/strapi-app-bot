@@ -4,7 +4,7 @@ from urllib.parse import quote as urlquote
 
 import requests
 from core.log_utils import get_logger
-from core.normalize import force_https
+from core.parser.web import force_https
 
 # Логгер
 logger = get_logger("parser_youtube")

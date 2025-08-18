@@ -8,7 +8,7 @@ async function main() {
         process.exit(1);
     }
 
-    // Chromium с инжекцией отпечатка
+    // chromium с инжекцией отпечатка
     const browser = await chromium.launch({ headless: true });
     const context = await newInjectedContext(browser, {
         // fingerprintOptions и newContextOptions можно настроить при необходимости
@@ -23,7 +23,7 @@ async function main() {
         { timeout: 45000, waitUntil: 'domcontentloaded' }
         );
 
-        // Ожидание появления аватара в любом из вариантов
+        // ожидание появления аватара в любом из вариантов
         await page.waitForSelector(
         'img[src*="pbs.twimg.com/profile_images/"],' +
         'div[style*="pbs.twimg.com/profile_images/"],' +
@@ -31,7 +31,7 @@ async function main() {
         { timeout: 12000 }
         ).catch(() => { /* не критично - попытка вытащить без ожидания */ });
 
-        // Небольшая задержка, чтобы дом дорисовался
+        // небольшая задержка, чтобы дом дорисовался
         await page.waitForTimeout(1000);
 
         const result = await page.evaluate(() => {
@@ -50,7 +50,7 @@ async function main() {
             name = (m && m[1]) ? m[1].trim() : t;
         }
 
-        // BIO‑ссылки
+        // bio-ссылки
         const bio = document.querySelector('[data-testid="UserDescription"]');
         if (bio) {
             const urls = bio.innerHTML.match(/https?:\/\/[^\s"<]+/g);
@@ -61,7 +61,7 @@ async function main() {
             }
         }
 
-        // Ссылки под профилем
+        // ссылки под профилем
         document.querySelectorAll('[data-testid="UserProfileHeader_Items"] a, a[role="link"]').forEach(a => {
             const href = a.getAttribute('href') || '';
             if (!href) return;
@@ -100,7 +100,7 @@ async function main() {
             if (/pbs\.twimg\.com\/profile_images\//.test(og)) avatar = og;
         }
 
-        // Нормализация протокола и чистка HTML‑entities
+        // Нормализация протокола и чистка HTML-entities
         if (avatar) {
             avatar = avatar.replace(/^\/\//,'https://').replace(/&amp;/g,'&');
         }
