@@ -60,7 +60,7 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
         socials = normalize_socials(socials)
         for k in main_data["socialLinks"].keys():
             v = socials.get(k)
-            if v:
+            if v and isinstance(v, str):
                 main_data["socialLinks"][k] = v
 
         # twitter: верификация (+ аватар) и доп.соцсети от агрегатора

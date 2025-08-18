@@ -9,10 +9,11 @@ logger = get_logger("normalize")
 
 # Социальные и url нормализации
 def force_https(url: str) -> str:
-    """Приводит URL к https"""
-    if not url:
+    if not url or not isinstance(url, str):
         return url
     url = url.strip()
+    if url.startswith("//"):
+        return "https:" + url
     url = re.sub(r"^http://", "https://", url, flags=re.I)
     return url
 
@@ -35,19 +36,30 @@ def is_bad_name(name: str) -> bool:
 
 # Привод соцссылок к канонике
 def normalize_socials(socials: dict) -> dict:
-    if socials.get("twitterURL"):
-        socials["twitterURL"] = socials["twitterURL"].replace("twitter.com", "x.com")
+    # twitter → x
+    tv = socials.get("twitterURL")
+    if isinstance(tv, str) and tv:
+        socials["twitterURL"] = tv.replace("twitter.com", "x.com")
 
-    if socials.get("youtubeURL"):
-        # обновленный путь после переноса парсера youtube
-        from core.parser.youtube import youtube_to_handle
+    # youtube: channel id → @handle (только если строка)
+    yv = socials.get("youtubeURL")
+    if isinstance(yv, str) and yv:
+        try:
+            from core.parser.youtube import youtube_to_handle
 
-        socials["youtubeURL"] = youtube_to_handle(socials["youtubeURL"])
+            socials["youtubeURL"] = youtube_to_handle(yv)
+        except Exception:
+            socials["youtubeURL"] = yv
 
+    # принудительный https только для строк; списки/сложные типы пропускаем
     for k, v in list(socials.items()):
-        if not v:
+        if not v or not isinstance(v, str):
             continue
         socials[k] = force_https(v)
+
+    if "twitterAll" in socials:
+        socials.pop("twitterAll", None)
+
     return socials
 
 
