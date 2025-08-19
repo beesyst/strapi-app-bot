@@ -311,7 +311,6 @@ def extract_social_links(html: str, base_url: str, is_main_page: bool = False) -
     zones.append(soup.find(["div", "section"], recursive=False))
     zones.append(soup.select_one("body > :last-child"))
 
-
     def _scan_zone(node):
         if not node:
             return
@@ -323,7 +322,6 @@ def extract_social_links(html: str, base_url: str, is_main_page: bool = False) -
                 if pattern.search(abs_href):
                     if not links.get(key):
                         links[key] = abs_href
-
 
     for z in zones:
         _scan_zone(z)

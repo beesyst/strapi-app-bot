@@ -1,0 +1,42 @@
+{
+  "name": "Osec",
+  "shortDescription": "OtterSec offers white hat blockchain audits and incident response with multichain coverage, reports, and AI assisted analysis.",
+  "svgLogo": "osec.jpg",
+  "project_categories": [
+    38,
+    30,
+    37
+  ],
+  "socialLinks": {
+    "websiteURL": "https://osec.io/",
+    "twitterURL": "https://x.com/osec_io",
+    "discordURL": "",
+    "githubURL": "https://github.com/otter-sec/",
+    "mediumURL": "",
+    "youtubeURL": "",
+    "telegramURL": "",
+    "documentURL": "",
+    "linkedinURL": "",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": "moosecoin-2"
+  },
+  "seo": {
+    "metaTitle": "Osec",
+    "metaDescription": "",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "Osec",
+        "description": "Пожалуйста, вставьте текст на английском, который нужно",
+        "image": null
+      }
+    ],
+    "keywords": "Чтобы сделать релевантные НЧ-запросы, мне нужна тема статьи или её текст. Пришлите, пожалуйста, одну из следующих вещей:\n- краткое содержание статьи или её тему;\n- ключевые идеи и целевую аудиторию.\n\nПосле этого верну 3 английские длиннохвостые ключевых запроса (long-tail keywords), разделённых запятой, например: keyword one, keyword two, keyword three. Если хотите, можно указать регион или специфику аудитории (например, США, для начинающих и т.д.).",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nOtterSec, with a site at osec.io, is a commercial team providing auditing and incident response services for blockchain projects, positioning itself as white-hat specialists in smart contract and infrastructure audits.\n\nThe organization has published technical research and case studies since February 2022, beginning with a blog post series dated February 16 to 26, 2022, and has continued to issue analytical articles and vulnerability analyses since then.\n\nOn its company page OtterSec declares scalable metrics that illustrate the scope of its work: over 120 projects audited, more than 36.82B on-chain TVL secured, and more than 1.00B vulnerabilities patched. These figures are presented as indicators of reach and impact.\n\nLegally the public record shows Otter Audits LLC registered to the brand on March 21, 2024, and the site footer carries the notice © Otter Audits LLC 2025.\n\n## Functionality\n\nOtterSec's core activity is conducting comprehensive audits of smart contracts and infrastructure components of blockchain projects, including DeFi protocols, bridges, and peripheral services, and producing public reports that classify risks and provide remediation recommendations. Examples of such public reports are available in project repositories as PDF documents dated 2022–2024.\n\nThe company promotes an audit plus monitor approach, combining pre-release audits with post-release monitoring and alerts to rapidly detect exploits and on-chain anomalies. This approach is described on the site's service descriptions and reflected in third party reviews of their methodology.\n\nIts technical methodology blends traditional manual reviews with formal verification where applicable, dynamic testing, and reverse engineering tools. The team also mentions decompilation and AI-assisted interpretations to accelerate analysis of malicious programs.\n\nPublic audits of specific projects demonstrate the model, including Soroswap audited on February 22, 2024, XChain Lending in May 2024, and Cetus and other protocols, with reports hosted in project repositories.\n\nOtter Audits LLC is legally registered in South Dakota on March 21, 2024, and the site footer shows © Otter Audits LLC 2025.\n\n## Features\n\n- **Multichain Coverage**: Conducts audits and post-release monitoring across multiple L1 and L2 ecosystems, including Solana, Sui, Aptos, Near, and Ethereum integrations.\n- **Audit Volume (Public Reports)**: Publishes public PDF audit reports for clients; examples of public reports dated 2022–2024 are available in GitHub project repositories.\n- **Scale Metrics (TVL & Remediations)**: The main page lists 36.82B+ on-chain TVL secured and 1.00B+ vulnerabilities patched, used as indicators of reach and effectiveness.\n- **Client Testimonials & Partnerships**: The site features testimonials and mentions collaborations with the Solana Foundation, Sui Foundation, and other clients, presented as quotes on the main page.\n- **Formal Methods & Research**: The team publishes research on formal verification, including Move Prover materials and formal validation of Solana programs, and technical articles beginning in 2022.\n- **Incident Response & Decompilation Toolkit**: The practice includes incident response and use of decompilation plus AI-supported tooling for rapid exploit analysis; techniques and case studies are described in materials and at conferences.\n- **Public Audit Dates (Examples)**: Specific audit reports with dates such as Soroswap on February 22, 2024; XChain Lending in May 2024; Jup-lock on August 15, 2024; PDF reports available in project repositories.\n- **Corporate Entity & Dates**: Otter Audits LLC was registered in South Dakota on March 21, 2024; the site footer shows © Otter Audits LLC 2025."
+}

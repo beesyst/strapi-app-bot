@@ -102,14 +102,23 @@ async def process_partner(
     api_url_cat=None,
     api_token=None,
     ai_active=True,
+    spinner_event=None,
 ):
     start_time = time.time()
     spinner_text = f"{app_name} - {url}"
-    stop_event = threading.Event()
-    spinner_thread = threading.Thread(
-        target=spinner_task, args=(spinner_text, stop_event)
-    )
-    spinner_thread.start()
+
+    owns_spinner = False
+    if spinner_event is None:
+        stop_event = threading.Event()
+        spinner_thread = threading.Thread(
+            target=spinner_task, args=(spinner_text, stop_event)
+        )
+        spinner_thread.start()
+        owns_spinner = True
+    else:
+        stop_event = spinner_event
+        spinner_thread = None
+
     status = ERROR
     try:
         storage_path = create_project_folder(app_name, domain)
@@ -247,7 +256,8 @@ async def process_partner(
         log_mainjson_status(ERROR, app_name, domain, url, error_msg=str(e))
     finally:
         stop_event.set()
-        spinner_thread.join()
+        if owns_spinner and spinner_thread:
+            spinner_thread.join()
         time.sleep(0.01)
     return status
 
@@ -315,6 +325,14 @@ async def orchestrate_all():
             start_time = time.time()
             status_main = ERROR
 
+            # внешний спиннер на время выполнения одного партнера
+            spinner_text = f"{app_name} - {url}"
+            ext_stop_event = threading.Event()
+            ext_spinner_thread = threading.Thread(
+                target=spinner_task, args=(spinner_text, ext_stop_event)
+            )
+            ext_spinner_thread.start()
+
             try:
                 status_main = await asyncio.wait_for(
                     process_partner(
@@ -332,14 +350,26 @@ async def orchestrate_all():
                         api_url_cat=api_url_cat,
                         api_token=api_token,
                         ai_active=ai_active,
+                        spinner_event=ext_stop_event,
                     ),
-                    timeout=300,
+                    timeout=400,
                 )
+
+                # успешное завершение - сперва гасим спиннер, потом печатаем статус
+                ext_stop_event.set()
+                ext_spinner_thread.join()
+
             except asyncio.TimeoutError:
                 logger.warning(
                     f"[timeout] Превышено время на сбор {app_name} {url}, пропуск!"
                 )
-                print(f"[error] {app_name} - {url} - timeout!")
+                # сначала гасим спиннер, потом печатаем строку ошибки
+                ext_stop_event.set()
+                ext_spinner_thread.join()
+
+                # чистая строка без артефактов спиннера
+                print(f"\r[error] {app_name} - {url} - timeout!", end="", flush=True)
+                print()
                 continue
 
             elapsed = int(time.time() - start_time)

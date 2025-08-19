@@ -1,7 +1,7 @@
 venv/
 core/__pycache__/
-api/__pycache__/
-parser/__pycache__/
+core/api/__pycache__/
+core/parser/__pycache__/
 core/node_modules/
 logs/*
 !logs/.gitkeep
