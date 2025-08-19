@@ -34,6 +34,20 @@ def load_ai_config(config_path=CONFIG_JSON):
     return config["ai"]
 
 
+# Прио включенного провайдера
+def get_active_provider(ai_cfg):
+    for name, cfg in ai_cfg.get("providers", {}).items():
+        if cfg.get("enabled", False):
+            return name, cfg
+    return None, None
+
+
+# Наличие провайдера
+def is_ai_enabled(ai_cfg):
+    name, _ = get_active_provider(ai_cfg)
+    return bool(name)
+
+
 # Поиск провайдера по имени модели
 def find_provider_by_model(ai_cfg, model_name):
     for provider_name, prov_cfg in ai_cfg["providers"].items():
@@ -65,9 +79,25 @@ def get_group_for_prompt_type(ai_cfg, prompt_type):
 def call_ai_with_config(
     prompt, ai_cfg, custom_system_prompt=None, prompt_type="prompt"
 ):
+    # если ИИ выключен - ничего не генерится
+    active_name, _ = get_active_provider(ai_cfg)
+    if not active_name:
+        logger.info("[ai] disabled: skip generation for %s", prompt_type)
+        return ""
+
     group_cfg = get_group_for_prompt_type(ai_cfg, prompt_type)
     model = group_cfg["model"]
-    _, provider_cfg = find_provider_by_model(ai_cfg, model)
+    provider_name, provider_cfg = find_provider_by_model(ai_cfg, model)
+
+    # если модель принадлежит не активному провайдеру - скип
+    if provider_name != active_name:
+        logger.info(
+            "[ai] provider '%s' not active (active: '%s'), skip %s",
+            provider_name,
+            active_name,
+            prompt_type,
+        )
+        return ""
 
     # приоритет: api_url из группы → из провайдера
     api_url = group_cfg.get("api_url") or provider_cfg.get("api_url")

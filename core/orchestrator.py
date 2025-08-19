@@ -101,6 +101,7 @@ async def process_partner(
     api_url_proj=None,
     api_url_cat=None,
     api_token=None,
+    ai_active=True,
 ):
     start_time = time.time()
     spinner_text = f"{app_name} - {url}"
@@ -114,56 +115,90 @@ async def process_partner(
         storage_path = create_project_folder(app_name, domain)
         logger.info(f"Создание main.json - {app_name} - {url}")
         logger.info(f"Сбор соц линков - {app_name} - {url}")
-        logger.info(f"ИИ-генерация - {app_name} - {url}")
+        if ai_active:
+            logger.info(f"ИИ-генерация - {app_name} - {url}")
+        else:
+            logger.info(
+                f"ИИ-генерация отключена (ai_active=False) - {app_name} - {url}"
+            )
         logger.info(f"Поиск API ID в Coingecko - {app_name} - {url}")
 
         loop = asyncio.get_event_loop()
+
+        # сбор соцлинков / основных данных
         socials_future = loop.run_in_executor(
             executor, collect_main_data, url, main_template, storage_path
         )
 
-        # временная заготовка для AI
+        # заготовка данных для параллельных задач
         main_data_for_ai = dict(main_template)
         main_data_for_ai["name"] = domain.capitalize()
         main_data_for_ai.setdefault("socialLinks", {})
         main_data_for_ai["socialLinks"]["websiteURL"] = url
 
-        # Параллельно только контент и coin
-        ai_content_future = asyncio.create_task(
-            ai_generate_content_markdown(
-                main_data_for_ai, app_name, domain, prompts, ai_cfg, executor
-            )
-        )
+        # запуск coinGecko
         coin_future = asyncio.create_task(enrich_coin_async(main_data_for_ai, executor))
 
-        # Асинхронно получаем все соцсети и общие данные по проекту
-        main_data = await socials_future
-        if isinstance(main_data, tuple):
-            main_data = main_data[0]
+        # контент по ИИ - только если ai_active
+        if ai_active:
+            ai_content_future = asyncio.create_task(
+                ai_generate_content_markdown(
+                    main_data_for_ai, app_name, domain, prompts, ai_cfg, executor
+                )
+            )
+            # асинх получение всех соцсетей
+            main_data = await socials_future
+            if isinstance(main_data, tuple):
+                main_data = main_data[0]
 
-        # подстраховка
-        for k, v in main_template.items():
-            if k not in main_data:
-                main_data[k] = v
+            # подстраховка по ключам шаблона
+            for k, v in main_template.items():
+                if k not in main_data:
+                    main_data[k] = v
 
-        # websiteURL в socialLinks
-        main_data.setdefault("socialLinks", {})
-        main_data["socialLinks"].setdefault("websiteURL", url)
+            # websiteURL в socialLinks
+            main_data.setdefault("socialLinks", {})
+            main_data["socialLinks"].setdefault("websiteURL", url)
 
-        # Параллельно ждём AI контент и coin
-        coin_result, content_md = await asyncio.gather(coin_future, ai_content_future)
+            # асинх ожидание ИИ контент и coin
+            coin_result, content_md = await asyncio.gather(
+                coin_future, ai_content_future
+            )
 
-        # Генерация шорт описания по content_md
-        short_desc = await ai_generate_short_desc_with_retries(
-            content_md, prompts, ai_cfg, executor
-        )
+            # ген short_description / categories / seo
+            short_desc = await ai_generate_short_desc_with_retries(
+                content_md, prompts, ai_cfg, executor
+            )
+            categories = await ai_generate_project_categories(
+                content_md, prompts, ai_cfg, executor, allowed_categories
+            )
+            main_data["seo"] = await build_seo_section(
+                main_data, prompts, ai_cfg, executor
+            )
 
-        # Генерация категорий на основе content_md и allowed_categories
-        categories = await ai_generate_project_categories(
-            content_md, prompts, ai_cfg, executor, allowed_categories
-        )
+        else:
+            # ИИ выключен - socials и coin, без генерации контента
+            main_data = await socials_future
+            if isinstance(main_data, tuple):
+                main_data = main_data[0]
 
-        # coinData, shortDescription, contentMarkdown
+            # подстраховка по ключам шаблона
+            for k, v in main_template.items():
+                if k not in main_data:
+                    main_data[k] = v
+
+            # websiteURL в socialLinks
+            main_data.setdefault("socialLinks", {})
+            main_data["socialLinks"].setdefault("websiteURL", url)
+
+            # ожидание coinGecko
+            coin_result = await coin_future
+            content_md = ""  # без ИИ - нет markdown-контента
+            short_desc = ""  # без ИИ - нет ген краткого описания
+            categories = []  # без ИИ - нет подбора категории
+            main_data["seo"] = {}  # без ИИ - нет seo
+
+        # заполнение coinData, shortDescription, contentMarkdown
         if coin_result and "coinData" in coin_result:
             main_data["coinData"] = coin_result["coinData"]
         if short_desc:
@@ -171,7 +206,7 @@ async def process_partner(
         if content_md:
             main_data["contentMarkdown"] = content_md.strip()
 
-        # Категории
+        # категории → id (если strapi_sync и есть доступ к api категорий)
         if not categories:
             main_data["project_categories"] = []
         elif strapi_sync and api_url_cat and api_token:
@@ -180,12 +215,9 @@ async def process_partner(
         else:
             main_data["project_categories"] = categories
 
-        # SEO
-        main_data["seo"] = await build_seo_section(main_data, prompts, ai_cfg, executor)
-
         main_json_path = os.path.join(storage_path, "main.json")
 
-        # Проверка и сохранение main.json
+        # проверка и сохранение main.json
         if not os.path.exists(main_json_path):
             status = ADD
         else:
@@ -197,7 +229,7 @@ async def process_partner(
                 logger.warning(f"Ошибка сравнения main.json: {e}")
                 status = ADD
 
-        if status == ADD or status == UPDATE:
+        if status in (ADD, UPDATE):
             save_main_json(storage_path, main_data)
             log_mainjson_status(status, app_name, domain, url)
             logger.info(f"Готово - {app_name} - {url}")
@@ -228,38 +260,61 @@ async def enrich_coin_async(main_data, executor):
 
 # Главная оркестрация всего пайплайна
 async def orchestrate_all():
-    # Глобальный список для fallback
+    # глобальный список для fallback
     with open(CENTRAL_CONFIG_PATH, "r", encoding="utf-8") as f:
         central_config = json.load(f)
+
     allowed_categories = central_config.get("categories", [])
-    strapi_sync = central_config.get("strapi_sync", True)
+
+    # новый контейнер настроек strapi с бэксовместимостью
+    strapi_cfg = central_config.get("strapi", {})
+    strapi_sync = strapi_cfg.get("strapi_sync", central_config.get("strapi_sync", True))
+    strapi_publish_cfg = strapi_cfg.get("strapi_publish", True)
+
     main_template = load_main_template()
     prompts = load_prompts()
     ai_cfg = load_ai_config()
+
+    # определение включенности ИИ
+    from core.api.ai import is_ai_enabled
+
+    ai_active = is_ai_enabled(ai_cfg)
+
+    # если ИИ выключен - в черновик
+    will_publish = bool(strapi_publish_cfg and ai_active)
+
     executor = ThreadPoolExecutor(max_workers=8)
+
     for app in central_config["apps"]:
         if not app.get("enabled", True):
             continue
+
         app_name = app["app"]
-        # Приоритет категорий
+        # приоритет категорий
         app_categories = app.get("categories") or allowed_categories
 
         print(f"[app] {app_name} start")
+
         app_config_path = os.path.join(APPS_CONFIG_DIR, f"{app_name}.json")
         if not os.path.exists(app_config_path):
             logger.warning(f"Config for app {app_name} not found, skipping")
             continue
+
         with open(app_config_path, "r", encoding="utf-8") as f:
             app_config = json.load(f)
+
         for url in app_config["partners"]:
             api_url_proj = app.get("api_url_proj", "")
             api_url_cat = app.get("api_url_cat", "")
             api_token = app.get("api_token", "")
+
             domain = brand_from_url(url) or "project"
             storage_path = os.path.join(STORAGE_DIR, app_name, domain)
             main_json_path = os.path.join(storage_path, "main.json")
+
             start_time = time.time()
             status_main = ERROR
+
             try:
                 status_main = await asyncio.wait_for(
                     process_partner(
@@ -276,6 +331,7 @@ async def orchestrate_all():
                         api_url_proj=api_url_proj,
                         api_url_cat=api_url_cat,
                         api_token=api_token,
+                        ai_active=ai_active,
                     ),
                     timeout=300,
                 )
@@ -287,12 +343,10 @@ async def orchestrate_all():
                 continue
 
             elapsed = int(time.time() - start_time)
-            # strapi_sync: false - печать только main.json статуса
+
+            # strapi_sync: false - печать только статуса main.json
             if not strapi_sync:
-                if status_main == ERROR:
-                    extra = " [main.json Error]"
-                else:
-                    extra = ""
+                extra = " [main.json Error]" if status_main == ERROR else ""
                 print(
                     f"\r[{status_main}] {app_name} - {url} - {elapsed} sec{extra}",
                     end="",
@@ -300,12 +354,15 @@ async def orchestrate_all():
                 )
                 print()
                 continue
-            # strapi_sync: true - пуш в Strapi и печать статуса
+
+            # strapi_sync: true - пуш в strapi и печать статуса
             if not os.path.exists(main_json_path):
                 print(f"[error] {app_name} - {url} - {elapsed} sec [No main.json]")
                 continue
+
             with open(main_json_path, "r", encoding="utf-8") as fjson:
                 main_data = json.load(fjson)
+
             if api_url_proj and api_token:
                 from core.api.strapi import (
                     ERROR as STRAPI_ERROR,
@@ -317,35 +374,60 @@ async def orchestrate_all():
                     create_project,
                 )
 
-                status_strapi, project_id = create_project(
-                    api_url_proj,
-                    api_url_cat,
-                    api_token,
-                    main_data,
-                    app_name=app_name,
-                    domain=domain,
-                    url=url,
-                )
+                publish_flag = bool(will_publish)
+
+                # попытка вызвать create_project с флагом publish
+                try:
+                    status_strapi, project_id = create_project(
+                        api_url_proj,
+                        api_url_cat,
+                        api_token,
+                        main_data,
+                        app_name=app_name,
+                        domain=domain,
+                        url=url,
+                        publish=publish_flag,
+                    )
+                except TypeError:
+                    # старый вариант без публикации
+                    status_strapi, project_id = create_project(
+                        api_url_proj,
+                        api_url_cat,
+                        api_token,
+                        main_data,
+                        app_name=app_name,
+                        domain=domain,
+                        url=url,
+                    )
+
                 final_status = (
                     status_strapi if status_strapi != STRAPI_ERROR else "error"
                 )
-                extra = ""
+                badges = []
                 if status_strapi == STRAPI_ERROR:
-                    extra = " [Strapi Create Failed]"
+                    badges.append("Strapi Create Failed")
                 elif status_strapi == STRAPI_SKIP:
-                    extra = " [Already exists]"
+                    badges.append("Already exists")
+
+                # маркер публикации/черновика для наглядности
+                badges.append("Published" if publish_flag else "Draft")
+
+                extra = f" [{' | '.join(badges)}]" if badges else ""
+
                 print(
                     f"\r[{final_status}] {app_name} - {url} - {elapsed} sec{extra}",
                     end="",
                     flush=True,
                 )
                 print()
+
                 if project_id:
                     try_upload_logo(
                         main_data, storage_path, api_url_proj, api_token, project_id
                     )
             else:
                 print(f"[error] {app_name} - {url} - {elapsed} sec [No API]")
+
         print(f"[app] {app_name} done")
 
 

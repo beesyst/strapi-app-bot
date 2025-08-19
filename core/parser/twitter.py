@@ -13,10 +13,11 @@ import requests
 from bs4 import BeautifulSoup
 from core.log_utils import get_logger
 from core.parser.link_aggregator import (
-    find_aggregators_in_links as _find_aggs_in_links,
+    extract_socials_from_aggregator,
+    is_link_aggregator,
 )
 from core.parser.link_aggregator import (
-    is_link_aggregator,
+    find_aggregators_in_links as _find_aggs_in_links,
 )
 from core.parser.link_aggregator import (
     verify_aggregator_belongs as _verify_agg_belongs,
@@ -630,16 +631,19 @@ def verify_twitter_and_enrich(
     for agg_url in aggs:
         ok, _ = _verify_agg_belongs(agg_url, site_domain, handle)
         if ok:
-            from core.parser.link_aggregator import extract_socials_from_aggregator
-
             socials_clean = extract_socials_from_aggregator(agg_url) or {}
             if site_domain:
                 socials_clean["websiteURL"] = f"https://www.{site_domain}/"
+
+            agg_url_log = force_https(agg_url)
+
             logger.info(
-                "Агрегатор подтвержден (text-match) и дал соц-ссылки: %s",
+                "Агрегатор подтвержден (%s) и дал соц-ссылки: %s",
+                agg_url_log,
                 {k: v for k, v in socials_clean.items() if v},
             )
-            return True, socials_clean, agg_url
+
+            return True, socials_clean, force_https(agg_url)
 
     # прямой сайт в bio - ок
     for b in bio_links:
@@ -649,7 +653,7 @@ def verify_twitter_and_enrich(
         except Exception:
             pass
 
-    return False, {}, (aggs[0] if aggs else "")
+    return False, {}, (force_https(aggs[0]) if aggs else "")
 
 
 # Возврат url сайта из агрегатора
@@ -811,6 +815,7 @@ def pick_best_twitter(
 _VERIFIED_TW_URL: str = ""
 _VERIFIED_AGG_URL: str = ""
 _VERIFIED_ENRICHED: dict = {}
+_VERIFIED_DOMAIN: str = ""
 
 
 # Верификация "домашнего" X (из found_socials)
@@ -844,9 +849,12 @@ def select_verified_twitter(
     url: str,
     trust_home: bool = False,
 ) -> tuple[str, dict, str, str]:
-    global _VERIFIED_TW_URL, _VERIFIED_ENRICHED, _VERIFIED_AGG_URL
+    global _VERIFIED_TW_URL, _VERIFIED_ENRICHED, _VERIFIED_AGG_URL, _VERIFIED_DOMAIN
 
-    if _VERIFIED_TW_URL:
+    if (
+        _VERIFIED_TW_URL
+        and (_VERIFIED_DOMAIN or "").lower() == (site_domain or "").lower()
+    ):
         return _VERIFIED_TW_URL, dict(_VERIFIED_ENRICHED), _VERIFIED_AGG_URL
 
     twitter_final = ""
@@ -864,6 +872,7 @@ def select_verified_twitter(
             _VERIFIED_TW_URL = twitter_final = normalize_twitter_url(t_final)
             _VERIFIED_ENRICHED = dict(t_extra or {})
             _VERIFIED_AGG_URL = aggregator_url = agg_url or ""
+            _VERIFIED_DOMAIN = (site_domain or "").lower()
             # ава из профиля
             avatar_url = ""
             try:
@@ -957,6 +966,7 @@ def select_verified_twitter(
             _VERIFIED_TW_URL = twitter_final = u
             _VERIFIED_ENRICHED = {}
             _VERIFIED_AGG_URL = ""
+            _VERIFIED_DOMAIN = (site_domain or "").lower()
             # вернуть аватар, если есть
             avatar_url = ""
             try:
@@ -985,9 +995,11 @@ def select_verified_twitter(
             twitter_final = u
             enriched_from_agg = extra or {}
             aggregator_url = agg_url or ""
+
             _VERIFIED_TW_URL = twitter_final
             _VERIFIED_ENRICHED = dict(enriched_from_agg)
             _VERIFIED_AGG_URL = aggregator_url
+            _VERIFIED_DOMAIN = (site_domain or "").lower()
 
             avatar_url = ""
             try:
@@ -1014,7 +1026,7 @@ def select_verified_twitter(
                     "X подтвержден по единственному профилю с аватаром: %s",
                     twitter_final,
                 )
-                return twitter_final, {}, ""
+                return twitter_final, {}, "", ""
         except Exception:
             pass
 
@@ -1155,10 +1167,11 @@ def download_twitter_avatar(
 
 # Сброс зафиксированного состояния верификации и кэшей
 def reset_verified_state(full: bool = False) -> None:
-    global _VERIFIED_TW_URL, _VERIFIED_ENRICHED, _VERIFIED_AGG_URL
+    global _VERIFIED_TW_URL, _VERIFIED_ENRICHED, _VERIFIED_AGG_URL, _VERIFIED_DOMAIN
     _VERIFIED_TW_URL = ""
     _VERIFIED_ENRICHED = {}
     _VERIFIED_AGG_URL = ""
+    _VERIFIED_DOMAIN = ""
 
     if full:
         try:

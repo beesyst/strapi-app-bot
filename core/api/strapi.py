@@ -33,7 +33,7 @@ def get_strapi_headers(api_token, extra=None, skip_content_type=False):
 
 # Markdown → html для strapi
 def markdown_to_html(md_text):
-    return markdown.markdown(md_text, extensions=["extra"])
+    return markdown.markdown(md_text or "", extensions=["extra"])
 
 
 # Нормализация videoSlider к json-строке со структурой url/title/embed
@@ -167,12 +167,22 @@ def log_strapi_sections(data):
 
 # Создание или обновление проекта в strapi
 def create_project(
-    api_url_proj, api_url_cat, api_token, data, app_name=None, domain=None, url=None
+    api_url_proj,
+    api_url_cat,
+    api_token,
+    data,
+    app_name=None,
+    domain=None,
+    url=None,
+    publish=True,
 ):
+    # категории: если пришли строками - мап на id
     cats = data.get("project_categories", [])
     if cats and isinstance(cats[0], str):
         ids = get_project_category_ids(api_url_cat, api_token, cats)
         data["project_categories"] = ids
+
+    # проверка: проект уже существует?
     project_id, existing_attrs = project_exists(
         api_url_proj, api_token, data.get("name", "")
     )
@@ -186,45 +196,82 @@ def create_project(
     else:
         status = ADD
         log_strapi_status(status, app_name, domain, url)
+
+    # принудительный https для соц-ссылок
+    social_links = (data.get("socialLinks") or {}).copy()
+    for k, v in list(social_links.items()):
+        if isinstance(v, str) and v.strip():
+            social_links[k] = force_https(v.strip())
+
+    # безопасные seo-дефолты (чтобы не ловить 400 при пустом ИИ)
+    safe_name = (data.get("name") or domain or "").strip() or "Project"
+    safe_short = (data.get("shortDescription") or safe_name).strip()
+
+    in_seo = data.get("seo") or {}
+    seo = {
+        "metaTitle": in_seo.get("metaTitle") or safe_name,
+        "metaDescription": in_seo.get("metaDescription") or safe_short,
+        "metaImage": in_seo.get("metaImage") or None,
+        "metaSocial": in_seo.get("metaSocial") or [],
+        "keywords": in_seo.get("keywords") or "",
+        "metaRobots": in_seo.get("metaRobots") or "",
+    }
+
+    # плоские поля (если у модели в strapi есть дубли meta*)
+    metaTitle = seo["metaTitle"]
+    metaDescription = seo["metaDescription"]
+    metaImage = seo["metaImage"]
+    keywords = seo["keywords"]
+
+    # видео: нормализация и привод к json-строкам
+    video_slider = normalize_video_slider(data.get("videoSlider", []))
+
+    # базовый payload
     payload = {
         "data": {
-            "name": data.get("name", ""),
-            "shortDescription": data.get("shortDescription", ""),
-            "socialLinks": data.get("socialLinks", {}),
+            "name": safe_name,
+            "shortDescription": safe_short,
+            "socialLinks": social_links,
             "contentMarkdown": markdown_to_html(data.get("contentMarkdown", "")),
-            "coinData": data.get("coinData", {}),
-            "seo": data.get("seo") or {},
-            "metaTitle": data.get("seo", {}).get("metaTitle", ""),
-            "metaDescription": data.get("seo", {}).get("metaDescription", ""),
-            "metaImage": data.get("seo", {}).get("metaImage", ""),
-            "keywords": data.get("seo", {}).get("keywords", ""),
-            "project_categories": data.get("project_categories", []),
-            "videoSlider": normalize_video_slider(data.get("videoSlider", [])),
+            "coinData": data.get("coinData", {}) or {},
+            "seo": seo,
+            "metaTitle": metaTitle,
+            "metaDescription": metaDescription,
+            "metaImage": metaImage,
+            "keywords": keywords,
+            "project_categories": data.get("project_categories", []) or [],
+            "videoSlider": video_slider,
         }
     }
+
+    # черновик: publishedAt=None для Draft & Publish
+    if not publish:
+        payload["data"]["publishedAt"] = None
+
     headers = get_strapi_headers(api_token)
+
     try:
-        resp = requests.post(api_url_proj, json=payload, headers=headers, timeout=10)
-        logger.info(
-            f"[create] {data.get('name', '')}: {resp.status_code}, {resp.text[:200]}"
-        )
+        resp = requests.post(api_url_proj, json=payload, headers=headers, timeout=20)
+        logger.info(f"[create] {safe_name}: {resp.status_code}, {resp.text[:200]}")
+
+        # успех
         if resp.status_code in (200, 201):
             log_strapi_sections(data)
             return ADD, resp.json()["data"]["id"]
+
+        # конфликты/валидация/сервер - попытка найти ID и метка SKIP, если уже есть
         if resp.status_code in (409, 400, 500):
-            project_id, _ = project_exists(
-                api_url_proj, api_token, data.get("name", "")
-            )
+            project_id, _ = project_exists(api_url_proj, api_token, safe_name)
             if project_id:
                 log_strapi_status(SKIP, app_name, domain, url)
-                logger.info(
-                    f"[SKIP] Проект уже существует после ошибки: {data.get('name', '')}"
-                )
+                logger.info(f"[SKIP] Проект уже существует после ошибки: {safe_name}")
                 log_strapi_sections(data)
                 return SKIP, project_id
+
     except Exception as e:
         log_strapi_status(ERROR, app_name, domain, url, error_msg=str(e))
         logger.error(f"[create_project] {e}")
+
     return ERROR, None
 
 
@@ -358,132 +405,116 @@ def get_project_category_ids(api_url_cat, api_token, category_names):
     return ids
 
 
-# Основная функция синхронизации всех проектов по шаблону
-def sync_projects(config_path=CONFIG_JSON, only_app=None):
+# Синх без вывода в терминал
+def sync_projects(config_path=CONFIG_JSON, only_app=None, quiet: bool = False):
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
-    for app in config["apps"]:
-        if only_app and app["app"] != only_app:
+
+    # вычисляем publish один раз
+    strapi_box = config.get("strapi", {}) or {}
+    strapi_publish_cfg = strapi_box.get("strapi_publish", True)
+
+    ai_cfg = config.get("ai", {}) or {}
+    providers = (ai_cfg.get("providers") or {}).values()
+    any_ai_enabled = any(bool(p.get("enabled")) for p in providers)
+    publish = bool(strapi_publish_cfg and any_ai_enabled)
+
+    for app in config.get("apps", []):
+        if only_app and app.get("app") != only_app:
             continue
         if not app.get("enabled", True):
             continue
-        app_name = app["app"]
+
+        app_name = app.get("app")
         api_url_proj = app.get("api_url_proj")
         api_url_cat = app.get("api_url_cat")
         api_token = app.get("api_token")
+
         if not api_url_proj or not api_url_cat or not api_token:
-            logger.warning(
-                f"[skip] {app_name}: no api_url_proj or api_url_cat or api_token"
-            )
+            if not quiet:
+                logger.warning(
+                    f"[skip] {app_name}: no api_url_proj or api_url_cat or api_token"
+                )
             continue
+
         partners_path = os.path.join(CONFIG_DIR, "apps", f"{app_name}.json")
         if not os.path.exists(partners_path):
-            logger.warning(f"[skip] {app_name}: no partners config")
+            if not quiet:
+                logger.warning(f"[skip] {app_name}: no partners config")
             continue
+
         with open(partners_path, "r", encoding="utf-8") as f2:
             partners_data = json.load(f2)
+
         for partner in partners_data.get("partners", []):
             if not partner or not partner.strip():
                 continue
+
             domain = (
                 partner.split("//")[-1].split("/")[0].replace("www.", "").split(".")[0]
             )
             if not domain:
-                logger.warning(f"[skip] пустой domain для partner: {partner}")
+                if not quiet:
+                    logger.warning(f"[skip] пустой domain для partner: {partner}")
                 continue
+
             json_path = os.path.join(STORAGE_APPS_DIR, app_name, domain, "main.json")
             image_path = os.path.join(
                 STORAGE_APPS_DIR, app_name, domain, f"{domain}.jpg"
             )
+
             if not os.path.exists(json_path):
-                logger.warning(f"[skip] {domain}: main.json not found, skip.")
+                if not quiet:
+                    logger.warning(f"[skip] {domain}: main.json not found, skip.")
                 continue
+
             try:
                 with open(json_path, "r", encoding="utf-8") as f3:
                     data = json.load(f3)
             except Exception as e:
-                log_strapi_status(
-                    ERROR,
-                    app_name,
-                    domain,
-                    partner,
-                    error_msg=f"main.json not loaded: {e}",
-                )
-                logger.error(f"[main.json] не загружен для {domain}: {e}")
+                if not quiet:
+                    log_strapi_status(
+                        ERROR,
+                        app_name,
+                        domain,
+                        partner,
+                        error_msg=f"main.json not loaded: {e}",
+                    )
+                    logger.error(f"[main.json] не загружен для {domain}: {e}")
                 continue
+
             status, project_id = create_project(
-                app.get("api_url_proj"),
-                app.get("api_url_cat"),
+                api_url_proj,
+                api_url_cat,
                 api_token,
                 data,
                 app_name=app_name,
                 domain=domain,
                 url=partner,
+                publish=publish,
             )
+
             if status == ERROR or not project_id:
-                log_strapi_status(
-                    ERROR, app_name, domain, partner, error_msg="project_id не создан"
-                )
-                logger.error(f"[project_id] не создан: {domain}")
+                if not quiet:
+                    log_strapi_status(
+                        ERROR,
+                        app_name,
+                        domain,
+                        partner,
+                        error_msg="project_id не создан",
+                    )
+                    logger.error(f"[project_id] не создан: {domain}")
                 continue
+
+            # загрузка лого одинаково для обоих режимов
             try_upload_logo(
-                data,
-                os.path.dirname(json_path),
-                app.get("api_url_proj"),
-                api_token,
-                project_id,
+                data, os.path.dirname(json_path), api_url_proj, api_token, project_id
             )
 
 
-# Альтернативная синхронизация без вывода в терминал
+# "Тихий" режим
 def sync_projects_with_terminal_status(config_path=CONFIG_JSON):
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = json.load(f)
-    for app in config["apps"]:
-        if not app.get("enabled", True):
-            continue
-        app_name = app["app"]
-        api_url_proj = app.get("api_url_proj")
-        api_url_cat = app.get("api_url_cat")
-        api_token = app.get("api_token")
-        if not api_url_proj or not api_url_cat or not api_token:
-            continue
-        partners_path = os.path.join(CONFIG_DIR, "apps", f"{app_name}.json")
-        if not os.path.exists(partners_path):
-            continue
-        with open(partners_path, "r", encoding="utf-8") as f2:
-            partners_data = json.load(f2)
-        for partner in partners_data.get("partners", []):
-            if not partner or not partner.strip():
-                continue
-            domain = (
-                partner.split("//")[-1].split("/")[0].replace("www.", "").split(".")[0]
-            )
-            json_path = os.path.join(STORAGE_APPS_DIR, app_name, domain, "main.json")
-            image_path = os.path.join(
-                STORAGE_APPS_DIR, app_name, domain, f"{domain}.jpg"
-            )
-            if not os.path.exists(json_path):
-                continue
-            try:
-                with open(json_path, "r", encoding="utf-8") as f3:
-                    data = json.load(f3)
-                status, project_id = create_project(
-                    app.get("api_url_proj"),
-                    app.get("api_url_cat"),
-                    api_token,
-                    data,
-                    app_name=app_name,
-                    domain=domain,
-                    url=partner,
-                )
-                if status not in (ERROR, None) and project_id:
-                    if data.get("svgLogo") and os.path.exists(image_path):
-                        upload_logo(
-                            app.get("api_url_proj"), api_token, project_id, image_path
-                        )
-            except Exception:
-                continue
+    return sync_projects(config_path=config_path, only_app=None, quiet=True)
 
 
 if __name__ == "__main__":

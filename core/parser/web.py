@@ -132,29 +132,42 @@ def force_https(url: str) -> str:
 
 
 # Обертка поверх browser_fetch.js
-def fetch_url_html_playwright(url: str, timeout: int = 90) -> str:
-    # js-скрипт теперь лежит в этой же папке: core/parser/browser_fetch.js
+def fetch_url_html_playwright(url: str, timeout: int = 60) -> str:
     script_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "browser_fetch.js"
     )
-    try:
-        result = subprocess.run(
-            ["node", script_path, url],
-            cwd=os.path.dirname(script_path),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        if result.returncode == 0:
-            logger.info("browser_fetch.js ок: %s", url)
-            return result.stdout or ""
-        logger.warning(
-            "browser_fetch.js error for %s: %s", url, (result.stderr or "").strip()
-        )
-        return result.stdout or result.stderr or ""
-    except Exception as e:
-        logger.warning("Запуск browser_fetch.js упал для %s: %s", url, e)
-        return ""
+
+    def _run(args, label):
+        try:
+            result = subprocess.run(
+                ["node", script_path, *args],
+                cwd=os.path.dirname(script_path),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            if result.returncode == 0:
+                logger.info("Playwright (%s) ок: %s", label, url)
+                return result.stdout or ""
+            logger.warning(
+                "Playwright (%s) error for %s: %s",
+                label,
+                url,
+                (result.stderr or "").strip(),
+            )
+            return result.stdout or result.stderr or ""
+        except Exception as e:
+            logger.warning("Playwright (%s) упал для %s: %s", label, url, e)
+            return ""
+
+    # Попытка 1: обычный режим
+    out = _run([url], "normal")
+    if out and out.strip():
+        return out
+
+    # Попытка 2: raw (возврат html/antiBot статус внутри json)
+    out_raw = _run([url, "--raw"], "raw")
+    return out_raw or out
 
 
 # Основной fetch c политикой prefer=('auto'|'http'|'browser'), антибот-эвристики и кэш
@@ -298,6 +311,7 @@ def extract_social_links(html: str, base_url: str, is_main_page: bool = False) -
     zones.append(soup.find(["div", "section"], recursive=False))
     zones.append(soup.select_one("body > :last-child"))
 
+
     def _scan_zone(node):
         if not node:
             return
@@ -310,8 +324,19 @@ def extract_social_links(html: str, base_url: str, is_main_page: bool = False) -
                     if not links.get(key):
                         links[key] = abs_href
 
+
     for z in zones:
         _scan_zone(z)
+
+    # если по "зонам" пусто - проход по всей странице
+    if all(not links[k] for k in links if k != "websiteURL"):
+        for a in soup.find_all("a", href=True):
+            abs_href = urljoin(base_url, a["href"])
+            for key, pattern in SOCIAL_PATTERNS.items():
+                if key == "documentURL":
+                    continue
+                if not links.get(key) and pattern.search(abs_href):
+                    links[key] = abs_href
 
     # website и docs
     links["websiteURL"] = base_url
@@ -342,7 +367,7 @@ def extract_social_links(html: str, base_url: str, is_main_page: bool = False) -
     # если главная пустая целиком - fallback на browser_fetch.js как было
     if is_main_page and all(not links[k] for k in links if k != "websiteURL"):
         logger.info(
-            "extract_social_links: пусто на %s — повтор через browser_fetch.js",
+            "Обычный парс html (requests + BeautifulSoup): пусто на %s - повтор через Playwright",
             base_url,
         )
         browser_out = fetch_url_html_playwright(base_url)

@@ -1,5 +1,9 @@
 {
   "name": "Monad",
   "url": "https://www.monad.xyz/",
-  "partners": ["https://accountable.capital/"]
+  "partners": [
+    "https://accountable.capital/",
+    "https://www.altlayer.io/",
+    "https://www.aarna.ai/"
+  ]
 }
