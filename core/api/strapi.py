@@ -1,5 +1,6 @@
 import json
 import os
+import time
 
 import markdown
 import requests
@@ -14,6 +15,7 @@ from core.status import (
     check_strapi_status,
     log_strapi_status,
 )
+from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout
 
 # Логгер
 logger = get_logger("strapi")
@@ -76,16 +78,75 @@ def normalize_video_slider(slides):
     return out
 
 
+def _request_with_retry(
+    method,
+    url,
+    *,
+    headers=None,
+    json_body=None,
+    params=None,
+    files=None,
+    data=None,
+    timeout,
+    retries,
+    backoff,
+):
+    # минимальная валидация входа
+    retries = max(1, int(retries))
+    timeout = float(timeout)
+    backoff = float(backoff)
+
+    last_exc = None
+    for attempt in range(1, retries + 1):
+        try:
+            resp = requests.request(
+                method=method.upper(),
+                url=url,
+                headers=headers or {},
+                json=json_body,
+                params=params,
+                files=files,
+                data=data,
+                timeout=timeout,
+            )
+            return resp
+        except (ReadTimeout, ConnectTimeout, ConnectionError) as e:
+            last_exc = e
+            if attempt >= retries:
+                break
+            sleep_sec = backoff ** (attempt - 1)
+            logger.warning(
+                f"[http-retry] {method} {url} failed: {e} (attempt {attempt}/{retries}), sleep {sleep_sec:.2f}s"
+            )
+            time.sleep(sleep_sec)
+        except Exception as e:
+            # другие ошибки не ретраим
+            last_exc = e
+            break
+    raise last_exc if last_exc else RuntimeError("Unknown HTTP error")
+
+
 # Проверка существования проекта в strapi
-def project_exists(api_url_proj, api_token, name):
+def project_exists(
+    api_url_proj, api_token, name, *, http_timeout, http_retries, http_backoff
+):
     url = f"{api_url_proj}?filters[name][$eq]={name}"
     headers = get_strapi_headers(api_token)
     try:
-        resp = requests.get(url, headers=headers, timeout=10)
+        resp = _request_with_retry(
+            "GET",
+            url,
+            headers=headers,
+            timeout=http_timeout,
+            retries=http_retries,
+            backoff=http_backoff,
+        )
         if resp.status_code == 200:
             data = resp.json()
             if data.get("data") and len(data["data"]) > 0:
                 return data["data"][0]["id"], data["data"][0]["attributes"]
+        else:
+            logger.warning(f"[project_exists] {resp.status_code}: {resp.text[:200]}")
     except Exception as e:
         logger.error(f"[project_exists] {e}")
     return None, None
@@ -106,7 +167,6 @@ def log_strapi_sections(data):
     ]
     for key in sections:
         val = data.get(key)
-        # aорматированный лог по секциям
         if key == "name":
             if val:
                 logger.info(f"[name] Размещено имя {val}")
@@ -175,16 +235,32 @@ def create_project(
     domain=None,
     url=None,
     publish=True,
+    *,
+    http_timeout,
+    http_retries,
+    http_backoff,
 ):
     # категории: если пришли строками - мап на id
     cats = data.get("project_categories", [])
     if cats and isinstance(cats[0], str):
-        ids = get_project_category_ids(api_url_cat, api_token, cats)
+        ids = get_project_category_ids(
+            api_url_cat,
+            api_token,
+            cats,
+            http_timeout=http_timeout,
+            http_retries=http_retries,
+            http_backoff=http_backoff,
+        )
         data["project_categories"] = ids
 
     # проверка: проект уже существует?
     project_id, existing_attrs = project_exists(
-        api_url_proj, api_token, data.get("name", "")
+        api_url_proj,
+        api_token,
+        data.get("name", ""),
+        http_timeout=http_timeout,
+        http_retries=http_retries,
+        http_backoff=http_backoff,
     )
     if project_id:
         status = check_strapi_status(data, existing_attrs)
@@ -251,7 +327,15 @@ def create_project(
     headers = get_strapi_headers(api_token)
 
     try:
-        resp = requests.post(api_url_proj, json=payload, headers=headers, timeout=20)
+        resp = _request_with_retry(
+            "POST",
+            api_url_proj,
+            headers=headers,
+            json_body=payload,
+            timeout=http_timeout,
+            retries=http_retries,
+            backoff=http_backoff,
+        )
         logger.info(f"[create] {safe_name}: {resp.status_code}, {resp.text[:200]}")
 
         # успех
@@ -261,7 +345,14 @@ def create_project(
 
         # конфликты/валидация/сервер - попытка найти ID и метка SKIP, если уже есть
         if resp.status_code in (409, 400, 500):
-            project_id, _ = project_exists(api_url_proj, api_token, safe_name)
+            project_id, _ = project_exists(
+                api_url_proj,
+                api_token,
+                safe_name,
+                http_timeout=http_timeout,
+                http_retries=http_retries,
+                http_backoff=http_backoff,
+            )
             if project_id:
                 log_strapi_status(SKIP, app_name, domain, url)
                 logger.info(f"[SKIP] Проект уже существует после ошибки: {safe_name}")
@@ -276,7 +367,16 @@ def create_project(
 
 
 # Загрузка лого через эндпоинт /upload
-def upload_logo(api_url, api_token, project_id, image_path):
+def upload_logo(
+    api_url,
+    api_token,
+    project_id,
+    image_path,
+    *,
+    http_timeout,
+    http_retries,
+    http_backoff,
+):
     if not os.path.exists(image_path):
         logger.warning(f"[svgLogo] no_image: {image_path}")
         return None
@@ -288,7 +388,16 @@ def upload_logo(api_url, api_token, project_id, image_path):
         with open(image_path, "rb") as f:
             files = {"files": (os.path.basename(image_path), f, "image/jpeg")}
             data = {"ref": ref, "refId": project_id, "field": field}
-            resp = requests.post(upload_url, files=files, data=data, headers=headers)
+            resp = _request_with_retry(
+                "POST",
+                upload_url,
+                headers=headers,
+                files=files,
+                data=data,
+                timeout=http_timeout,
+                retries=http_retries,
+                backoff=http_backoff,
+            )
             logger.info(
                 f"[svgLogo] {image_path} to project_id={project_id}: {resp.status_code}, {resp.text[:200]}"
             )
@@ -301,10 +410,26 @@ def upload_logo(api_url, api_token, project_id, image_path):
 
 
 # Обновление seo секции с media id картинки (logo_id)
-def update_seo_image(api_url_proj, api_token, project_id, logo_id):
+def update_seo_image(
+    api_url_proj,
+    api_token,
+    project_id,
+    logo_id,
+    *,
+    http_timeout,
+    http_retries,
+    http_backoff,
+):
     headers = get_strapi_headers(api_token)
     get_url = f"{api_url_proj}/{project_id}?populate[seo][populate][metaSocial]=*"
-    resp = requests.get(get_url, headers=headers)
+    resp = _request_with_retry(
+        "GET",
+        get_url,
+        headers=headers,
+        timeout=http_timeout,
+        retries=http_retries,
+        backoff=http_backoff,
+    )
     if resp.status_code != 200:
         logger.warning(
             f"[seo_patch] Не удалось получить текущий seo: {resp.status_code}"
@@ -323,19 +448,37 @@ def update_seo_image(api_url_proj, api_token, project_id, logo_id):
 
     data = {"seo": new_seo}
     put_url = f"{api_url_proj}/{project_id}"
-    put_resp = requests.put(put_url, json={"data": data}, headers=headers)
+    put_resp = _request_with_retry(
+        "PUT",
+        put_url,
+        headers=headers,
+        json_body={"data": data},
+        timeout=http_timeout,
+        retries=http_retries,
+        backoff=http_backoff,
+    )
     logger.info(f"[seo_patch] PATCH seo: {put_resp.status_code}, {put_resp.text[:200]}")
     return put_resp.status_code == 200
 
 
 # Установка alt
-def set_strapi_alt(api_url, api_token, image_id, alt_text):
+def set_strapi_alt(
+    api_url, api_token, image_id, alt_text, *, http_timeout, http_retries, http_backoff
+):
     upload_url = api_url.replace("/projects", "/upload")
     url = f"{upload_url}?id={image_id}"
     headers = {"Authorization": f"Bearer {api_token}"}
     files = {"fileInfo": (None, json.dumps({"alternativeText": alt_text}))}
     try:
-        resp = requests.post(url, headers=headers, files=files, timeout=10)
+        resp = _request_with_retry(
+            "POST",
+            url,
+            headers=headers,
+            files=files,
+            timeout=http_timeout,
+            retries=http_retries,
+            backoff=http_backoff,
+        )
         if resp.status_code in (200, 201):
             logger.info(
                 f"[svgLogo-alt] alternativeText успешно обновлен для id={image_id}"
@@ -350,7 +493,17 @@ def set_strapi_alt(api_url, api_token, image_id, alt_text):
 
 
 # Загрузка svgLogo проекта в strapi
-def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
+def try_upload_logo(
+    main_data,
+    storage_path,
+    api_url,
+    api_token,
+    project_id,
+    *,
+    http_timeout,
+    http_retries,
+    http_backoff,
+):
     image_name = main_data.get("svgLogo")
     project_name = main_data.get("name") or ""
     if not image_name:
@@ -360,7 +513,15 @@ def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
     if not os.path.exists(image_path):
         logger.warning(f"[svgLogo] не найдено (файл отсутствует): {image_path}")
         return None
-    result = upload_logo(api_url, api_token, project_id, image_path)
+    result = upload_logo(
+        api_url,
+        api_token,
+        project_id,
+        image_path,
+        http_timeout=http_timeout,
+        http_retries=http_retries,
+        http_backoff=http_backoff,
+    )
     if result:
         logger.info(
             f"[svgLogo] успешно загружено: {image_name} для project_id={project_id}"
@@ -368,8 +529,24 @@ def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
         logo_id = result.get("id")
         if logo_id:
             if project_name:
-                set_strapi_alt(api_url, api_token, logo_id, project_name)
-            update_seo_image(api_url, api_token, project_id, logo_id)
+                set_strapi_alt(
+                    api_url,
+                    api_token,
+                    logo_id,
+                    project_name,
+                    http_timeout=http_timeout,
+                    http_retries=http_retries,
+                    http_backoff=http_backoff,
+                )
+            update_seo_image(
+                api_url,
+                api_token,
+                project_id,
+                logo_id,
+                http_timeout=http_timeout,
+                http_retries=http_retries,
+                http_backoff=http_backoff,
+            )
         return result
     else:
         logger.warning(f"[svgLogo] ошибка загрузки: {image_name}")
@@ -377,10 +554,19 @@ def try_upload_logo(main_data, storage_path, api_url, api_token, project_id):
 
 
 # Получение или создание категории по имени
-def get_or_create_project_category(api_url_cat, api_token, category_name):
+def get_or_create_project_category(
+    api_url_cat, api_token, category_name, *, http_timeout, http_retries, http_backoff
+):
     url = f"{api_url_cat}?filters[name][$eq]={category_name}"
     headers = get_strapi_headers(api_token)
-    resp = requests.get(url, headers=headers)
+    resp = _request_with_retry(
+        "GET",
+        url,
+        headers=headers,
+        timeout=http_timeout,
+        retries=http_retries,
+        backoff=http_backoff,
+    )
     if resp.status_code == 200:
         data = resp.json()
         items = data.get("data", [])
@@ -388,7 +574,15 @@ def get_or_create_project_category(api_url_cat, api_token, category_name):
             return items[0]["id"]
     create_url = api_url_cat
     payload = {"data": {"name": category_name}}
-    resp = requests.post(create_url, headers=headers, json=payload)
+    resp = _request_with_retry(
+        "POST",
+        create_url,
+        headers=headers,
+        json_body=payload,
+        timeout=http_timeout,
+        retries=http_retries,
+        backoff=http_backoff,
+    )
     if resp.status_code in (200, 201):
         data = resp.json()
         return data["data"]["id"]
@@ -396,10 +590,19 @@ def get_or_create_project_category(api_url_cat, api_token, category_name):
 
 
 # Список id (или [])
-def get_project_category_ids(api_url_cat, api_token, category_names):
+def get_project_category_ids(
+    api_url_cat, api_token, category_names, *, http_timeout, http_retries, http_backoff
+):
     ids = []
     for cat in category_names:
-        id_ = get_or_create_project_category(api_url_cat, api_token, cat)
+        id_ = get_or_create_project_category(
+            api_url_cat,
+            api_token,
+            cat,
+            http_timeout=http_timeout,
+            http_retries=http_retries,
+            http_backoff=http_backoff,
+        )
         if id_:
             ids.append(id_)
     return ids
@@ -410,10 +613,14 @@ def sync_projects(config_path=CONFIG_JSON, only_app=None, quiet: bool = False):
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
 
-    # вычисляем publish один раз
-    strapi_box = config.get("strapi", {}) or {}
-    strapi_publish_cfg = strapi_box.get("strapi_publish", True)
+    # http-настройки из централизованного конфига
+    strapi_box = config.get("strapi") or {}
+    http_timeout = float(strapi_box.get("http_timeout_sec"))
+    http_retries = int(strapi_box.get("http_retries"))
+    http_backoff = float(strapi_box.get("http_backoff"))
 
+    # вычисляем publish один раз
+    strapi_publish_cfg = strapi_box.get("strapi_publish", True)
     ai_cfg = config.get("ai", {}) or {}
     providers = (ai_cfg.get("providers") or {}).values()
     any_ai_enabled = any(bool(p.get("enabled")) for p in providers)
@@ -459,9 +666,6 @@ def sync_projects(config_path=CONFIG_JSON, only_app=None, quiet: bool = False):
                 continue
 
             json_path = os.path.join(STORAGE_APPS_DIR, app_name, domain, "main.json")
-            image_path = os.path.join(
-                STORAGE_APPS_DIR, app_name, domain, f"{domain}.jpg"
-            )
 
             if not os.path.exists(json_path):
                 if not quiet:
@@ -492,6 +696,9 @@ def sync_projects(config_path=CONFIG_JSON, only_app=None, quiet: bool = False):
                 domain=domain,
                 url=partner,
                 publish=publish,
+                http_timeout=http_timeout,
+                http_retries=http_retries,
+                http_backoff=http_backoff,
             )
 
             if status == ERROR or not project_id:
@@ -508,11 +715,18 @@ def sync_projects(config_path=CONFIG_JSON, only_app=None, quiet: bool = False):
 
             # загрузка лого одинаково для обоих режимов
             try_upload_logo(
-                data, os.path.dirname(json_path), api_url_proj, api_token, project_id
+                data,
+                os.path.dirname(json_path),
+                api_url_proj,
+                api_token,
+                project_id,
+                http_timeout=http_timeout,
+                http_retries=http_retries,
+                http_backoff=http_backoff,
             )
 
 
-# "Тихий" режим
+# Тихий режим
 def sync_projects_with_terminal_status(config_path=CONFIG_JSON):
     return sync_projects(config_path=config_path, only_app=None, quiet=True)
 

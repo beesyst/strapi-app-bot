@@ -41,7 +41,6 @@ from core.status import (
 
 # Логгеры
 logger = get_logger("orchestrator")
-strapi_logger = get_logger("strapi")
 
 # Пути
 MAIN_TEMPLATE = os.path.join(
@@ -103,6 +102,9 @@ def _partner_worker(
     api_url_cat,
     api_token,
     ai_active,
+    http_timeout,
+    http_retries,
+    http_backoff,
 ):
     # в дочернем процессе свой executor и свой event loop
     os.environ["DISABLE_CHILD_SPINNER"] = "1"
@@ -118,13 +120,15 @@ def _partner_worker(
                 ai_cfg,
                 executor,
                 allowed_categories,
-                show_status=False,
                 strapi_sync=strapi_sync,
                 api_url_proj=api_url_proj,
                 api_url_cat=api_url_cat,
                 api_token=api_token,
                 ai_active=ai_active,
                 spinner_event=None,
+                http_timeout=http_timeout,
+                http_retries=http_retries,
+                http_backoff=http_backoff,
             )
         )
     except Exception:
@@ -151,15 +155,16 @@ async def process_partner(
     ai_cfg,
     executor,
     allowed_categories,
-    show_status=False,
     strapi_sync=None,
     api_url_proj=None,
     api_url_cat=None,
     api_token=None,
     ai_active=True,
     spinner_event=None,
+    http_timeout=None,
+    http_retries=None,
+    http_backoff=None,
 ):
-    start_time = time.time()
     spinner_text = f"{app_name} - {url}"
 
     owns_spinner = False
@@ -291,7 +296,14 @@ async def process_partner(
         if not categories:
             main_data["project_categories"] = []
         elif strapi_sync and api_url_cat and api_token:
-            category_ids = get_project_category_ids(api_url_cat, api_token, categories)
+            category_ids = get_project_category_ids(
+                api_url_cat,
+                api_token,
+                categories,
+                http_timeout=http_timeout,
+                http_retries=http_retries,
+                http_backoff=http_backoff,
+            )
             main_data["project_categories"] = category_ids
         else:
             main_data["project_categories"] = categories
@@ -360,6 +372,11 @@ async def orchestrate_all():
     strapi_cfg = central_config.get("strapi", {})
     strapi_sync = strapi_cfg.get("strapi_sync", central_config.get("strapi_sync", True))
     strapi_publish_cfg = strapi_cfg.get("strapi_publish", True)
+
+    # HTTP из конфига (централизованно)
+    http_timeout = float(strapi_cfg["http_timeout_sec"])
+    http_retries = int(strapi_cfg["http_retries"])
+    http_backoff = float(strapi_cfg["http_backoff"])
 
     main_template = load_main_template()
     prompts = load_prompts()
@@ -433,13 +450,14 @@ async def orchestrate_all():
                     api_url_cat,
                     api_token,
                     ai_active,
+                    http_timeout,
+                    http_retries,
+                    http_backoff,
                 ),
             )
             p.start()
-
             # ждем завершения с таймаутом
             p.join(PARTNER_TIMEOUT)
-
             if p.is_alive():
                 # таймаут: останавливаем красивый спиннер, печатаем error, жестко убиваем воркер
                 ext_stop_event.set()
@@ -488,27 +506,19 @@ async def orchestrate_all():
                 from core.api.strapi import create_project
 
                 publish_flag = bool(will_publish)
-                try:
-                    status_strapi, project_id = create_project(
-                        api_url_proj,
-                        api_url_cat,
-                        api_token,
-                        main_data,
-                        app_name=app_name,
-                        domain=domain,
-                        url=url,
-                        publish=publish_flag,
-                    )
-                except TypeError:
-                    status_strapi, project_id = create_project(
-                        api_url_proj,
-                        api_url_cat,
-                        api_token,
-                        main_data,
-                        app_name=app_name,
-                        domain=domain,
-                        url=url,
-                    )
+                status_strapi, project_id = create_project(
+                    api_url_proj,
+                    api_url_cat,
+                    api_token,
+                    main_data,
+                    app_name=app_name,
+                    domain=domain,
+                    url=url,
+                    publish=publish_flag,
+                    http_timeout=http_timeout,
+                    http_retries=http_retries,
+                    http_backoff=http_backoff,
+                )
 
                 if status_strapi == STRAPI_ERROR:
                     final_status = "error"
@@ -532,7 +542,14 @@ async def orchestrate_all():
 
                 if project_id and status_strapi != STRAPI_ERROR:
                     try_upload_logo(
-                        main_data, storage_path, api_url_proj, api_token, project_id
+                        main_data,
+                        storage_path,
+                        api_url_proj,
+                        api_token,
+                        project_id,
+                        http_timeout=http_timeout,
+                        http_retries=http_retries,
+                        http_backoff=http_backoff,
                     )
             else:
                 print(f"[error] {app_name} - {url} - {elapsed} sec [No API]")
