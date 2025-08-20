@@ -1,0 +1,42 @@
+{
+  "name": "BeraPaw",
+  "shortDescription": "BeraPaw on Berachain wraps native BGT into a liquid asset and introduces the Paw governance token for decentralized governance.",
+  "svgLogo": "berapaw.jpg",
+  "project_categories": [
+    4,
+    5,
+    8
+  ],
+  "socialLinks": {
+    "websiteURL": "https://www.berapaw.com/",
+    "twitterURL": "https://x.com/0xBeraPaw",
+    "discordURL": "https://discord.gg/berapaw",
+    "githubURL": "https://github.com/BeraPaw",
+    "mediumURL": "",
+    "youtubeURL": "",
+    "telegramURL": "",
+    "documentURL": "https://docs.berapaw.com",
+    "linkedinURL": "",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": ""
+  },
+  "seo": {
+    "metaTitle": "BeraPaw",
+    "metaDescription": "BeraPaw on Berachain wraps native BGT into a liquid asset and introduces the Paw governance token for decentralized governance.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "BeraPaw",
+        "description": "BeraPaw on Berachain: BGT liquid; Paw gov token.",
+        "image": null
+      }
+    ],
+    "keywords": "How BeraPaw wraps BGT into LBGT and the role of stLBGT in auto compounding on Berachain, PAW tokenomics fixed supply of 100 million staking to obtain stPAW and governance rights, BeraPawForge redemption queue mechanics including queueDelay processingFee and batch processing",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nBeraPaw is a liquid staking protocol within the Berachain ecosystem that wraps the native BGT token into a liquid instrument called Liquid BGT and introduces the PAW governance token for DAO governance. The project aims to simplify interaction with Proof of Liquidity and provide a portable, tradable version of BGT.\n\nBeraPaw publishes technical documentation and addresses of key contracts, including LBGT, BeraPawForge, StakedLBGT, and pPAW, in its official documentation, which also outlines the forge plus reward vaults architecture and the access control roles embedded in smart contracts.\n\nThe project has undergone audits of core contracts and PoL strategy modules. The initial Core Contracts audit was published on February 19, 2025, the final Core Contracts audit followed on March 3, 2025, and the PoL Strategy Vault audits were published on April 29, 2025. These reports are listed in the Audits section of the official documentation.\n\n## Functionality\n\nMinting: Users create LBGT through the forge, where LBGT is backed 1:1 by BGT. The mint and redeem logic resides in the BeraPawForge contract, which accepts BGT from reward vaults and issues LBGT to recipient addresses.\n\nAuto-compounding and staking: On staking LBGT, users receive the index token stLBGT as a receipt, and rewards from delegations and incentive pools are automatically reinvested into stLBGT, delivering compound gains for holders.\n\nRedemption and queue: The system supports a redeem queue and manages parameters such as queueDelay, processingFee, and the minimum redemption amount. These controls and related management functions are exposed in the BeraPawForge contract documentation.\n\nGovernance and economics: The PAW governance token must be staked to receive stPAW and participate in voting on the distribution of BGT delegations and to earn a share of protocol revenue. The total PAW supply is fixed at 100,000,000 and is described in the tokenomics section.\n\nRoadmap and decentralisation: The project roadmap is divided into three phases: (1) protocol launch and liquidity bootstrap, (2) expansion of utilities and integrations, and (3) full decentralization with contract ownership returned to Paw Labs. All stages and items are detailed in the official roadmap.\n\n## Features\n\n- **Liquid Wrapper (LBGT 1:1)**: LBGT is a 1:1 wrapper over BGT designed for trading, lending, and other DeFi use cases; LBGT is backed by a BGT reserve.\n- **Governance Token (PAW) — Fixed Supply**: PAW is the governance token with a fixed supply of 100,000,000, requiring staking to obtain stPAW and to participate in governance and protocol revenue.\n- **stLBGT — index receipt with auto-compounding**: Staking LBGT yields stLBGT, with delegable rewards automatically reinvested to grow the index.\n- **BeraPawForge — core contract**: The core contract holds BGT, manages mint and redeem, the redeem queue, rewards collection and distribution, and includes functions to boost validators and manage reward vaults.\n- **Redemption Queue and processing parameters**: The redemption queue includes queueDelay, processingFee, and batch processing via processRedemptions, with access controlled by contract roles.\n- **Audits — public reports with dates**: Public audits include the Core Contracts initial report published on February 19, 2025, the final report on March 3, 2025, and PoL Strategy Vault audits dated April 29, 2025.\n- **Contracts verified on explorer**: The addresses of key contracts, including LBGT, BeraPawForge, and StakedLBGT, are published in the official documentation and their sources are accessible for inspection.\n- **LP-staking and reward vaults**: The protocol supports LP staking and reward vaults, including the LBGT-WBERA staking contract, enabling liquidity providers to earn rewards and participate in pPAW/PAW issuance; the relevant contracts and functions are documented.\n- **Pre-TGE pPAW mechanics**: The Pre-TGE pPAW mechanism involves 15,000,000 tokens (15% of total supply) used for community rewards and converted 1:1 into PAW at TGE.\n- **Position in analytics and aggregators**: External analytics and review sites describe BeraPaw as a liquid staking protocol on Berachain, publishing TVL, stake balances, and APY; examples include DAIC Capital and DeFiLlama.\n\n## Berachain x Berapaw\n\nBeraPaw positions itself as a protocol built on Berachain, providing a liquid wrapper for the native governance token BGT, turning BGT into Liquid BGT and introducing the PAW governance token. This is described in the What Is BeraPaw documentation.\n\nBeraPaw published audits of its contracts on the official documentation site, with the Core Contracts Initial Report dated 2025-02-19 and the Final Report dated 2025-03-03; the documentation also notes audits for PoL Strategy Vault on 2025-04-29.\n\nCorrespondence on the Berachain ecosystem forum confirms governance and PoL management ties: on 2025-03-06, BeraPaw filed a General Request for Reward Vault for WBERA/LBGT with pool address 0x705Fc16BA5A1EB67051934F2Fb17EacaE660F6c7 and technical details about the LP token.\n\nIn May 2025, BeraPaw continued work on the RFRV mechanism, with posts on 2025-05-08 describing Reward Vault Requests for BeraPaw-Euler-MevCapital WBERA Lending and BeraPaw-Bulla-LBGT-HONEY, including plans to seed a pool of $50,000 as part of listing and liquidity intensification.\n\nThe official Berachain blog notes the opening of Proof of Liquidity governance Phase One and the launch of the first off-BEX reward vaults, dated 2025-03-24; weekly RFRV updates include Guardians Assemble and other updates, with a pool involving Kodiak, BeraPaw, and LBGT/wBERA appearing among approved pools, indicating BeraPaw’s whitelisting consideration in April 2025."
+}

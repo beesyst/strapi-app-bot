@@ -1,0 +1,42 @@
+{
+  "name": "Roadmap logo",
+  "shortDescription": "ApeBond is a multichain bonds platform issuing vesting non fungible tokens to fund projects at a discount, via the ABOND token.",
+  "svgLogo": "ape.jpg",
+  "project_categories": [
+    2,
+    4,
+    6
+  ],
+  "socialLinks": {
+    "websiteURL": "https://ape.bond/",
+    "twitterURL": "https://x.com/ApeBond",
+    "discordURL": "https://discord.com/channels/821817977917538375/1110438345701593088",
+    "githubURL": "https://github.com/ApeSwapFinance",
+    "mediumURL": "https://medium.com/p/257c10e2ad18",
+    "youtubeURL": "",
+    "telegramURL": "https://t.me/ape_bond",
+    "documentURL": "https://docs.ape.bond/apebond/welcome/master",
+    "linkedinURL": "",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": "apecoin"
+  },
+  "seo": {
+    "metaTitle": "Roadmap logo",
+    "metaDescription": "ApeBond is a multichain bonds platform issuing vesting non fungible tokens to fund projects at a discount, via the ABOND token.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "Roadmap logo",
+        "description": "ApeBond issues vesting NFT bonds at ABOND discount",
+        "image": null
+      }
+    ],
+    "keywords": "ApeBond ERC-5725 vesting NFT explained, How to stake ABOND for veABOND governance and bond discounts, ApeBond Berachain Edition Bond Art NFT drop May 2025",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nApeBond is a multi-chain bonds protocol (on-chain OTC marketplace) spun out of the ApeSwap project and positioned as a platform for raising capital through the sale of discounted, vesting NFT issuances of tokens. The rebranding from ApeSwap to ApeBond was announced on October 10, 2023. This transition positioned ApeBond as a dedicated venue for token vesting NFTs issued at a discount to support project fundraising.\n\nABOND is the native utility token of the ecosystem. Its public launch and migration from BANANA and GNANA began with ABOND’s launch on 12 December 2023, and all migration bonds started linear vesting at 13:00 UTC on that day. The project actively promotes the ERC‑5725 Transferable Vesting NFT standard, published in September 2022, and uses it as the basis for vesting NFTs that confer rights to token vesting.\n\n## Functionality\n\nApeBond’s core functionality is the sale of four bond types, including reserve bonds and liquidity bonds. Projects sell their tokens at a discount in exchange for stablecoins, LP tokens, or other assets, and buyers receive an NFT vesting note with a linear vesting schedule; the aim is to create protocol‑owned liquidity and to fund the project treasury.\n\nThe platform’s tokenomics revolve around ABOND, with contracts published for BNB Chain and Ethereum/Polygon, and governance/utility via veABOND (vote‑escrowed ABOND). Locking ABOND yields veABOND, increases discounts on bonds, and unlocks access to special sales and Real Yield distributions.\n\nIn addition to bonds, the platform offers Launchpad for listings and Flash Bonds for timed sales, with the first campaign announced on 23 April 2024. Tier Staking / Real Yield lets ABOND stakers earn a share of ecosystem revenue, with Real Yield launched on 12 September 2024. The platform also provides multi‑chain swap aggregation; details are described in the official documentation.\n\n## Features\n\n- **On‑chain OTC Bonding**: Sellers list Reserve and Liquidity Bonds; buyers receive a vesting NFT upon purchase, while the protocol gains capital and liquidity, forming protocol‑owned liquidity.\n- **ABOND (Native Utility Token)**: ABOND is the core ecosystem token with contracts published for BNB Chain and Ethereum/Polygon; purchasing and migration guidance are provided in the official documentation.\n- **veABOND (Vote‑Escrowed ABOND)**: Locking ABOND yields veABOND, which confers governance rights, boosts bond discounts, provides access to Flash/Launch Bonds, and enables Real Yield distributions.\n- **EIP‑5725 Transferable Vesting NFT**: ApeBond and ApeSwap contributed to the creation and adoption of the ERC‑5725 standard, which serves as the basis for vesting NFTs representing token vesting rights.\n- **Flash Bonds (Timed Sales)**: Structured, short‑duration sales of blue‑chip assets with tiered access and immediate or accelerated vesting for eligible participants; first campaign announced on 23 April 2024.\n- **Real Yield Revenue Share**: A model distributing a portion of revenue from ecosystem bonds and LP operations to stakers and veABOND holders; Real Yield was officially launched on 12 September 2024.\n- **Tier Staking & Discount Boosts**: Tier Points and Bronze‑to‑Legend tiers based on ABOND lockups provide differentiated bond discounts, larger allocation access, and exclusive sales.\n- **Launchpad / Token Launches**: An integrated Launchpad for primary token sales and distribution via migration/launch bonds; partnerships and features are described in the product suite.\n- **Multi‑chain Support & Swap Aggregation**: The platform markets multi‑chain support (Ethereum, BNB, Polygon, Base, Arbitrum and others) and includes a swap aggregator; supported networks are listed on the site.\n- **Open‑source Contracts & Audit Surface**: Project sources are available through the ApeSwapFinance GitHub organization, including verified contracts on Etherscan.\n- **On‑chain Metrics & Transparency**: Public statistics such as Total Bonds Sold and Total Bonded Value, plus partner lists, are accessible on the main site and in the documentation.\n\n## Berachain x Ape\n\nApeBond’s public website lists Berachain explicitly as one of the platform’s primary chains and shows Berachain in the Bonds marketplace UI, visible on the live homepage and Bonds page.\n\nApeBond’s social posts announced Berachain‑specific activity, including a Berachain‑themed Bond Art NFT drop scheduled for May 29, 2025 at 17:00 UTC, and a “Bonding with Partners #40: Berachain Edition” event scheduled for May 30, 2025 at 16:00 UTC.\n\nApeBond’s official Medium publication dated 2025‑07‑09 states that ApeBond’s smart contracts have powered on‑chain bonds across multiple chains and explicitly names Berachain among the supported chains.\n\nIn Berachain’s official materials, there is no separate public announcement or blog post hosted on Berachain’s site describing a formal partnership with ApeBond; Berachain’s documentation and blogs discuss NFTs, Proof‑of‑Liquidity, and governance updates but do not contain a Berachain‑hosted press release referencing ApeBond."
+}

@@ -1,10 +1,32 @@
+import json
 import re
 from urllib.parse import urlparse
 
 from core.log_utils import get_logger
+from core.paths import CONFIG_JSON
 
 # Логгер
 logger = get_logger("normalize")
+
+# Загрузка bad_name_keywords из конфига и сбор регэксп
+try:
+    with open(CONFIG_JSON, "r", encoding="utf-8") as _f:
+        _CONFIG = json.load(_f) or {}
+except Exception:
+    _CONFIG = {}
+
+_BAD_NAME_KEYWORDS = [
+    str(x).strip() for x in _CONFIG.get("bad_name_keywords", []) if str(x).strip() != ""
+]
+# собираем \b(...|...|...)\b, экранируем токены; если список пустой - ставим заглушку, чтобы регэксп был валиден
+_BAD_NAME_RE = (
+    re.compile(
+        r"\b(" + "|".join(re.escape(k) for k in _BAD_NAME_KEYWORDS) + r")\b",
+        re.I,
+    )
+    if _BAD_NAME_KEYWORDS
+    else re.compile(r"^\Z")
+)
 
 
 # Социальные и url нормализации
@@ -28,10 +50,10 @@ def clean_project_name(name: str) -> str:
 
 # Определение, что имя проекта мусорное
 def is_bad_name(name: str) -> bool:
-    if not name or len(name) < 2:
+    if not name or len(name.strip()) < 2:
         return True
-    blacklist = ["home", "index", "welcome", "untitled"]
-    return name.strip().lower() in blacklist
+    txt = name.strip().lower()
+    return bool(_BAD_NAME_RE.search(txt))
 
 
 # Привод соцссылок к канонике

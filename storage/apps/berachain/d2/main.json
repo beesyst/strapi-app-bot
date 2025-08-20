@@ -1,0 +1,42 @@
+{
+  "name": "D2 Finance",
+  "shortDescription": "On-chain epoch vaults delivering multi-strategy derivatives and options, with Hyperliquid integration and transparent performance.",
+  "svgLogo": "d2.jpg",
+  "project_categories": [
+    4,
+    2,
+    28
+  ],
+  "socialLinks": {
+    "websiteURL": "https://d2.finance/",
+    "twitterURL": "https://x.com/D2_Finance",
+    "discordURL": "https://discord.com/invite/XaKt2weT33",
+    "githubURL": "",
+    "mediumURL": "https://medium.com/@D2.Finance",
+    "youtubeURL": "",
+    "telegramURL": "",
+    "documentURL": "",
+    "linkedinURL": "",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": "d2"
+  },
+  "seo": {
+    "metaTitle": "D2 Finance",
+    "metaDescription": "On-chain epoch vaults delivering multi-strategy derivatives and options, with Hyperliquid integration and transparent performance.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "D2 Finance",
+        "description": "On-chain epoch vaults: multi-strat derivs & opts",
+        "image": null
+      }
+    ],
+    "keywords": "D2 Finance HyperEVM integration timeline 2025 hXXI hWORLD hKRAKEN hSOL, Berachain x D2 HyperBera.USDC Epoch 1 deposits January 2025, D2 Finance on‑chain epoch vaults audit Paladin 2023 TVL metrics Arbitrum Berachain",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nD2 Finance is a multi‑strategy on‑chain fund positioned as a provider of institutional tokenized derivative strategies and managed vault products. The project publicly introduced itself via an official announcement on October 30, 2023. Smart contracts for D2 were deployed in 2022–2023, with the token epoch released on November 11, 2022 and vault contracts deployed on March 8, 2023.\n\nThe platform offers single‑click access to sets of option‑based and relatively meaningful strategies, including stablecoin delta‑neutral, funding arbitrage, BTC‑oriented structures, and RWA strategies, all implemented through on‑chain vaults. According to aggregators and the site, total TVL exceeds $10M, while DefiLlama shows about $12.16M with a chain breakdown across Arbitrum, Hyperliquid L1, Berachain, and others.\n\nD2 publishes concrete product releases and metrics. The project reports a cumulative return of +140% for the period from December 1, 2023 to April 30, 2025 on its site, and in 2024–2025 announced integration with Hyperliquid and the launch of several HyperEVM strategies (hXXI, hWORLD, hKRAKEN, hSOL) with launch dates documented in their official blog posts.\n\n## Functionality\n\nD2’s architecture is built as a set of autonomous on‑chain vault contracts that operate in epochs, where users deposit capital for fixed periods and the strategy executes predefined trades. The official documentation lists the vault contracts and their deployment dates.\n\nThe user interface and backend are integrated with a proprietary Order Management System and a custom operating system, which the team states manages external executions and enforces risk parameters.\n\nD2 strategies combine on‑chain derivatives, options selling, volatility and relative‑value trading, and funding arbitrage; there are also products for BTC accumulation and tokenized RWA structures with compliance. For capital‑intensive or high‑liquidity operations, D2 integrated with Hyperliquid, announced in November 2024, enabling precompiled calls to access Layer‑1 perpetuals and expanding on‑chain execution capabilities; the first HyperEVM products began launching in 2025, such as hXXI, with deposits opened on May 5, 2025.\n\n## Features\n\n- **On‑chain Epoch Vaults**: Non‑custodial epoch‑based vault architecture with public contract addresses and deployment dates published in the official docs.\n- **Multi‑strategy Derivatives Engine**: Actively managed options, volatility, and relative‑value strategies (stablecoin delta‑neutral, funding arbitrage, BTC convexity, RWA) run inside vaults.\n- **HyperEVM / Hyperliquid Integration**: Integration with Hyperliquid announced to enable precompile access to on‑chain perpetuals and higher execution throughput; first HyperEVM products launched with deposits opened on May 5, 2025.\n- **Public Audit Trail / Third‑party Audits**: Smart contracts and strategy code audited by Paladin; audit completed on September 27, 2023; security partners referenced on the official site.\n- **Transparent Performance Reporting**: The project publishes cumulative performance figures and epoch results on site and in blog posts (for example, a +140% cumulative return from December 1, 2023 to April 30, 2025).\n- **Live Contract Addresses & Provenance**: Official documentation lists individual vault contract addresses and deployment timestamps (multiple epochs with on‑chain links and dates such as November 11, 2022 and March 8, 2023).\n- **TVL & Economic Metrics Published**: Protocol TVL and revenue metrics are publicly tracked; the site notes Strategies TVL over $10M and DefiLlama reports TVL around $12.16M with a chain breakdown.\n- **Product Roadmap & New Vaults**: A sequence of HyperEVM vaults and tokenized structured products rolled out in 2025, including hWORLD, hKRAKEN, and hSOL, with strategy posts detailing launch timelines.\n\n## Berachain x D2\n\nD2 Finance published on January 15, 2025 on Medium an announcement of the HyperBera weETH strategy, stating a collaboration with Etherfi to launch this strategy and that Epoch 1 deposits would open January 17–21, 2025 with withdrawals available March 31, 2025. The post details phases before and after the Boyco/Berachain launch and outlines mechanics for deploying weETH and transferring main volume to Boyco/Berachain after they go live.\n\nD2 submitted a Reward Vault for “2xBERA” on the Berachain forum on March 28, 2025; the post notes the Vault address 0xCD18006cC69c6d5Fa4fd4EaF99910b58464fa3ae and describes the Vault as ERC‑4626‑compatible with its own management strategies; it also outlines planned integration with Berachain ecosystem protocols and provides contact details.\n\nIn a Berachain forum thread on April 9, 2025, D2 presented a Reward Vault for the “HyperBera.USDC” strategy, noting that HyperBera.USDC has traded $10m USDC notional in Berachain protocols over two epochs, and listing arbitrage and capital deployment mechanics within Berachain; the thread links to a D2 Medium article and provides X verification.\n\nIn March 2025, D2 published a Medium article about the dgnBeraland strategy; Epoch 1 achieved 110% APR, the deposit cap was filled during the Boyco launch, and the strategy traded $690k in deposits during the first epoch and retained $547,939 through the second epoch; it traded over $5m USDC notional of BERA and BERA derivatives in Berachain across two epochs, with details on volume, mechanics and ecosystem interactions."
+}

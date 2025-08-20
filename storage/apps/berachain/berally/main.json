@@ -1,0 +1,42 @@
+{
+  "name": "Berally",
+  "shortDescription": "Berally is a social trading platform on Berachain with agents named Cybera for monetizing audiences through Pass and Pot.",
+  "svgLogo": "berally.jpg",
+  "project_categories": [
+    37,
+    40,
+    4
+  ],
+  "socialLinks": {
+    "websiteURL": "https://www.berally.io/",
+    "twitterURL": "https://x.com/Berally_io",
+    "discordURL": "https://discord.com/invite/berally",
+    "githubURL": "",
+    "mediumURL": "",
+    "youtubeURL": "",
+    "telegramURL": "",
+    "documentURL": "https://docs.berally.io/",
+    "linkedinURL": "",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": "berally-token"
+  },
+  "seo": {
+    "metaTitle": "Berally",
+    "metaDescription": "Berally is a social trading platform on Berachain with agents named Cybera for monetizing audiences through Pass and Pot.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "Berally",
+        "description": "Berally: Berachain social trading with Cybera.",
+        "image": null
+      }
+    ],
+    "keywords": "Berally Pass and Pot monetization on Berachain, Cybera AI agents on Berachain with Account Abstraction wallets, Berachain Mainnet Q1 2025 TGE and vesting schedule",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nBerally is a social trading platform with integrated AI agents named Cybera, designed to enable the creation, management, and monetization of on-chain communities and trading strategies on Berachain. The platform centers on three product blocks: Pass (social tokens), Pot (on-chain vaults), and Cybera (AI agents). These components work together to allow creators to monetize audiences and coordinate capital across communities.\n\nAccording to the official roadmap, the minimum viable product was deployed during April–June 2024, with the social module and a mobile-friendly Progressive Web App launched in July 2024, and the Beracid NFT collection released in August 2024. In Q4 2024, Berally conducted a public presale on Fjord, claiming to have raised $1,378,000, and a whitelisting round ran from December 10 to 15, 2024. The project also indicated plans for a Mainnet and Token Generation Event in Q1 2025.\n\nPublic communications and news coverage indicated plans for Mainnet and TGE in Q1 2025; however, on March 15, 2025 the team disclosed a compromise of part of a deployer key with a substantial sale of vesting tokens and liquidity outflow. Berally stated that the dApp smart contracts remained secure and recommended temporarily revoking access to the dApp and staking while the investigation continued.\n\n## Functionality\n\nThe Berally user layer enables the issuance of personalized Pass tokens, which provide automatic income generation through Proof-of-Liquidity on Berachain and trading fees. It also supports creating Pot, which are on-chain crowdfunding vaults for pooled capital management, and allows users to invest in others’ Pots with a structured fee model and revenue distribution through the project treasury.\n\nCybera is the project’s AI-agent architecture. Each agent operates with an Account Abstraction wallet, can execute on-chain transactions according to owner-defined rules without continuous signing, and can connect to external data sources via plugins. An orchestrator assigns tasks across analytical, research, trading, and risk agents and records results in a performance-evaluation module.\n\nTechnically, the platform envisions a Data Lake for raw data, a Vector DB for embeddings, relational and NoSQL storages, and an in-memory layer for contextual memory. A data pipeline performs cleaning and normalization to drive trading triggers based on technical indicators, on-chain events, and sentiment, followed by fine-tuning of agent models as needed.\n\nThe fee and revenue framework is documented in the official materials: trading and governance fees are defined to fund the treasury and align incentives, with revenue distributions supporting token holders and project development. The tokenomics outline a fixed supply, initial release, and vesting structures, while integrations and partnerships outline planned ecosystem collaborations with Berachain protocols and dApps. The presale and TGE timeline indicates a Fjord presale in Q4 2024 and expectations for a Mainnet in Q1 2025, with ongoing discussions around reward vaults and governance mechanisms within the Berachain ecosystem.\n\n## Features\n\n- **Social Trading (Pass & Pot)**: On-chain social tokens for monetizing audiences and crowd-funded on-chain vaults with defined commissions and administration.\n- **AI Agents (Cybera)**: A multi-agent architecture with Account Abstraction wallets, external data plugins, and autonomous learning with performance evaluation.\n- **Account Abstraction for Agents**: Each agent uses an AA wallet to perform on-chain operations under predefined rules without repeated owner signatures.\n- **Data Pipeline & Storage**: A data lake, vector database for embeddings, relational and NoSQL stores, and an in-memory retriever to accelerate contextual queries.\n- **Triggers & Orchestrator**: A suite of triggers (technical indicators, on-chain events, sentiment) and an orchestrator that allocates tasks among agents and LLMs as needed.\n- **Fee & Revenue Model**: A set of platform fees with revenue flowing into the treasury and distributed to token holders, bribe/validators, and development funds.\n- **Tokenomics (Supply & Vesting)**: Total BRLY supply of 6,942,000,000 with an initial release of 2,182,102,000 BRLY and a vesting schedule including a 1-year cliff plus 1-year monthly vesting for the Team and Advisors.\n- **Integrations & Partnerships**: Roadmap-annotated integrations with Berachain ecosystem protocols and dApps, including Beradrome and others.\n- **Presale & TGE Timeline**: Public presale on Fjord in Q4 2024 with a whitelist phase from December 10 to 15, 2024; TGE and Mainnet were planned for Q1 2025.\n\n## Berachain x Berally\n\nBerally positions itself as a social trading platform and AI Agents dApp built atop Berachain; official roadmap and main site indicate that the testnet ran on Berachain in July 2024 and that the MVP was deployed in the April–June 2024 window. These statements are published directly on Berally’s official materials.\n\nBerally publicly described plans and realizations of integrations with Berachain ecosystem protocols, with roadmap entries noting Beradrome and other dApps and August 2024 as a reference point for Berachain-related work. It is also noted that Pass would utilize BER A as the currency for passes, according to official documentation.\n\nFor BRLY, there is a confirmed schedule of public events: a whitelist sale on Fjord occurred from December 10 to December 15, 2024, with the roadmap indicating a TGE and Mainnet in Q1 2025. Public sources and Berally’s documentation reference governance developments within Berachain, including a General Reward Vault-related request on Beradrome and the progression of Governance Phase 1, with the initial whitelisting interactions for dApps beginning in late March 2025."
+}

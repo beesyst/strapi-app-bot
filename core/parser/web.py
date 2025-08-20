@@ -69,12 +69,12 @@ def extract_project_name(
     base_url: str,
     twitter_display_name: str = "",
 ) -> str:
-    # twitter имя приоритетно
+    # приоритет: имя из X (display name)
     tw = clean_project_name(twitter_display_name or "")
     if tw and not is_bad_name(tw):
         return tw
 
-    # если это json от browser_fetch.js - попробуем вытащить title/ogName из полей
+    # если прилетел json от browser_fetch.js - пробуем поля тайтла/сайта
     try:
         j = json.loads(html or "{}")
         if isinstance(j, dict):
@@ -85,7 +85,6 @@ def extract_project_name(
     except Exception:
         pass
 
-    # обычный html
     soup = BeautifulSoup(html or "", "html.parser")
 
     # og:site_name
@@ -97,26 +96,49 @@ def extract_project_name(
         if val and not is_bad_name(val):
             return val
 
-    # <title> → левая часть до разделителей | — : - –
+    # <title> - выбираем лучшую часть
+    domain_token = ""
+    try:
+        domain_token = urlparse(base_url).netloc.replace("www.", "").split(".")[0]
+    except Exception:
+        domain_token = ""
+
     raw_title = ""
     if soup.title and soup.title.string:
         raw_title = soup.title.string.strip()
-    if raw_title:
-        head = re.split(r"[\|\-–—:]", raw_title, maxsplit=1)[0]
-        val = clean_project_name(head)
-        if val and not is_bad_name(val):
-            return val
 
-    # header/nav: логотип alt/h1
+    if raw_title:
+        # разбиваем по частым разделителям
+        parts = re.split(r"[|\-–—:•·⋅]+", raw_title)
+        candidates = []
+        for p in parts:
+            val = clean_project_name(p or "")
+            if not val or is_bad_name(val):
+                continue
+            score = 0
+            # бонус за попадание доменного токена
+            if domain_token and domain_token.lower() in val.lower():
+                score += 100
+            # умеренная длина 2..40 символов
+            if 2 <= len(val) <= 40:
+                score += 10
+            # без лишних слов вроде "official", "homepage" и т.п. - их фильтрует is_bad_name
+            candidates.append((score, val))
+
+        if candidates:
+            candidates.sort(key=lambda x: (-x[0], len(x[1])))
+            best = candidates[0][1]
+            if best and not is_bad_name(best):
+                return best
+
+    # header/nav: alt у логотипа → h1 (с фильтром мусора)
     header = soup.select_one("header") or soup.select_one("nav")
     if header:
-        # alt у логотипа
         img = header.select_one("img[alt]")
         if img and img.get("alt"):
             val = clean_project_name(img.get("alt", "").strip())
             if val and not is_bad_name(val):
                 return val
-        # h1 как запасной вариант
         h1 = header.select_one("h1")
         if h1 and h1.get_text(strip=True):
             val = clean_project_name(h1.get_text(strip=True))

@@ -1,0 +1,42 @@
+{
+  "name": "Curvance",
+  "shortDescription": "Curvance is a modular, multi-chain money market with auto compounding, non-custodial assets, and veCVE governance.",
+  "svgLogo": "curvance.jpg",
+  "project_categories": [
+    2,
+    17,
+    12
+  ],
+  "socialLinks": {
+    "websiteURL": "https://www.curvance.com/",
+    "twitterURL": "https://x.com/curvance",
+    "discordURL": "https://discord.com/invite/curvance",
+    "githubURL": "https://github.com/curvance",
+    "mediumURL": "",
+    "youtubeURL": "",
+    "telegramURL": "https://t.me/curvance",
+    "documentURL": "https://docs.curvance.com/cve",
+    "linkedinURL": "",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": "curvance"
+  },
+  "seo": {
+    "metaTitle": "Curvance",
+    "metaDescription": "Curvance is a modular, multi-chain money market with auto compounding, non-custodial assets, and veCVE governance.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "Curvance",
+        "description": "Curvance: multi-chain, money market; auto comp.",
+        "image": null
+      }
+    ],
+    "keywords": "Curvance Berachain testnet integration, veCVE governance model Curvance 12-month lock, ERC-4626 inspired cTokens dTokens architecture Curvance",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nCurvance is a modular, multi-chain money market protocol focused on yield-bearing and tokenized assets. It combines an automated compounding vault with cross-margin lending markets in a single platform. Official technical documentation describes Curvance as a protocol designed for capital efficiency and composability, with an architecture oriented toward developers and integrators.\n\nOn December 5, 2023, the project announced exiting stealth mode and closing a seed round of 3.6 million USD. The round featured Offchain Labs (Arbitrum), Wormhole, angel investors including Sandeep Nailwal, and representatives from major DeFi projects, as reported in press announcements and coverage.\n\nCurvance public documentation outlines a phased deployment: a beta launch with support for at least six networks and no immediate issuance of CVE, followed by the introduction of a gateway system and two-week reward-epoch cycles. These technical details and the roadmap are described in open repositories and the developers’ README.\n\n## Functionality\n\nThe protocol defines a universal balance model, where user assets remain non-custodial but are automatically routed into verified, risk-adjusted yield streams with instant liquidity access. Documentation notes the protocol’s non-custodial storage and its integration with ERC-4626-compatible mechanisms.\n\nThe multi-chain architecture uses Wormhole for inter-chain messaging and Circle CCTP for cross-chain transfers of stablecoins, enabling a single system for governance voting, fee distribution, and cross-chain epochs.\n\nThe protocol implements its own tokenomics with CVE as the native utility and governance token, and veCVE as a vote-escrow position with a fixed 12-month lock, a continuous lock mechanism, and fee distributions to veCVE holders. The model for reward distribution and governance roles is described in the Core Token Ecosystem.\n\nCurvance supports a risk-isolated market model where deposits are represented as different token types, using cTokens for collateral and dTokens for debt, with a share/asset framework akin to ERC-4626 but implemented in a custom design. Documentation notes automatic yield reinvestment without user action and a 20-minute withdrawal cooldown under normal conditions.\n\nThe protocol also implements liquidation optimization and MEV capture through application-specific sequencing and an auction-based orderflow model developed with Atlas, where liquidators compete to execute liquidations in tight windows to extract value for the protocol and creditors.\n\nCurvance employs an epoch-based framework and external automators, with development notes indicating epoch management, fee accrual, and compound calls planned in collaboration with Gelato Network; block migrations and reward distribution are designed for two-week epochs.\n\n## Features\n\n- **Omnichain Message & Value Layer**: Cross-chain messaging via Wormhole and Circle CCTP enables cross-chain fee distribution and token migrations.\n- **Universal Account Balance**: A non-custodial universal balance representation allows assets to earn yields in verified pools while remaining instantly operable.\n- **dTokens / cTokens Architecture**: Separate asset roles for collateral and debt using cTokens and dTokens with a share/asset model inspired by ERC-4626 but implemented in-house.\n- **Auto‑Compounding & ERC‑4626 Integrations**: Automatic compounding routes deposits to target strategies, including ERC‑4626‑compatible protocols, to maximize yield.\n- **Multichain Gauge System**: Two-week epochs and cross-chain reward distribution managed via a centralized Registry/MessagingHub, enabling multi-chain emissions governance.\n- **veCVE Vote‑Escrow Model**: A 12-month fixed lock with continuous lock and migration across chains; veCVE holders receive a share of protocol fees.\n- **Fee Revenue Streams (Protocol Economics)**: Revenue allocated to veCVE holders; a sample parameter is a 15% fee on underlying yield.\n- **Application‑Specific Sequencing & MEV Capture**: Auction-based orderflow for liquidations and MEV capture reduces liquidation costs and improves creditor value.\n- **Price Feed Redundancy & Risk Isolation**: Each market can use two independent oracles and dynamic collateral caps to isolate risk.\n- **Security & Audits**: Emphasis on audits with TrustSec, yAudit and Trail of Bits and public release of audit reports as they become available.\n- **Phased Mainnet Rollout (Beta → Epochs → Full Launch)**: A phased deployment plan starting with a beta supporting at least six networks, followed by CVE issuance and a gate system after the beta.\n- **Open Source Development & Competition**: Code and tools are available in the official GitHub repository; a public Cantina Competition with a prize pool ran from February 27 to April 15, 2024.\n\n## Berachain x Curvance\n\nCurvance formally announced the launch of a public testnet with Berachain (bArtio V2). Binance News reported that Curvance launched its public testnet on Ethereum’s Sepolia, Arbitrum’s Sepolia, and Berachain’s bArtio V2 on 2024-08-25. A follow-up post dated 2024-08-26 from the Curvance team confirms Berachain support and the start of public testing on Berachain.\n\nOfficial Curvance documentation indicates support for native gas tokens, and in the UniversalBalance section, examples such as ETH and BER A are listed, confirming Berachain native token support via the UniversalBalance contract and the UniversalBalanceNative extension for native gas tokens.\n\nIndependent industry outlets corroborated that the public testnet included Berachain deployment on 2024-08-25, aligning with Curvance announcements and Binance coverage of multi‑chain deployment in that period.\n\nIn the Specialized Blockchain Integrations section, Berachain is listed as a supported chain and Curvance notes optimization for Berachain’s Proof of Liquidity model; the integration article is described in Curvance documentation. The team’s announcements around testing described tester tasks and rewards for the Berachain ecosystem dated 2024-08-26."
+}

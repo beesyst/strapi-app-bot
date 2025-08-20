@@ -1,0 +1,42 @@
+{
+  "name": "BGTscan",
+  "shortDescription": "BGTscan is an on-chain analytics explorer for Berachain's BGT and PoL, with vault, farmer and validator insights; Nodeinfra integrated.",
+  "svgLogo": "",
+  "project_categories": [
+    31,
+    39,
+    4
+  ],
+  "socialLinks": {
+    "websiteURL": "https://bgtscan.com/",
+    "twitterURL": "",
+    "discordURL": "",
+    "githubURL": "",
+    "mediumURL": "",
+    "youtubeURL": "",
+    "telegramURL": "",
+    "documentURL": "",
+    "linkedinURL": "",
+    "redditURL": ""
+  },
+  "videoSlider": [],
+  "coinData": {
+    "coin": ""
+  },
+  "seo": {
+    "metaTitle": "BGTscan",
+    "metaDescription": "BGTscan is an on-chain analytics explorer for Berachain's BGT and PoL, with vault, farmer and validator insights; Nodeinfra integrated.",
+    "metaImage": null,
+    "metaSocial": [
+      {
+        "socialNetwork": "Twitter",
+        "title": "BGTscan",
+        "description": "BGTscan: Berachain on-chain analytics for BGT/PoL.",
+        "image": null
+      }
+    ],
+    "keywords": "Berachain BGT emissions by vault analysis, PoL bribe market trends in Berachain, BGT payouts history by farmers in Berachain PoL",
+    "metaRobots": ""
+  },
+  "contentMarkdown": "## Overview\n\nBGTscan is a web analytics and explorer focused on on-chain data for the BGT token and the Proof-of-Liquidity mechanism within the Berachain ecosystem. It offers dashboards and pages for analyzing farmers, reward vaults, validators, and PoL flows. The platform is labeled as powered by Nodeinfra and includes references to Nodeinfra staking and validator pages, indicating an operational relationship with Nodeinfra in Berachain.\n\nBGTscan emphasizes metrics related to the distribution and use of BGT, the sovereign soulbound governance token of Berachain, and to emission, payout, and bribe market indicators within the PoL model. The site includes dedicated sections detailing BGT emissions, vault yields, bribe payment trends, and a classic interface variant. Public pages do not publish a founding or launch date, and there are no press releases or launch-date repositories available.\n\n## Functionality\n\nBGTscan displays aggregated on-chain metrics for BGT, including total emissions, distribution by vault contracts, and cumulative and incremental payouts to farmers and LP pairs. Sections Bribe Market and BGT Flows provide analytical views of incentive flows and bribe transactions among ecosystem participants, and also compute vault profits and emission trends. The service links Berachain tooling directly, with references to hub.berachain.com and staking and validator pages, indicating that data sources are on-chain contracts and Berachain public APIs.\n\nThe interface exists in two variants, Main and Classic, and includes analytics pages for individual vault, validator, and farmer addresses, plus metrics for top rankings. The footer and project pages show an attribution to the BGTscan validator and Nodeinfra validator, confirming Nodeinfra's role as a connected validator or operator and integration with Berachain validation infrastructure. Practically, the tool targets DeFi analysts and PoL participants by enabling monitoring of BGT emissions by vault, assessing profitability, tracking bribe flows, and identifying leading farmer addresses.\n\n## Features\n\n- **On‑chain BGT Analytics**: Displays aggregated BGT emission and distribution metrics across vaults, farmers, and validators.\n- **Vault Analytics**: Detailed pages for each Reward Vault with history of LP deposits, withdrawals and cumulative BGT payouts.\n- **BGT Flows (PoL Flows)**: Visualization and tables of PoL flows showing emission distribution and internal movements of BGT.\n- **Bribe Market / Vault Profits**: Dedicated module for bribe trend calculations and vault profitability with USD valuations via price integration.\n- **Validators Dashboard**: Analytics on validators, delegations and boost/reward metrics for positioning within PoL.\n- **Top Farmers / Top Validators / Top Vaults**: Ratings and leaders by accumulated BGT and LP activity for quick identification of major participants.\n- **Classic UI (classic.bgtscan.com)**: Alternative heritage interface for accessing historical PoL data representations.\n- **Nodeinfra Integration / Validator Presence**: Explicit link to Nodeinfra indicating operational or partner role supporting the service.\n- **Berachain Ecosystem Links**: Direct links to hub.berachain.com and use of PoL/BGT terminology confirming integration with the Berachain ecosystem.\n- **Ecosystem Partnerships**: The project appears as a partner or integration in ecosystem projects, such as Grizzy Launchpad listing BGTscan as a partner."
+}

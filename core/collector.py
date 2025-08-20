@@ -113,16 +113,32 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
         try:
             bio = {}
             avatar_url = avatar_verified or ""
-            need_bio = bool(
+            need_bio_for_avatar = bool(
                 main_data["socialLinks"].get("twitterURL") and (not avatar_url)
             )
 
-            if need_bio:
+            # имя из X тянем всегда (need_avatar=False), независимо от аватара
+            twitter_display = ""
+            if main_data["socialLinks"].get("twitterURL"):
+                try:
+                    tw_profile = (
+                        get_links_from_x_profile(
+                            main_data["socialLinks"]["twitterURL"],
+                            need_avatar=False,
+                        )
+                        or {}
+                    )
+                    twitter_display = (tw_profile.get("name") or "").strip()
+                except Exception:
+                    twitter_display = ""
+
+            # если аватар не подтвержден, дергаем профиль с need_avatar=True
+            if need_bio_for_avatar:
                 try:
                     bio = (
                         get_links_from_x_profile(
                             main_data["socialLinks"]["twitterURL"],
-                            need_avatar=not bool(avatar_url),
+                            need_avatar=True,
                         )
                         or {}
                     )
@@ -249,19 +265,14 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
             except Exception as e:
                 logger.warning("Ошибка обработки YouTube: %s", e)
 
-        # имя проекта
+        # имя проекта - пробрасываем twitter_display_name,
         try:
-            twitter_display = ""
-            # если уже дергали bio - используем имя оттуда как приоритет (не тащим парсер X в web.py)
-            try:
-                if isinstance(bio, dict):
-                    twitter_display = bio.get("name", "") or ""
-            except Exception:
-                twitter_display = ""
-
-            # передаем twitter_display (если есть), html главной и base_url
             parsed_name = extract_project_name(
-                html, website_url, twitter_display_name=twitter_display
+                html,
+                website_url,
+                twitter_display_name=(
+                    twitter_display if "twitter_display" in locals() else ""
+                ),
             )
             if parsed_name:
                 main_data["name"] = parsed_name

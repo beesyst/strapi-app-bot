@@ -225,20 +225,38 @@ async def process_partner(
             main_data["socialLinks"].setdefault("websiteURL", url)
 
             # асинх ожидание ИИ контент и coin
-            coin_result, content_md = await asyncio.gather(
-                coin_future, ai_content_future
-            )
+            coin_result = await coin_future
 
-            # ген short_description / categories / seo
-            short_desc = await ai_generate_short_desc_with_retries(
-                content_md, prompts, ai_cfg, executor
-            )
-            categories = await ai_generate_project_categories(
-                content_md, prompts, ai_cfg, executor, allowed_categories
-            )
-            main_data["seo"] = await build_seo_section(
-                main_data, prompts, ai_cfg, executor
-            )
+            # контент пытаемся получить с таймаутом и безопасно
+            content_md = ""
+            try:
+                CONTENT_TIMEOUT = int(os.environ.get("CONTENT_TIMEOUT_SEC", "240"))
+                content_md = await asyncio.wait_for(
+                    ai_content_future, timeout=CONTENT_TIMEOUT
+                )
+                content_md = (content_md or "").strip()
+            except Exception as e:
+                logger.warning("[content_llm] failed or timed out: %s", e)
+                content_md = ""
+
+            # short_desc и категории считаем только если есть контент
+            short_desc = ""
+            categories = []
+            if content_md:
+                try:
+                    short_desc = await ai_generate_short_desc_with_retries(
+                        content_md, prompts, ai_cfg, executor
+                    )
+                    short_desc = (short_desc or "").strip()
+                except Exception as e:
+                    logger.warning("[short_desc] generation failed: %s", e)
+
+                try:
+                    categories = await ai_generate_project_categories(
+                        content_md, prompts, ai_cfg, executor, allowed_categories
+                    )
+                except Exception as e:
+                    logger.warning("[categories] generation failed: %s", e)
 
         else:
             # ИИ выключен - socials и coin, без генерации контента
@@ -260,9 +278,8 @@ async def process_partner(
             content_md = ""  # без ИИ - нет markdown-контента
             short_desc = ""  # без ИИ - нет ген краткого описания
             categories = []  # без ИИ - нет подбора категории
-            main_data["seo"] = {}  # без ИИ - нет seo
 
-        # заполнение coinData, shortDescription, contentMarkdown
+        # записываем даныне в main_data
         if coin_result and "coinData" in coin_result:
             main_data["coinData"] = coin_result["coinData"]
         if short_desc:
@@ -278,6 +295,14 @@ async def process_partner(
             main_data["project_categories"] = category_ids
         else:
             main_data["project_categories"] = categories
+
+        # строим seo
+        if main_data.get("shortDescription") or main_data.get("contentMarkdown"):
+            main_data["seo"] = await build_seo_section(
+                main_data, prompts, ai_cfg, executor
+            )
+        else:
+            main_data["seo"] = {}
 
         main_json_path = os.path.join(storage_path, "main.json")
 
@@ -347,7 +372,7 @@ async def orchestrate_all():
     will_publish = bool(strapi_publish_cfg and ai_active)
 
     # таймаут на одного партнера (сек)
-    PARTNER_TIMEOUT = 400
+    PARTNER_TIMEOUT = int(central_config.get("partner_timeout_sec", 400))
 
     try:
         ctx = mp.get_context("fork")
@@ -432,9 +457,7 @@ async def orchestrate_all():
             try:
                 status_main = q.get_nowait()
             except Exception:
-                status_main = (
-                    ERROR if (p.exitcode is None or p.exitcode != 0) else ERROR
-                )
+                status_main = "ok" if (p.exitcode == 0) else ERROR
 
             # останавливаем спиннер перед печатью финала
             ext_stop_event.set()
@@ -487,15 +510,17 @@ async def orchestrate_all():
                         url=url,
                     )
 
-                final_status = (
-                    status_strapi if status_strapi != STRAPI_ERROR else "error"
-                )
-                badges = []
                 if status_strapi == STRAPI_ERROR:
-                    badges.append("Strapi Create Failed")
+                    final_status = "error"
+                    badges = ["Strapi Create Failed"]
                 elif status_strapi == STRAPI_SKIP:
-                    badges.append("Already exists")
-                badges.append("Published" if publish_flag else "Draft")
+                    final_status = "skip"
+                    badges = ["Already exists"]
+                else:
+                    # успех (создано/обновлено)
+                    final_status = status_strapi
+                    badges = ["Published" if publish_flag else "Draft"]
+
                 extra = f" [{' | '.join(badges)}]" if badges else ""
 
                 print(
@@ -505,7 +530,7 @@ async def orchestrate_all():
                 )
                 print()
 
-                if project_id:
+                if project_id and status_strapi != STRAPI_ERROR:
                     try_upload_logo(
                         main_data, storage_path, api_url_proj, api_token, project_id
                     )
