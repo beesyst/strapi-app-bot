@@ -139,15 +139,61 @@ cd strapi-app-bot
 bash start.sh
 ```
 
-## Configuration Guide
+## Configuration
 
-All settings are defined in `config/config.json`:
+All parameters are set in the `config/config.json` file:
 
-| Parameter          | Default Value     | Description                                                      |
-| ------------------ | ----------------- | ---------------------------------------------------------------- |
-| `apps`             | `[ "babylon" ]`   | List of targets (project objects with settings and enabled flag) |
-| `enabled`          | `true`            | Flag: if false, the project will be completely skipped           |
-| `link_collections` | `[ "linktr.ee" ]` | List of collection services for deep parsing                     |
+### General
+
+| Parameter         | Default value          | Description                                                         |
+|-------------------|------------------------|---------------------------------------------------------------------|
+| `apps`            | `[ "babylon" ]`        | List of target apps (projects with settings and `enabled` flag)     |
+| `enabled`         | `true`                 | Whether the project is enabled (false = fully ignored)              |
+| `link_collections`| `[ "linktr.ee" ]`      | Services for deep link parsing                                      |
+| `clear_logs`      | `true`                 | Whether to clear logs on startup                                    |
+
+### AI
+
+| Parameter              | Default value           | Description                                                                 |
+|------------------------|-------------------------|-----------------------------------------------------------------------------|
+| `ai.providers`         | `openai`, `perplexity`  | Configured AI providers and API keys                                        |
+| `ai.groups`            | see config              | Prompt/model groups with optional `web_search_options`                      |
+| `short_desc`           | `max_len=130`           | Constraints for project description length                                  |
+| `seo_short`            | `max_len=50`            | Constraints for short SEO description length                                |
+
+### Strapi
+
+| Parameter              | Default value | Description                                    |
+|------------------------|---------------|------------------------------------------------|
+| `strapi_sync`          | `true`        | Synchronize data with Strapi                   |
+| `strapi_publish`       | `true`        | Automatically publish entries                   |
+| `http_timeout_sec`     | `45`          | HTTP timeout for Strapi requests                |
+| `http_retries`         | `3`           | Number of retry attempts on errors              |
+| `http_backoff`         | `1.7`         | Backoff multiplier between retries              |
+
+### Nitter (X/Twitter parser)
+
+| Parameter                  | Default value     | Description                                       |
+|----------------------------|------------------|---------------------------------------------------|
+| `nitter_instances`         | list of URLs     | List of available Nitter instances                |
+| `nitter_retry_per_instance`| `1`              | Retry count per instance                          |
+| `nitter_timeout_sec`       | `14`             | Request timeout                                   |
+| `nitter_bad_ttl_sec`       | `600`            | TTL for caching failed attempts (in seconds)      |
+| `nitter_enabled`           | `true`           | Enable/disable Nitter usage                       |
+
+### CoinGecko
+
+| Parameter       | Default value                     | Description                   |
+|-----------------|-----------------------------------|-------------------------------|
+| `api_base`      | `https://api.coingecko.com/api/v3`| CoinGecko API base URL        |
+
+### Other
+
+| Parameter            | Description                                                  |
+|----------------------|--------------------------------------------------------------|
+| `bad_name_keywords`  | Stopword list for filtering invalid project names            |
+| `categories`         | Full list of supported project categories                    |
+
 
 ## Terminal Status Codes
 
