@@ -1,12 +1,8 @@
 {
-  "name": "Havenscompass",
-  "shortDescription": "Cross-platform tactical shooter with blockchain and the CMPS token, featuring skills, gunsmith, staking, and non fungible tokens.",
+  "name": "Haven's Compass",
+  "shortDescription": "",
   "svgLogo": "havenscompass.jpg",
-  "project_categories": [
-    51,
-    52,
-    22
-  ],
+  "project_categories": [],
   "socialLinks": {
     "websiteURL": "https://www.havenscompass.com/",
     "twitterURL": "https://x.com/HavensCompass",
@@ -23,20 +19,6 @@
   "coinData": {
     "coin": ""
   },
-  "seo": {
-    "metaTitle": "Havenscompass",
-    "metaDescription": "",
-    "metaImage": null,
-    "metaSocial": [
-      {
-        "socialNetwork": "Twitter",
-        "title": "Havenscompass",
-        "description": "Пожалуйста, пришлите сам текст на английском, который нужно",
-        "image": null
-      }
-    ],
-    "keywords": "Пожалуйста, пришлите текст статьи или хотя бы опишите её тему, целевую аудиторию и регион (если важно). Как только увижу содержимое, дам 3 релевантных НЧ-запроса на английском, разделённых запятыми. Если прямо сейчас нет текста, можно указать тему статьи и кратко её цель — я за это сгенерирую запросы.",
-    "metaRobots": ""
-  },
-  "contentMarkdown": "## Overview\n\nHaven’s Compass is a cross‑platform tactical shooter that integrates blockchain mechanics and a native token, CMPS. It is positioned as a hybrid of an ability shooter and fast‑paced tactical matches. The game entered early access on the Epic Games Store on August 15, 2023, where it was labeled as a blockchain and NFT title and listed as Early Access. The official project site describes in‑game systems such as skills, a gunsmith, and a ranked mode, and notes the CMPS token together with dedicated subdomains for staking and application access. The project homepage and footer display branding and a 2024 copyright; the project participates in the Web3 ecosystem through exchanges and DEX routes.\n\n## Functionality\n\nGameplay centers on a set of selectable skills, including Sprint, Super Jump, and Invisibility, with weapon customization provided by the Gunsmith and competitive ranked play. CMPS functions as the primary in‑game currency and can be earned through missions, trading, and alliances, while it is used to access the Ranked Mode and to purchase items. CMPS entered the crypto ecosystem with listings and trading pairs, with a publicly noted milestone in June 2024 marking the opening of trading and deposits on centralized exchanges. Technically, CMPS is traded via DEX platforms; the token’s presence on the SKALE Europa network is reflected in exchange interfaces, and trackers list contracts across multiple networks.\n\n## Features\n\n- **Tactical Hero Abilities**: Game design emphasizes interchangeable hero elements, including Sprint, Super Jump, and Invisibility, with a focus on tactical loadouts as core gameplay.\n- **Gunsmith Customization**: In‑game gunsmith enables players to modify weapon stats and tailor arsenals to their preferred playstyle.\n- **Ranked Mode (CMPS-gated)**: Ranked competitive mode is CMPS-gated and includes staking mechanics tied to high-stakes competition.\n- **CMPS In-Game Currency**: CMPS serves as the primary currency for purchases, rewards and ecosystem activities within the game.\n- **Blockchain / NFT Integration**: The title is marketed as a blockchain and NFT game by the official listing and site, confirming Web3 integration.\n- **Staking Portal**: A dedicated staking portal exists for staking and token management.\n- **DEX Availability**: The token is listed and routable on decentralized exchanges, including platforms on the SKALE Europa network.\n- **Centralized Exchange Listings**: In June 2024, CMPS was publicly listed on centralized exchanges with deposits opened.\n- **Early Access Release**: The game launched in early access on August 15, 2023.\n- **NFTs**: Game Keys / Skins / Land: NFT components include game keys, skins, and land as part of tokenomics and access tiers to events and tournaments."
+  "seo": {},
+  "contentMarkdown": ""
 }

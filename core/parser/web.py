@@ -9,6 +9,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 from core.log_utils import get_logger
+from core.normalize import clean_project_name, is_bad_name
 from core.paths import CONFIG_JSON
 
 # Логгер
@@ -60,6 +61,75 @@ def get_domain_name(url: str) -> str:
         return parsed.netloc.replace("www.", "").lower()
     except Exception:
         return url
+
+
+# Имя проекта по многослойной стратегии
+def extract_project_name(
+    html: str,
+    base_url: str,
+    twitter_display_name: str = "",
+) -> str:
+    # twitter имя приоритетно
+    tw = clean_project_name(twitter_display_name or "")
+    if tw and not is_bad_name(tw):
+        return tw
+
+    # если это json от browser_fetch.js - попробуем вытащить title/ogName из полей
+    try:
+        j = json.loads(html or "{}")
+        if isinstance(j, dict):
+            for key in ("pageTitle", "title", "ogSiteName", "siteName"):
+                val = clean_project_name(str(j.get(key, "")).strip())
+                if val and not is_bad_name(val):
+                    return val
+    except Exception:
+        pass
+
+    # обычный html
+    soup = BeautifulSoup(html or "", "html.parser")
+
+    # og:site_name
+    meta_site = soup.select_one(
+        "meta[property='og:site_name'][content], meta[name='og:site_name'][content]"
+    )
+    if meta_site and meta_site.get("content"):
+        val = clean_project_name(meta_site.get("content", "").strip())
+        if val and not is_bad_name(val):
+            return val
+
+    # <title> → левая часть до разделителей | — : - –
+    raw_title = ""
+    if soup.title and soup.title.string:
+        raw_title = soup.title.string.strip()
+    if raw_title:
+        head = re.split(r"[\|\-–—:]", raw_title, maxsplit=1)[0]
+        val = clean_project_name(head)
+        if val and not is_bad_name(val):
+            return val
+
+    # header/nav: логотип alt/h1
+    header = soup.select_one("header") or soup.select_one("nav")
+    if header:
+        # alt у логотипа
+        img = header.select_one("img[alt]")
+        if img and img.get("alt"):
+            val = clean_project_name(img.get("alt", "").strip())
+            if val and not is_bad_name(val):
+                return val
+        # h1 как запасной вариант
+        h1 = header.select_one("h1")
+        if h1 and h1.get_text(strip=True):
+            val = clean_project_name(h1.get_text(strip=True))
+            if val and not is_bad_name(val):
+                return val
+
+    # фолбэк - домен
+    try:
+        token = urlparse(base_url).netloc.replace("www.", "").split(".")[0]
+        val = clean_project_name((token or "").capitalize())
+        return val
+    except Exception:
+        return "Project"
 
 
 # Json из browser_fetch.js, а не обычный html
@@ -423,4 +493,5 @@ __all__ = [
     "is_html_suspicious",
     "has_social_links",
     "get_domain_name",
+    "extract_project_name",
 ]

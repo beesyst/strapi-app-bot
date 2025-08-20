@@ -6,9 +6,7 @@ import traceback
 
 from core.log_utils import get_logger
 from core.normalize import (
-    clean_project_name,
     force_https,
-    is_bad_name,
     normalize_socials,
 )
 from core.parser.link_aggregator import is_link_aggregator
@@ -18,7 +16,12 @@ from core.parser.twitter import (
     reset_verified_state,
     select_verified_twitter,
 )
-from core.parser.web import extract_social_links, fetch_url_html, get_domain_name
+from core.parser.web import (
+    extract_project_name,
+    extract_social_links,
+    fetch_url_html,
+    get_domain_name,
+)
 from core.parser.youtube import (
     youtube_oembed_title,
     youtube_to_handle,
@@ -248,12 +251,24 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
 
         # имя проекта
         try:
-            base = (site_domain or "").split(".")[0]
-            name = clean_project_name(base.capitalize())
-            if not is_bad_name(name):
-                main_data["name"] = name
+            twitter_display = ""
+            # если уже дергали bio - используем имя оттуда как приоритет (не тащим парсер X в web.py)
+            try:
+                if isinstance(bio, dict):
+                    twitter_display = bio.get("name", "") or ""
+            except Exception:
+                twitter_display = ""
+
+            # передаем twitter_display (если есть), html главной и base_url
+            parsed_name = extract_project_name(
+                html, website_url, twitter_display_name=twitter_display
+            )
+            if parsed_name:
+                main_data["name"] = parsed_name
         except Exception as e:
-            logger.warning("Ошибка очистки имени проекта: %s", e)
+            logger.warning(
+                "Ошибка определения имени проекта (web.extract_project_name): %s", e
+            )
 
     except Exception as e:
         logger.error("collect_main_data CRASH: %s\n%s", e, traceback.format_exc())
