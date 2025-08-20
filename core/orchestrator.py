@@ -1,5 +1,6 @@
 import asyncio
 import json
+import multiprocessing as mp
 import os
 import threading
 import time
@@ -42,8 +43,7 @@ from core.status import (
 logger = get_logger("orchestrator")
 strapi_logger = get_logger("strapi")
 
-# Пути (используем константы из core/paths.py)
-# MAIN_TEMPLATE добавьте в core/paths.py как os.path.join(TEMPLATES_DIR, "main_template.json")
+# Пути
 MAIN_TEMPLATE = os.path.join(
     os.path.dirname(CONFIG_DIR), "templates", "main_template.json"
 )
@@ -78,12 +78,67 @@ def save_main_json(storage_path, data):
 
 # Анимация спиннера для отображения статуса в терминале
 def spinner_task(text, stop_event):
+    if os.environ.get("DISABLE_CHILD_SPINNER") == "1":
+        return
     idx = 0
     while not stop_event.is_set():
         spin = spinner_frames[idx % len(spinner_frames)]
         print(f"\r[{spin}] {text} ", end="", flush=True)
         idx += 1
         time.sleep(0.13)
+
+
+# Воркер для процесса
+def _partner_worker(
+    queue,
+    app_name,
+    domain,
+    url,
+    main_template,
+    prompts,
+    ai_cfg,
+    allowed_categories,
+    strapi_sync,
+    api_url_proj,
+    api_url_cat,
+    api_token,
+    ai_active,
+):
+    # в дочернем процессе свой executor и свой event loop
+    os.environ["DISABLE_CHILD_SPINNER"] = "1"
+    executor = ThreadPoolExecutor(max_workers=8)
+    try:
+        status = asyncio.run(
+            process_partner(
+                app_name,
+                domain,
+                url,
+                main_template,
+                prompts,
+                ai_cfg,
+                executor,
+                allowed_categories,
+                show_status=False,
+                strapi_sync=strapi_sync,
+                api_url_proj=api_url_proj,
+                api_url_cat=api_url_cat,
+                api_token=api_token,
+                ai_active=ai_active,
+                spinner_event=None,
+            )
+        )
+    except Exception:
+        status = ERROR
+    finally:
+        try:
+            executor.shutdown(wait=False, cancel_futures=True)
+        except TypeError:
+            executor.shutdown(wait=False)
+    # отдаем статус родителю
+    try:
+        queue.put(status)
+    except Exception:
+        pass
 
 
 # Асинх обработка одного партнера
@@ -108,7 +163,7 @@ async def process_partner(
     spinner_text = f"{app_name} - {url}"
 
     owns_spinner = False
-    if spinner_event is None:
+    if spinner_event is None and os.environ.get("DISABLE_CHILD_SPINNER") != "1":
         stop_event = threading.Event()
         spinner_thread = threading.Thread(
             target=spinner_task, args=(spinner_text, stop_event)
@@ -116,7 +171,7 @@ async def process_partner(
         spinner_thread.start()
         owns_spinner = True
     else:
-        stop_event = spinner_event
+        stop_event = threading.Event() if spinner_event is None else spinner_event
         spinner_thread = None
 
     status = ERROR
@@ -285,22 +340,25 @@ async def orchestrate_all():
     prompts = load_prompts()
     ai_cfg = load_ai_config()
 
-    # определение включенности ИИ
     from core.api.ai import is_ai_enabled
 
     ai_active = is_ai_enabled(ai_cfg)
 
-    # если ИИ выключен - в черновик
     will_publish = bool(strapi_publish_cfg and ai_active)
 
-    executor = ThreadPoolExecutor(max_workers=8)
+    # таймаут на одного партнера (сек)
+    PARTNER_TIMEOUT = 400
+
+    try:
+        ctx = mp.get_context("fork")
+    except ValueError:
+        ctx = mp.get_context("spawn")
 
     for app in central_config["apps"]:
         if not app.get("enabled", True):
             continue
 
         app_name = app["app"]
-        # приоритет категорий
         app_categories = app.get("categories") or allowed_categories
 
         print(f"[app] {app_name} start")
@@ -323,9 +381,8 @@ async def orchestrate_all():
             main_json_path = os.path.join(storage_path, "main.json")
 
             start_time = time.time()
-            status_main = ERROR
 
-            # внешний спиннер на время выполнения одного партнера
+            # родительский спиннер (одна строка в терминале)
             spinner_text = f"{app_name} - {url}"
             ext_stop_event = threading.Event()
             ext_spinner_thread = threading.Thread(
@@ -333,48 +390,58 @@ async def orchestrate_all():
             )
             ext_spinner_thread.start()
 
-            try:
-                status_main = await asyncio.wait_for(
-                    process_partner(
-                        app_name,
-                        domain,
-                        url,
-                        main_template,
-                        prompts,
-                        ai_cfg,
-                        executor,
-                        app_categories,
-                        show_status=False,
-                        strapi_sync=strapi_sync,
-                        api_url_proj=api_url_proj,
-                        api_url_cat=api_url_cat,
-                        api_token=api_token,
-                        ai_active=ai_active,
-                        spinner_event=ext_stop_event,
-                    ),
-                    timeout=400,
-                )
+            # дочерний процесс + очередь для возврата статуса
+            q = ctx.Queue()
+            p = ctx.Process(
+                target=_partner_worker,
+                args=(
+                    q,
+                    app_name,
+                    domain,
+                    url,
+                    main_template,
+                    prompts,
+                    ai_cfg,
+                    app_categories,
+                    strapi_sync,
+                    api_url_proj,
+                    api_url_cat,
+                    api_token,
+                    ai_active,
+                ),
+            )
+            p.start()
 
-                # успешное завершение - сперва гасим спиннер, потом печатаем статус
+            # ждем завершения с таймаутом
+            p.join(PARTNER_TIMEOUT)
+
+            if p.is_alive():
+                # таймаут: останавливаем красивый спиннер, печатаем error, жестко убиваем воркер
                 ext_stop_event.set()
                 ext_spinner_thread.join()
 
-            except asyncio.TimeoutError:
-                logger.warning(
-                    f"[timeout] Превышено время на сбор {app_name} {url}, пропуск!"
-                )
-                # сначала гасим спиннер, потом печатаем строку ошибки
-                ext_stop_event.set()
-                ext_spinner_thread.join()
-
-                # чистая строка без артефактов спиннера
                 print(f"\r[error] {app_name} - {url} - timeout!", end="", flush=True)
                 print()
+
+                # жесткая рубка
+                p.terminate()
+                p.join()
                 continue
+
+            # воркер завершился сам - забираем его статус
+            try:
+                status_main = q.get_nowait()
+            except Exception:
+                status_main = (
+                    ERROR if (p.exitcode is None or p.exitcode != 0) else ERROR
+                )
+
+            # останавливаем спиннер перед печатью финала
+            ext_stop_event.set()
+            ext_spinner_thread.join()
 
             elapsed = int(time.time() - start_time)
 
-            # strapi_sync: false - печать только статуса main.json
             if not strapi_sync:
                 extra = " [main.json Error]" if status_main == ERROR else ""
                 print(
@@ -385,7 +452,6 @@ async def orchestrate_all():
                 print()
                 continue
 
-            # strapi_sync: true - пуш в strapi и печать статуса
             if not os.path.exists(main_json_path):
                 print(f"[error] {app_name} - {url} - {elapsed} sec [No main.json]")
                 continue
@@ -394,19 +460,11 @@ async def orchestrate_all():
                 main_data = json.load(fjson)
 
             if api_url_proj and api_token:
-                from core.api.strapi import (
-                    ERROR as STRAPI_ERROR,
-                )
-                from core.api.strapi import (
-                    SKIP as STRAPI_SKIP,
-                )
-                from core.api.strapi import (
-                    create_project,
-                )
+                from core.api.strapi import ERROR as STRAPI_ERROR
+                from core.api.strapi import SKIP as STRAPI_SKIP
+                from core.api.strapi import create_project
 
                 publish_flag = bool(will_publish)
-
-                # попытка вызвать create_project с флагом publish
                 try:
                     status_strapi, project_id = create_project(
                         api_url_proj,
@@ -419,7 +477,6 @@ async def orchestrate_all():
                         publish=publish_flag,
                     )
                 except TypeError:
-                    # старый вариант без публикации
                     status_strapi, project_id = create_project(
                         api_url_proj,
                         api_url_cat,
@@ -438,10 +495,7 @@ async def orchestrate_all():
                     badges.append("Strapi Create Failed")
                 elif status_strapi == STRAPI_SKIP:
                     badges.append("Already exists")
-
-                # маркер публикации/черновика для наглядности
                 badges.append("Published" if publish_flag else "Draft")
-
                 extra = f" [{' | '.join(badges)}]" if badges else ""
 
                 print(
