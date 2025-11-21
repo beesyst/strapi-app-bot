@@ -99,7 +99,7 @@ strapi-app-bot/
    * `start.sh` → `config/start.py` → `core/orchestrator.py`
 2. **Автоустановка зависимостей**:
    * `config/start.py` вызывает `core/install.py`:
-      * Проверяет наличие `venv`, создаёт при отсутствии.
+      * Проверяет наличие `venv`, создает при отсутствии.
       * Устанавливает Python-зависимости (`requirements.txt`).
       * Устанавливает Node.js-модули (`core/package.json`).
       * Загружает Playwright-браузеры (`npx playwright install`).
@@ -115,7 +115,7 @@ strapi-app-bot/
    * **Link-агрегаторы:** `core/parser/link_aggregator.py`.
    * **YouTube и docs:** `core/parser/youtube.py` и др.
    * **Collector:** `core/collector.py` собирает результаты в единый поток.
-   * **Асинхронность:** всё работает через asyncio + ThreadPool.
+   * **Асинхронность:** все работает через asyncio + ThreadPool.
    * **Кэширование HTML и ретраи:** встроено для ускорения и отказоустойчивости.
 5. **AI-генерация и enrichment**:
    * AI создаёт краткие/полные описания.

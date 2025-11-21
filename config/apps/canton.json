@@ -1,5 +1,7 @@
 {
   "name": "Canton",
   "url": "https://www.canton.network/",
-  "partners": ["https://hyperledger-foundation.net/"]
+  "partners": [
+    "https://walletconnect.com/"
+  ]
 }

@@ -13,7 +13,6 @@ from core.api.ai import (
     load_ai_config,
     load_prompts,
 )
-from core.api.coingecko import enrich_with_coin_id
 from core.api.strapi import (
     get_project_category_ids,
     try_upload_logo,
@@ -24,10 +23,8 @@ from core.normalize import brand_from_url
 from core.paths import (
     CONFIG_DIR,
     CONFIG_JSON,
+    MAIN_TEMPLATE,
     STORAGE_APPS_DIR,
-    # см. примечание ниже: нужен MAIN_TEMPLATE в core/paths.py
-    # если добавлен, импортируем:
-    # MAIN_TEMPLATE,
 )
 from core.seo_utils import build_seo_section
 from core.status import (
@@ -43,9 +40,6 @@ from core.status import (
 logger = get_logger("orchestrator")
 
 # Пути
-MAIN_TEMPLATE = os.path.join(
-    os.path.dirname(CONFIG_DIR), "templates", "main_template.json"
-)
 CENTRAL_CONFIG_PATH = CONFIG_JSON
 APPS_CONFIG_DIR = os.path.join(CONFIG_DIR, "apps")
 STORAGE_DIR = STORAGE_APPS_DIR
@@ -182,58 +176,60 @@ async def process_partner(
     status = ERROR
     try:
         storage_path = create_project_folder(app_name, domain)
-        logger.info(f"Создание main.json - {app_name} - {url}")
-        logger.info(f"Сбор соц линков - {app_name} - {url}")
+        logger.info(f"Старт {app_name} - {url}")
         if ai_active:
             logger.info(f"ИИ-генерация - {app_name} - {url}")
         else:
             logger.info(
                 f"ИИ-генерация отключена (ai_active=False) - {app_name} - {url}"
             )
-        logger.info(f"Поиск API ID в Coingecko - {app_name} - {url}")
 
         loop = asyncio.get_event_loop()
 
-        # сбор соцлинков / основных данных
+        # сбор соцлинков/основных данных (collector)
         socials_future = loop.run_in_executor(
             executor, collect_main_data, url, main_template, storage_path
         )
 
-        # заготовка данных для параллельных задач
+        # заготовка данных для ИИ (упрощённый main_data: только name + website)
         main_data_for_ai = dict(main_template)
         main_data_for_ai["name"] = domain.capitalize()
         main_data_for_ai.setdefault("socialLinks", {})
         main_data_for_ai["socialLinks"]["websiteURL"] = url
 
-        # запуск coinGecko
-        coin_future = asyncio.create_task(enrich_coin_async(main_data_for_ai, executor))
-
-        # контент по ИИ - только если ai_active
+        # контент по ИИ запускаем параллельно с collect_main_data
         if ai_active:
             ai_content_future = asyncio.create_task(
                 ai_generate_content_markdown(
                     main_data_for_ai, app_name, domain, prompts, ai_cfg, executor
                 )
             )
-            # асинх получение всех соцсетей
-            main_data = await socials_future
-            if isinstance(main_data, tuple):
-                main_data = main_data[0]
+        else:
+            ai_content_future = None
 
-            # подстраховка по ключам шаблона
-            for k, v in main_template.items():
-                if k not in main_data:
-                    main_data[k] = v
+        # ждем collector (уже с Coingecko внутри)
+        main_data = await socials_future
+        if isinstance(main_data, tuple):
+            main_data = main_data[0]
 
-            # websiteURL в socialLinks
-            main_data.setdefault("socialLinks", {})
-            main_data["socialLinks"].setdefault("websiteURL", url)
+        # подстраховка по ключам шаблона
+        for k, v in main_template.items():
+            if k not in main_data:
+                main_data[k] = v
 
-            # асинх ожидание ИИ контент и coin
-            coin_result = await coin_future
+        # websiteURL в socialLinks
+        main_data.setdefault("socialLinks", {})
+        main_data["socialLinks"].setdefault("websiteURL", url)
 
-            # контент пытаемся получить с таймаутом и безопасно
-            content_md = ""
+        # подстраховка: coinData должен быть всегда
+        main_data.setdefault("coinData", {"coin": ""})
+
+        # обработка ИИ-контента (если включен)
+        content_md = ""
+        short_desc = ""
+        categories = []
+
+        if ai_active and ai_content_future is not None:
             try:
                 CONTENT_TIMEOUT = int(os.environ.get("CONTENT_TIMEOUT_SEC", "240"))
                 content_md = await asyncio.wait_for(
@@ -245,8 +241,6 @@ async def process_partner(
                 content_md = ""
 
             # short_desc и категории считаем только если есть контент
-            short_desc = ""
-            categories = []
             if content_md:
                 try:
                     short_desc = await ai_generate_short_desc_with_retries(
@@ -262,37 +256,19 @@ async def process_partner(
                     )
                 except Exception as e:
                     logger.warning("[categories] generation failed: %s", e)
-
         else:
-            # ИИ выключен - socials и coin, без генерации контента
-            main_data = await socials_future
-            if isinstance(main_data, tuple):
-                main_data = main_data[0]
+            # ИИ выключен - только socials (уже с Coingecko внутри),
+            content_md = ""
+            short_desc = ""
+            categories = []
 
-            # подстраховка по ключам шаблона
-            for k, v in main_template.items():
-                if k not in main_data:
-                    main_data[k] = v
-
-            # websiteURL в socialLinks
-            main_data.setdefault("socialLinks", {})
-            main_data["socialLinks"].setdefault("websiteURL", url)
-
-            # ожидание coinGecko
-            coin_result = await coin_future
-            content_md = ""  # без ИИ - нет markdown-контента
-            short_desc = ""  # без ИИ - нет ген краткого описания
-            categories = []  # без ИИ - нет подбора категории
-
-        # записываем даныне в main_data
-        if coin_result and "coinData" in coin_result:
-            main_data["coinData"] = coin_result["coinData"]
+        # записываем данные в main_data
         if short_desc:
             main_data["shortDescription"] = short_desc.strip()
         if content_md:
             main_data["contentMarkdown"] = content_md.strip()
 
-        # категории → id (если strapi_sync и есть доступ к api категорий)
+        # категории -> id (если strapi_sync и есть доступ к api категорий)
         if not categories:
             main_data["project_categories"] = []
         elif strapi_sync and api_url_cat and api_token:
@@ -352,12 +328,6 @@ async def process_partner(
             spinner_thread.join()
         time.sleep(0.01)
     return status
-
-
-# Асинх обогащение данных по коину через CoinGecko
-async def enrich_coin_async(main_data, executor):
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, enrich_with_coin_id, main_data)
 
 
 # Главная оркестрация всего пайплайна

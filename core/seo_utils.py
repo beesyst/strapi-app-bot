@@ -10,17 +10,17 @@ async def build_seo_section(main_data, prompts, ai_cfg, executor):
     short_desc = (main_data.get("shortDescription") or "").strip()
     content_md = (main_data.get("contentMarkdown") or "").strip()
 
-    # лимит для social description берём из config.json → ai_cfg["seo_short"]["strapi_limit"]
+    # лимит для social description берем из config.json -> ai_cfg["seo_short"]["strapi_limit"]
     social_limit = int((ai_cfg.get("seo_short") or {}).get("strapi_limit", 60))
 
-    # генерация ИИ с ретраями (max_len → retry_len).
+    # генерация ИИ с ретраями (max_len -> retry_len).
     desc_for_social = ""
     if short_desc:
         try:
             desc_for_social = await ai_generate_seo_desc_with_retries(
                 short_desc, prompts, ai_cfg, executor
             )
-            # защита от редких случаев, когда модель всё равно вылезла за лимит
+            # защита от редких случаев, когда модель все равно вылезла за лимит
             if len(desc_for_social) > social_limit:
                 logger.warning(
                     "[seo_short_guard] model returned over-limit after retries (len=%d, limit=%d)",

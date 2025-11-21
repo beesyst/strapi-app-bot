@@ -1,6 +1,6 @@
 import os
 
-# Абсолютный корень проекта (…/strapi-app-bot)
+# Абсолютный корень проекта
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Подкаталоги
@@ -12,7 +12,6 @@ LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
 # Частные подпапки
 STORAGE_APPS_DIR = os.path.join(STORAGE_DIR, "apps")
 
-# Файлы
 # Файлы
 CONFIG_JSON = os.path.join(CONFIG_DIR, "config.json")
 PROMPT_JSON = os.path.join(CONFIG_DIR, "prompt.json")

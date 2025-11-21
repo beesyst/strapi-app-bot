@@ -4,6 +4,7 @@ import copy
 import re
 import traceback
 
+from core.api.coingecko import enrich_with_coin_id
 from core.log_utils import get_logger
 from core.normalize import (
     force_https,
@@ -52,7 +53,7 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
 
     try:
         # главная страница сайта
-        html = fetch_url_html(website_url, prefer="auto")
+        html = fetch_url_html(website_url, prefer="http")
 
         # извлекаем соцсети с главной
         socials = extract_social_links(html, website_url, is_main_page=True)
@@ -63,6 +64,12 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
             v = socials.get(k)
             if isinstance(v, str) and v.strip():
                 main_data["socialLinks"][k] = v.strip()
+
+        # Coingecko: обогащение coinData + соцсетей токена
+        try:
+            main_data = enrich_with_coin_id(main_data)
+        except Exception as e:
+            logger.warning("CoinGecko обогащение не удалось: %s", e)
 
         # twitter: верификация/агрегаторы/аватар
         site_domain = get_domain_name(website_url)
@@ -265,7 +272,7 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
             except Exception as e:
                 logger.warning("Ошибка обработки YouTube: %s", e)
 
-        # имя проекта - пробрасываем twitter_display_name,
+        # имя проекта - пробрасываем twitter_display_name
         try:
             parsed_name = extract_project_name(
                 html,
@@ -291,7 +298,7 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
             main_data["socialLinks"][k] = force_https(v)
 
     logger.info(
-        "Сайт %s: Итоговые соц-ссылки: %s",
+        "Конечный результат %s: %s",
         website_url,
         {k: v for k, v in main_data["socialLinks"].items() if v},
     )

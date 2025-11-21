@@ -13,7 +13,7 @@ from core.normalize import clean_project_name, is_bad_name
 from core.paths import CONFIG_JSON
 
 # Логгер
-logger = get_logger("parser_web")
+logger = get_logger("web")
 
 # Пути/конфиг
 try:
@@ -29,14 +29,14 @@ PARSED_DOCS_LINKS_LOGGED: set[str] = set()
 
 # Регулярки для соцсетей
 SOCIAL_PATTERNS = {
-    "twitterURL": re.compile(r"twitter\.com|x\.com", re.I),
-    "discordURL": re.compile(r"discord\.gg|discord\.com", re.I),
-    "telegramURL": re.compile(r"t\.me|telegram\.me", re.I),
-    "youtubeURL": re.compile(r"youtube\.com|youtu\.be", re.I),
-    "linkedinURL": re.compile(r"linkedin\.com", re.I),
-    "redditURL": re.compile(r"reddit\.com", re.I),
-    "mediumURL": re.compile(r"medium\.com", re.I),
-    "githubURL": re.compile(r"github\.com", re.I),
+    "twitterURL": re.compile(r"^https?://(?:www\.)?(?:twitter\.com|x\.com)/", re.I),
+    "discordURL": re.compile(r"^https?://(?:www\.)?discord\.(?:gg|com)/", re.I),
+    "telegramURL": re.compile(r"^https?://(?:www\.)?(?:t\.me|telegram\.me)/", re.I),
+    "youtubeURL": re.compile(r"^https?://(?:www\.)?(?:youtube\.com|youtu\.be)/", re.I),
+    "linkedinURL": re.compile(r"^https?://(?:[a-z0-9\-]+\.)?linkedin\.com/", re.I),
+    "redditURL": re.compile(r"^https?://(?:www\.)?reddit\.com/", re.I),
+    "mediumURL": re.compile(r"^https?://(?:www\.)?medium\.com/", re.I),
+    "githubURL": re.compile(r"^https?://(?:www\.)?github\.com/", re.I),
     "websiteURL": re.compile(
         r"^https?://(?!(?:www\.)?(?:twitter\.com|x\.com|discord\.gg|discord\.com|t\.me|telegram\.me|"
         r"youtube\.com|youtu\.be|linkedin\.com|reddit\.com|medium\.com|github\.com))",
@@ -169,45 +169,62 @@ def _looks_like_browser_json(s: str) -> bool:
 def is_html_suspicious(html: str) -> bool:
     if not html:
         return True
-    # cloudflare/антибот паттерны
+
+    low = html.lower()
+
+    # cloudflare/антибот-страницы
     if (
-        "cf-browser-verification" in html
-        or "Cloudflare" in html
-        or "Just a moment..." in html
-        or "checking your browser" in html.lower()
-        or "verifying you are human" in html.lower()
+        "cf-browser-verification" in low
+        or "cloudflare" in low
+        or "just a moment..." in low
+        or "checking your browser" in low
+        or "verifying you are human" in low
     ):
         return True
-    # короткий HTML
-    if len(html) < 2500:
+
+    # типичные SPA/Next/Nuxt/React-оболочки без реальных ссылок
+    if (
+        'id="__next"' in low
+        or 'id="__nuxt"' in low
+        or 'id="root"' in low
+        or 'id="app"' in low
+    ) and not has_social_links(html):
         return True
-    for dom in (
-        "twitter.com",
-        "x.com",
-        "discord.gg",
-        "t.me",
-        "telegram.me",
-        "github.com",
-        "medium.com",
-    ):
-        if dom in html:
-            return False
+
+    # короткий HTML без реальных ссылок - почти всегда заглушка/редирект/антибот
+    if len(html) < 2500 and not has_social_links(html):
+        return True
+
     return False
 
 
 # В html хотя бы одна соцссылка по доменам
 def has_social_links(html: str) -> bool:
-    for dom in (
+    if not html:
+        return False
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    social_domains = (
         "twitter.com",
         "x.com",
         "discord.gg",
+        "discord.com",
         "t.me",
         "telegram.me",
         "github.com",
         "medium.com",
-    ):
-        if dom in html:
+        "reddit.com",
+        "linkedin.com",
+        "youtube.com",
+        "youtu.be",
+    )
+
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if any(dom in href for dom in social_domains):
             return True
+
     return False
 
 
@@ -239,7 +256,8 @@ def fetch_url_html_playwright(url: str, timeout: int = 60) -> str:
                 timeout=timeout,
             )
             if result.returncode == 0:
-                logger.info("Playwright (%s) ок: %s", label, url)
+                # Было: logger.info("Playwright (%s) ок: %s", label, url)
+                logger.info("Парс %s (Playwright): ok", url)
                 return result.stdout or ""
             logger.warning(
                 "Playwright (%s) error for %s: %s",
@@ -252,12 +270,22 @@ def fetch_url_html_playwright(url: str, timeout: int = 60) -> str:
             logger.warning("Playwright (%s) упал для %s: %s", label, url, e)
             return ""
 
-    # Попытка 1: обычный режим
-    out = _run([url], "normal")
+    # попытка 1: обычный режим - просим отдать HTML
+    out = _run(
+        [
+            url,
+            "--html",
+            "--wait",
+            "networkidle",
+            "--scrollPages",
+            "4",
+        ],
+        "normal",
+    )
     if out and out.strip():
         return out
 
-    # Попытка 2: raw (возврат html/antiBot статус внутри json)
+    # попытка 2: raw (html + text + метаданные)
     out_raw = _run([url, "--raw"], "raw")
     return out_raw or out
 
@@ -366,116 +394,315 @@ def find_best_docs_link(soup: BeautifulSoup, base_url: str) -> str:
                 break
 
     if doc_url:
-        if doc_url not in PARSED_DOCS_LINKS_LOGGED:
-            logger.info("docs-ссылка найдена: %s", doc_url)
-            PARSED_DOCS_LINKS_LOGGED.add(doc_url)
         return doc_url
     return ""
 
 
 # Парс всех соцссылок/док с html либо из json browser_fetch
 def extract_social_links(html: str, base_url: str, is_main_page: bool = False) -> dict:
+    browser_json = None
+    opened_urls: list[str] = []
+
     try:
         j = json.loads(html)
-        if isinstance(j, dict) and "websiteURL" in j:
-            if j.get("error"):
-                logger.warning("browser_fetch.js error in payload: %s", j.get("error"))
-            else:
-                if "twitterAll" in j and isinstance(j["twitterAll"], list):
-                    logger.info("browser_fetch.js twitterAll: %d", len(j["twitterAll"]))
-                logger.info("Соцлинки (browser_fetch.js): %s", j)
-                # Приводим ключевые значения к https для единообразия
-                for k, v in list(j.items()):
-                    if isinstance(v, str):
-                        j[k] = force_https(v)
-                return j
+        if isinstance(j, dict):
+            browser_json = j
+
+            # если браузер уже сам собрал соцлинки - отдаем как есть (старый формат)
+            if "websiteURL" in j:
+                if j.get("error"):
+                    logger.warning(
+                        "browser_fetch.js error in payload: %s", j.get("error")
+                    )
+                else:
+                    if "twitterAll" in j and isinstance(j["twitterAll"], list):
+                        logger.info(
+                            "browser_fetch.js twitterAll: %d", len(j["twitterAll"])
+                        )
+                    logger.info("Соцлинки (browser_fetch.js): %s", j)
+                    for k, v in list(j.items()):
+                        if isinstance(v, str):
+                            j[k] = force_https(v)
+                    return j
+
+            # сырые URL, которые страница пыталась открыть (через window.open)
+            if isinstance(j.get("openedUrls"), list):
+                opened_urls = [
+                    str(u).strip()
+                    for u in j["openedUrls"]
+                    if isinstance(u, str) and u.strip()
+                ]
+
+            # на всякий случай поддерживаем старое поле socialHints, если где-то уже есть
+            if isinstance(j.get("socialHints"), dict):
+                for v in j["socialHints"].values():
+                    if isinstance(v, str) and v.strip():
+                        opened_urls.append(v.strip())
+
+            # html лежит внутри json
+            if isinstance(j.get("html"), str) and j["html"].strip():
+                html = j["html"]
     except Exception:
-        pass
+        browser_json = None
 
-    # обычный html → парс соцссылок и docs
-    soup = BeautifulSoup(html or "", "html.parser")
-    links = {k: "" for k in SOCIAL_PATTERNS if k != "documentURL"}
+    # вспомогательный парсер соцлинков из любого soup
+    def _collect_socials_from_soup(soup_obj, base) -> dict:
+        links_local = {k: "" for k in SOCIAL_PATTERNS if k != "documentURL"}
 
-    # кандидаты только из шапки/навигации/футера
-    zones = []
-    zones.extend(soup.select("header, nav"))
-    zones.extend(soup.select("footer"))
-    zones.append(soup.find(["div", "section"], recursive=False))
-    zones.append(soup.select_one("body > :last-child"))
+        # кандидаты только из шапки/навигации/футера
+        zones_local = []
+        zones_local.extend(soup_obj.select("header, nav"))
+        zones_local.extend(soup_obj.select("footer"))
+        zones_local.append(soup_obj.find(["div", "section"], recursive=False))
+        zones_local.append(soup_obj.select_one("body > :last-child"))
 
-    def _scan_zone(node):
-        if not node:
-            return
-        for a in node.find_all("a", href=True):
-            abs_href = urljoin(base_url, a["href"])
-            for key, pattern in SOCIAL_PATTERNS.items():
-                if key == "documentURL":
-                    continue
-                if pattern.search(abs_href):
-                    if not links.get(key):
-                        links[key] = abs_href
-
-    for z in zones:
-        _scan_zone(z)
-
-    # если по "зонам" пусто - проход по всей странице
-    if all(not links[k] for k in links if k != "websiteURL"):
-        for a in soup.find_all("a", href=True):
-            abs_href = urljoin(base_url, a["href"])
-            for key, pattern in SOCIAL_PATTERNS.items():
-                if key == "documentURL":
-                    continue
-                if not links.get(key) and pattern.search(abs_href):
-                    links[key] = abs_href
-
-    # website и docs
-    links["websiteURL"] = base_url
-    doc_url = find_best_docs_link(soup, base_url)
-    links["documentURL"] = doc_url or ""
-
-    # если docs найден - дозаполняем пустые поля со страницы docs
-    if doc_url:
-        doc_html = fetch_url_html(doc_url, prefer="auto")
-        dsoup = BeautifulSoup(doc_html or "", "html.parser")
-        dzones = []
-        dzones.extend(dsoup.select("header, nav"))
-        dzones.extend(dsoup.select("footer"))
-        dzones.append(dsoup.find(["div", "section"], recursive=False))
-        dzones.append(dsoup.select_one("body > :last-child"))
-
-        for z in dzones:
-            if not z:
-                continue
-            for a in z.find_all("a", href=True):
-                abs_href = urljoin(doc_url, a["href"])
+        def _scan_zone(node):
+            if not node:
+                return
+            for a in node.find_all("a", href=True):
+                abs_href = urljoin(base, a["href"])
                 for key, pattern in SOCIAL_PATTERNS.items():
-                    if key in ("documentURL",):
+                    if key == "documentURL":
                         continue
-                    if not links.get(key) and pattern.search(abs_href):
-                        links[key] = abs_href
+                    if pattern.search(abs_href):
+                        if not links_local.get(key):
+                            links_local[key] = abs_href
 
-    # если главная пустая целиком - fallback на browser_fetch.js как было
+        for z in zones_local:
+            _scan_zone(z)
+
+        # если по "зонам" пусто - проход по всей странице
+        if all(not links_local[k] for k in links_local if k != "websiteURL"):
+            for a in soup_obj.find_all("a", href=True):
+                abs_href = urljoin(base, a["href"])
+                for key, pattern in SOCIAL_PATTERNS.items():
+                    if key == "documentURL":
+                        continue
+                    if not links_local.get(key) and pattern.search(abs_href):
+                        links_local[key] = abs_href
+
+        # website и docs
+        links_local["websiteURL"] = base
+        doc_url_local = find_best_docs_link(soup_obj, base)
+        links_local["documentURL"] = doc_url_local or ""
+
+        # если docs найден - дозаполняем пустые поля со страницы docs
+        if doc_url_local:
+            doc_html = fetch_url_html(doc_url_local, prefer="http")
+            dsoup = BeautifulSoup(doc_html or "", "html.parser")
+            dzones = []
+            dzones.extend(dsoup.select("header, nav"))
+            dzones.extend(dsoup.select("footer"))
+            dzones.append(dsoup.find(["div", "section"], recursive=False))
+            dzones.append(dsoup.select_one("body > :last-child"))
+
+            for z in dzones:
+                if not z:
+                    continue
+                for a in z.find_all("a", href=True):
+                    abs_href = urljoin(doc_url_local, a["href"])
+                    for key, pattern in SOCIAL_PATTERNS.items():
+                        if key in ("documentURL",):
+                            continue
+                        if not links_local.get(key) and pattern.search(abs_href):
+                            links_local[key] = abs_href
+
+        return links_local
+
+    # обычный html -> первый проход парсинга
+    soup = BeautifulSoup(html or "", "html.parser")
+    links = _collect_socials_from_soup(soup, base_url)
+
+    # лог результат базового HTML-парсинга только для главной страницы
+    if is_main_page:
+        has_social_http = any(
+            links.get(k) for k in links if k not in ("websiteURL", "documentURL")
+        )
+        if has_social_http:
+            logger.info("Парс %s (requests + BeautifulSoup): ok", base_url)
+
+    base_host = get_domain_name(base_url)
+
+    def _same_project(url: str) -> bool:
+        try:
+            h = get_domain_name(url)
+            if not h or not base_host:
+                return False
+            # тот же домен или поддомен (app.bebop.xyz для bebop.xyz)
+            return h == base_host or h.endswith("." + base_host)
+        except Exception:
+            return False
+
+    if all(not links[k] for k in links if k not in ("websiteURL", "documentURL")):
+        iframe_srcs: list[str] = []
+        for iframe in soup.find_all("iframe", src=True):
+            src_abs = urljoin(base_url, iframe["src"])
+            if _same_project(src_abs) and src_abs not in iframe_srcs:
+                iframe_srcs.append(src_abs)
+
+        for iframe_url in iframe_srcs:
+            try:
+                frame_html = fetch_url_html(iframe_url, prefer="auto")
+            except Exception:
+                frame_html = ""
+
+            if not frame_html:
+                continue
+
+            fsoup = BeautifulSoup(frame_html or "", "html.parser")
+            frame_links = _collect_socials_from_soup(fsoup, iframe_url)
+
+            # дозаполняем только пустые поля с основной страницы
+            for key, val in frame_links.items():
+                if key in ("websiteURL", "documentURL"):
+                    continue
+                if val and not links.get(key):
+                    links[key] = val
+
+            # если нашли хотя бы один соц-URL - дальше можно не идти
+            if any(
+                links.get(k)
+                for k in (
+                    "twitterURL",
+                    "discordURL",
+                    "telegramURL",
+                    "githubURL",
+                    "mediumURL",
+                    "linkedinURL",
+                    "redditURL",
+                )
+            ):
+                break
+
+    # если главная пустая целиком - fallback на browser_fetch.js (SPA/JS-рендер)
     if is_main_page and all(not links[k] for k in links if k != "websiteURL"):
+        # здесь http-парс не дал соц.линков, логируем это и идем в Playwright
         logger.info(
-            "Обычный парс html (requests + BeautifulSoup): пусто на %s - повтор через Playwright",
+            "Парс %s (requests + BeautifulSoup): пусто - повтор через Playwright",
             base_url,
         )
         browser_out = fetch_url_html_playwright(base_url)
+
+        j2 = None
         try:
             j2 = json.loads(browser_out)
-            if isinstance(j2, dict) and "websiteURL" in j2:
-                logger.info("Соцлинки (fallback browser): %s", j2)
-                for k, v in list(j2.items()):
-                    if isinstance(v, str):
-                        j2[k] = force_https(v)
-                return j2
         except Exception as e:
-            logger.warning("extract_social_links fallback JSON error: %s", e)
+            j2 = None
+            logger.debug(
+                "extract_social_links: fallback Playwright output is not JSON: %s", e
+            )
 
-    # Финальная нормализация - все в https
+        if isinstance(j2, dict):
+            browser_json = j2  # запоминаем, чтобы потом использовать html в raw-фолбэке
+
+            # старый формат: браузер сам вернул готовые соцлинки
+            if "websiteURL" in j2:
+                if j2.get("error"):
+                    logger.warning(
+                        "browser_fetch.js error in payload (fallback): %s",
+                        j2.get("error"),
+                    )
+                else:
+                    if "twitterAll" in j2 and isinstance(j2["twitterAll"], list):
+                        logger.info(
+                            "browser_fetch.js twitterAll (fallback): %d",
+                            len(j2["twitterAll"]),
+                        )
+                    logger.info("Соцлинки (fallback browser): %s", j2)
+                    for k, v in list(j2.items()):
+                        if isinstance(v, str):
+                            j2[k] = force_https(v)
+                    links = j2
+            else:
+                # собираем openedUrls и html из fallback-JSON
+                if isinstance(j2.get("openedUrls"), list):
+                    opened_urls.extend(
+                        str(u).strip()
+                        for u in j2["openedUrls"]
+                        if isinstance(u, str) and u.strip()
+                    )
+                if isinstance(j2.get("socialHints"), dict):
+                    opened_urls.extend(
+                        str(v).strip()
+                        for v in j2["socialHints"].values()
+                        if isinstance(v, str) and v.strip()
+                    )
+
+                html2 = j2.get("html") or ""
+                if html2:
+                    soup2 = BeautifulSoup(html2 or "", "html.parser")
+                    links = _collect_socials_from_soup(soup2, base_url)
+        else:
+            # browser_out - это просто HTML, без JSON
+            if browser_out:
+                soup2 = BeautifulSoup(browser_out or "", "html.parser")
+                links = _collect_socials_from_soup(soup2, base_url)
+
+    # вытаскиваем соцлинки прямо из сырого HTML (включая inline-скрипты)
+    if all(not links.get(k) for k in links if k not in ("websiteURL", "documentURL")):
+        raw_html = html or ""
+        if (
+            browser_json
+            and isinstance(browser_json.get("html"), str)
+            and browser_json["html"].strip()
+        ):
+            # приоритет: HTML, который вернул Playwright
+            raw_html = browser_json["html"]
+
+        url_pattern = re.compile(r"https?://[^\s\"'<>]+", re.I)
+        found_raw = False
+
+        for url_candidate in url_pattern.findall(raw_html):
+            url_candidate = force_https(url_candidate)
+            for key, pattern in SOCIAL_PATTERNS.items():
+                if key in ("websiteURL", "documentURL"):
+                    continue
+                if links.get(key):
+                    continue
+                if pattern.search(url_candidate):
+                    links[key] = url_candidate
+                    found_raw = True
+
+        if found_raw:
+            logger.info("Парс %s (raw HTML): ok", base_url)
+        else:
+            logger.info("Парс %s (raw HTML): пусто", base_url)
+
+    # если Playwright поймал соцлинки через window.open - домерживаем их как подсказки
+    if opened_urls:
+        for url_candidate in opened_urls:
+            if not isinstance(url_candidate, str) or not url_candidate.strip():
+                continue
+            url_candidate = force_https(url_candidate.strip())
+            for key, pattern in SOCIAL_PATTERNS.items():
+                if key in ("websiteURL", "documentURL"):
+                    continue
+                if links.get(key):
+                    continue
+                if pattern.search(url_candidate):
+                    links[key] = url_candidate
+
+    # финальная нормализация - все в https
     for k, v in list(links.items()):
         if v and isinstance(v, str):
             links[k] = force_https(v)
+
+    # лог начального обогащения для главной страницы
+    if is_main_page:
+        initial_summary = {
+            "telegram": links.get("telegramURL", ""),
+            "github": links.get("githubURL", ""),
+            "twitter": links.get("twitterURL", ""),
+            "discord": links.get("discordURL", ""),
+            "document": links.get("documentURL", ""),
+            "website": links.get("websiteURL", base_url),
+            "reddit": links.get("redditURL", ""),
+        }
+        logger.info(
+            "Веб обогащение %s: %s",
+            base_url,
+            initial_summary,
+        )
 
     return links
 

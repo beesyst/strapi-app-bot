@@ -1,15 +1,5 @@
 {
   "name": "Berachain",
   "url": "https://www.berachain.com/",
-  "partners": [
-    "https://www.berally.io/",
-    "https://www.berapaw.com/",
-    "https://bgtscan.com/",
-    "https://brc.city/",
-    "https://www.burrbear.io/",
-    "https://clearpool.finance/",
-    "https://www.curvance.com/",
-    "https://d2.finance/",
-    "https://decimal.at/"
-  ]
+  "partners": ["https://moby.trade/"]
 }

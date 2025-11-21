@@ -2,14 +2,13 @@ import os
 import subprocess
 import sys
 
-# чтобы install.py можно было запускать как `python3 core/install.py`
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from core.paths import PROJECT_ROOT as _PROJECT_ROOT
 
-PROJECT_ROOT = _PROJECT_ROOT  # используем значение из paths.py
+PROJECT_ROOT = _PROJECT_ROOT
 
 
 # Корневые пути проекта / окружения
@@ -33,7 +32,7 @@ subprocess.run(
 )
 
 
-# npm install — только если есть package.json в core/
+# npm install - только если есть package.json в core/
 if os.path.isfile(PACKAGE_JSON_PATH):
     if not os.path.isdir(os.path.join(NODE_CORE_DIR, "node_modules")):
         print("[install] Устанавливаю Node.js зависимости ...")
