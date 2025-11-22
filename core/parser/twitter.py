@@ -106,10 +106,12 @@ def normalize_twitter_avatar(url: str) -> str:
     # убрать query/fragment
     u = re.sub(r"(?:\?[^#]*)?(?:#.*)?$", "", u)
 
-    # привести к сырому виду без _200x200,_400x400 и т.п.
+    # привести к сырому виду без _200x200,_400x400,_normal,_bigger,_mini и т.п.
     if "pbs.twimg.com/profile_images/" in u:
         u = re.sub(
-            r"(/profile_images/[^/]+/.+)_\d+x\d+(\.[a-zA-Z0-9]+)$",
+            r"(/profile_images/[^/]+/[^/.]+?)"
+            r"(?:_[0-9]+x[0-9]+|_x[0-9]+|_normal|_bigger|_mini)"
+            r"(\.[a-zA-Z0-9]+)$",
             r"\1\2",
             u,
         )
@@ -155,7 +157,7 @@ def _parse_x_profile_html(html: str) -> Dict[str, object]:
     if name_el:
         name = (name_el.get_text(strip=True) or "").strip()
 
-    # фолбэк по <title>, как в JS
+    # фолбэк по <title>
     if not name:
         title_tag = soup.title.string if soup.title and soup.title.string else ""
         t = (title_tag or "").strip()
@@ -165,31 +167,74 @@ def _parse_x_profile_html(html: str) -> Dict[str, object]:
     links: set[str] = set()
     handles: set[str] = set()
 
-    # bio-ссылки
+    # bio
     bio = soup.select_one('[data-testid="UserDescription"]')
     if bio:
-        # url из HTML
-        bio_html = str(bio)
-        for u in re.findall(r"https?://[^\s\"<]+", bio_html):
-            u_norm = force_https(u)
-            h = _host(u_norm)
-            # отбрасываем служебные домены (картинки, эмодзи, редиректы X и любые *.x.com)
+        # ссылки из <a> внутри BIO (работаем по DOM, не по regex по всему HTML)
+        for a in bio.find_all("a", href=True):
+            href = (a.get("href") or "").strip()
+            if not href:
+                continue
+
+            # @handles вида href="/Name" → складываем в handles
+            m_handle = re.match(r"^/([A-Za-z0-9_]{1,15})/?$", href)
+            if m_handle:
+                handles.add("@" + m_handle.group(1))
+                continue
+
+            # нас интересуют только http(s)-ссылки
+            if not href.startswith("http"):
+                continue
+
+            u = force_https(href)
+            h = _host(u)
+
+            # t.co в bio: разворачиваем по видимому тексту (как уже делаем в header)
+            if h == "t.co":
+                visible = a.get_text(" ", strip=True) or ""
+                # пример: "https://berapaw.com" или "https:// berapaw.com"
+                for naked in re.findall(
+                    r"([a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:/[^\s]+)?)",
+                    visible,
+                ):
+                    naked = naked.strip().rstrip(".,;:!?)(")
+                    if not naked:
+                        continue
+
+                    # если протокола нет - добавляем https://
+                    url_from_text = (
+                        naked if naked.startswith("http") else "https://" + naked
+                    )
+                    url_from_text = force_https(url_from_text)
+                    h_text = _host(url_from_text)
+
+                    # режем служебные домены
+                    if (
+                        h_text
+                        and h_text not in ("x.com", "twitter.com", "t.co")
+                        and not h_text.endswith(".x.com")
+                        and not h_text.endswith(".twimg.com")
+                    ):
+                        links.add(url_from_text)
+                continue
+
+            # обычные внешние ссылки из BIO, кроме служебных
             if (
-                h in ("t.co", "x.com", "twitter.com")
-                or h.endswith("twimg.com")
+                h in ("x.com", "twitter.com", "t.co")
                 or h.endswith(".x.com")
+                or h.endswith(".twimg.com")
             ):
                 continue
-            links.add(u_norm)
 
-        # голые домены вида example.com/path
+            links.add(u)
+
+        # запасной вариант - голые домены в тексте BIO (без <a>)
         text = bio.get_text(" ", strip=True) or ""
         for naked in re.findall(r"([a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:/[^\s]+)?)", text):
             naked = naked.strip().rstrip(".,;:!?)(")
             if not naked:
                 continue
 
-            # отбрасываем служебные домены (t.co/x.com/twitter.com и т.п.)
             host_name = _host("https://" + naked)
             if (
                 host_name in ("t.co", "x.com", "twitter.com")
@@ -198,58 +243,77 @@ def _parse_x_profile_html(html: str) -> Dict[str, object]:
             ):
                 continue
 
-            # избегаем дубликатов по подстроке
+            # если этот домен уже содержится внутри какой-то найденной ссылки - скип
             if any(naked in l for l in links):
                 continue
 
             links.add(force_https("https://" + naked))
 
-        # хэндлы-профили вида @Name из bio (href="/Name")
-        for a in bio.find_all("a", href=True):
+    # header (UserProfileHeader_Items): сайт/discord и т.п.
+    header_items = soup.select_one('[data-testid="UserProfileHeader_Items"]')
+    if header_items:
+        for a in header_items.select("a[href]"):
             href = (a.get("href") or "").strip()
-            if not href or href.startswith("http"):
-                continue
-            m_handle = re.match(r"^/([A-Za-z0-9_]{1,15})/?$", href)
-            if m_handle:
-                handles.add("@" + m_handle.group(1))
-
-    # ссылки под профилем (UserProfileHeader_Items, t.co и т.п.)
-    for a in soup.select('[data-testid="UserProfileHeader_Items"] a, a[role="link"]'):
-        href = (a.get("href") or "").strip()
-        if not href:
-            continue
-
-        # прямые внешние http-ссылки, кроме twitter/x/t.co
-        if href.startswith("http"):
-            u_norm = force_https(href)
-            h = _host(u_norm)
-
-            # отбрасываем любые "служебные" x-домены:
-            if (
-                h in ("x.com", "twitter.com", "t.co")
-                or h.endswith(".x.com")
-                or h.endswith(".twimg.com")
-            ):
+            if not href:
                 continue
 
-            links.add(u_norm)
+            # t.co -> разворачиваем по видимому тексту (discord.gg/..., сайт и т.п.)
+            if href.startswith("https://t.co/"):
+                span = a.select_one("span")
+                text = (
+                    span.get_text(strip=True) if span else a.get_text(" ", strip=True)
+                ) or ""
 
-        # укороченные t.co -> пытаемся восстановить по тексту
-        if href.startswith("https://t.co/"):
-            span = a.select_one("span")
-            text = (
-                span.get_text(strip=True) if span else a.get_text(" ", strip=True)
-            ) or ""
-            if re.match(r"^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}\/[^\s]+$", text):
-                links.add(force_https("https://" + text))
+                # простой паттерн домена/URL в тексте
+                if re.match(r"^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:/[^\s]+)?$", text):
+                    url_from_text = force_https("https://" + text)
+                    h_text = _host(url_from_text)
+                    if (
+                        h_text
+                        and h_text not in ("x.com", "twitter.com", "t.co")
+                        and not h_text.endswith(".x.com")
+                        and not h_text.endswith(".twimg.com")
+                    ):
+                        links.add(url_from_text)
+                continue
 
-    # аватар: <img src="...profile_images...">
+            # прямые внешние http-ссылки, кроме twitter/x/t.co
+            if href.startswith("http"):
+                u_norm = force_https(href)
+                h = _host(u_norm)
+                if (
+                    h in ("x.com", "twitter.com", "t.co")
+                    or h.endswith(".x.com")
+                    or h.endswith(".twimg.com")
+                ):
+                    continue
+                links.add(u_norm)
+
+    # аватар
     avatar = ""
-    img = soup.find("img", src=re.compile(r"pbs\.twimg\.com/profile_images/"))
-    if img and img.get("src"):
-        avatar = img["src"]
+    avatar_container = soup.select_one('[data-testid^="UserAvatar-Container"]')
+    if avatar_container:
+        img_el = avatar_container.find("img", src=True)
+        if img_el:
+            avatar = img_el.get("src", "")
 
-    # аватар: <div style="background-image: url('...profile_images...')">
+        if not avatar:
+            bg_div = avatar_container.select_one('div[style*="background-image"]')
+            if bg_div:
+                style = bg_div.get("style") or ""
+                m = re.search(
+                    r'url\(["\']?(https?:\/\/[^"\')]+)["\']?\)',
+                    style,
+                    re.I,
+                )
+                if m:
+                    avatar = m.group(1)
+
+    if not avatar:
+        img = soup.find("img", src=re.compile(r"pbs\.twimg\.com/profile_images/"))
+        if img and img.get("src"):
+            avatar = img["src"]
+
     if not avatar:
         for div in soup.select('div[style*="background-image"]'):
             style = div.get("style") or ""
@@ -262,7 +326,6 @@ def _parse_x_profile_html(html: str) -> Dict[str, object]:
                 avatar = m.group(1)
                 break
 
-    # аватар: <meta property="og:image" ... profile_images ...>
     if not avatar:
         meta = soup.find("meta", attrs={"property": "og:image"}) or soup.find(
             "meta", attrs={"name": "og:image"}
@@ -272,8 +335,20 @@ def _parse_x_profile_html(html: str) -> Dict[str, object]:
             if "pbs.twimg.com/profile_images/" in og:
                 avatar = og
 
+    if not handles:
+        chunks: list[str] = []
+        if bio:
+            chunks.append(bio.get_text(" ", strip=True) or "")
+        if "header_items" in locals() and header_items:
+            chunks.append(header_items.get_text(" ", strip=True) or "")
+        text_all = " ".join(chunks) if chunks else ""
+        for m in re.findall(r"@([A-Za-z0-9_]{1,15})", text_all):
+            handles.add("@" + m)
+
     if avatar:
         avatar = normalize_twitter_avatar((avatar or "").replace("&amp;", "&"))
+
+        pass
 
     return {
         "links": list(links),
@@ -377,7 +452,22 @@ def get_links_from_x_profile(
     def _run_once(u: str):
         try:
             return subprocess.run(
-                ["node", script_path, u, "--html"],
+                [
+                    "node",
+                    script_path,
+                    u,
+                    "--html",
+                    "--twitterProfile",
+                    "true",
+                    "--wait",
+                    "domcontentloaded",
+                    "--timeout",
+                    "45000",
+                    "--scrollPages",
+                    "2",
+                    "--waitSocialHosts",
+                    "t.co,discord.gg,github.com,linktr.ee,t.me,youtube.com,medium.com,reddit.com",
+                ],
                 cwd=os.path.dirname(script_path),
                 capture_output=True,
                 text=True,
@@ -406,21 +496,111 @@ def get_links_from_x_profile(
                 data = _extract_first_json_object(stdout) or {}
 
             html_from_browser = ""
-            if isinstance(data, dict) and isinstance(data.get("html"), str):
-                html_from_browser = data.get("html") or ""
+            twitter_profile = None
 
-            # если HTML есть - парсим X-профиль из него
+            if isinstance(data, dict):
+                if isinstance(data.get("html"), str):
+                    html_from_browser = data.get("html") or ""
+                if isinstance(data.get("twitter_profile"), dict):
+                    twitter_profile = data["twitter_profile"]
+
+            # приоритет: готовый twitter_profile из JS
+            browser_parsed: dict = {}
+
+            # пробуем взять то, что дал JS (twitter_profile)
+            if twitter_profile:
+                try:
+                    raw_links = twitter_profile.get("links") or []
+
+                    # фильтруем мусор: служебные домены X/Twitter/t.co и чужие профили
+                    current_handle = _handle_from_url(safe_url)
+                    filtered_links: list[str] = []
+
+                    for l in raw_links:
+                        if not isinstance(l, str) or not l.strip():
+                            continue
+                        u = force_https(l)
+                        h = _host(u)
+                        if not h:
+                            continue
+
+                        # служебные домены X/Twitter/t.co полностью выкидываем из links
+                        if (
+                            h in ("x.com", "twitter.com", "t.co")
+                            or h.endswith(".x.com")
+                            or h.endswith(".twimg.com")
+                        ):
+                            continue
+
+                        filtered_links.append(u)
+
+                    # убираем дубликаты, сохраняя порядок
+                    seen = set()
+                    clean_links: list[str] = []
+                    for u in filtered_links:
+                        if u not in seen:
+                            clean_links.append(u)
+                            seen.add(u)
+
+                    browser_parsed = {
+                        "links": clean_links,
+                        "avatar": twitter_profile.get("avatar") or "",
+                        "name": twitter_profile.get("name") or "",
+                        "handles": twitter_profile.get("handles") or [],
+                    }
+                except Exception as e:
+                    logger.warning(
+                        "Ошибка обработки twitter_profile для %s: %s",
+                        safe_url,
+                        e,
+                    )
+                    browser_parsed = {}
+
+            # всегда пытаемся дообогатить HTML-парсером (bio, агрегаторы и т.п.)
             if html_from_browser.strip():
                 try:
-                    browser_parsed = _parse_x_profile_html(html_from_browser)
+                    html_parsed = _parse_x_profile_html(html_from_browser)
                 except Exception as e:
                     logger.warning(
                         "Ошибка парсинга HTML X-профиля через Playwright для %s: %s",
                         safe_url,
                         e,
                     )
-                    browser_parsed = {}
-            else:
+                    html_parsed = {}
+
+                if isinstance(html_parsed, dict):
+                    # если twitter_profile ничего не дал - берем HTML-результат как есть
+                    if (
+                        not browser_parsed.get("links")
+                        and not browser_parsed.get("avatar")
+                        and not browser_parsed.get("name")
+                    ):
+                        browser_parsed = html_parsed
+                    else:
+                        # мержим: ссылки + аватар + имя в общий parsed_links
+                        for l in html_parsed.get("links") or []:
+                            if isinstance(l, str) and l:
+                                l_norm = force_https(l)
+                                if l_norm not in parsed_links:
+                                    parsed_links.append(l_norm)
+                        if not parsed_avatar and html_parsed.get("avatar"):
+                            parsed_avatar = html_parsed["avatar"]
+                        if not parsed_name and html_parsed.get("name"):
+                            parsed_name = html_parsed["name"]
+
+                        if not browser_parsed.get("links") and html_parsed.get("links"):
+                            browser_parsed["links"] = list(
+                                html_parsed.get("links") or []
+                            )
+
+                        if (
+                            not browser_parsed.get("handles")
+                            and isinstance(html_parsed.get("handles"), list)
+                            and html_parsed.get("handles")
+                        ):
+                            browser_parsed["handles"] = list(html_parsed["handles"])
+
+            if not browser_parsed:
                 browser_parsed = {}
 
             # если удалось что-то вытащить (links/avatar/name) - мержим
@@ -429,13 +609,24 @@ def get_links_from_x_profile(
                 or browser_parsed.get("avatar")
                 or browser_parsed.get("name")
             ):
-                browser_links = []
+                # оставляем только внешние BIO/шапка-ссылки, без служебных доменов X
+                browser_links: list[str] = []
                 for l in browser_parsed.get("links") or []:
-                    if isinstance(l, str) and l:
-                        l_norm = force_https(l)
-                        browser_links.append(l_norm)
-                        if l_norm not in parsed_links:
-                            parsed_links.append(l_norm)
+                    if not isinstance(l, str) or not l.strip():
+                        continue
+                    u_norm = force_https(l)
+                    h = _host(u_norm)
+                    if (
+                        not h
+                        or h in ("x.com", "twitter.com", "t.co")
+                        or h.endswith(".x.com")
+                        or h.endswith(".twimg.com")
+                    ):
+                        # выкидываем всё, что относится к самому X/Twitter
+                        continue
+                    browser_links.append(u_norm)
+                    if u_norm not in parsed_links:
+                        parsed_links.append(u_norm)
 
                 if not parsed_avatar:
                     parsed_avatar = browser_parsed.get("avatar") or parsed_avatar
@@ -449,32 +640,63 @@ def get_links_from_x_profile(
                     "name": parsed_name or "",
                 }
                 _PARSED_X_PROFILE_CACHE[safe_url] = cleaned
+
                 try:
                     if safe_url not in _PLAYWRIGHT_LOGGED:
+                        # считаем кол-во ссылок по финальному cleaned, а не только по raw browser_links
+                        links_for_log = cleaned.get("links") or []
+
                         logger.info(
                             "Playwright GET+parse: %s → avatar=%s, links=%d",
                             safe_url,
                             "yes" if cleaned.get("avatar") else "no",
-                            len(cleaned.get("links") or []),
+                            len(links_for_log),
                         )
-                        # лог BIO X (Playwright): внешние ссылки + @handles из bio
+
+                        # BIO X (Playwright): берем ссылки из финальных cleaned["links"],
                         browser_handles = browser_parsed.get("handles") or []
-                        if browser_links or browser_handles:
+
+                        bio_log_links: list[str] = []
+
+                        # сначала используем browser_links, если они есть
+                        if browser_links:
+                            bio_log_links = list(dict.fromkeys(browser_links))
+                        else:
+                            # если browser_links пустой, строим список из cleaned["links"],
+                            for l in links_for_log:
+                                if not isinstance(l, str) or not l.strip():
+                                    continue
+                                u_norm = force_https(l)
+                                h = _host(u_norm)
+                                if (
+                                    not h
+                                    or h in ("x.com", "twitter.com", "t.co")
+                                    or h.endswith(".x.com")
+                                    or h.endswith(".twimg.com")
+                                ):
+                                    continue
+                                bio_log_links.append(u_norm)
+                            # убираем дубли, сохраняя порядок
+                            bio_log_links = list(dict.fromkeys(bio_log_links))
+
+                        if bio_log_links or browser_handles:
                             logger.info(
                                 "BIO X (Playwright): links=%s, handles=%s",
-                                list(dict.fromkeys(browser_links)),
+                                bio_log_links,
                                 list(dict.fromkeys(browser_handles)),
                             )
+
                         _PLAYWRIGHT_LOGGED.add(safe_url)
                     else:
                         logger.debug(
                             "Playwright GET+parse (cached url): %s → avatar=%s, links=%d",
                             safe_url,
                             "yes" if cleaned.get("avatar") else "no",
-                            len(cleaned.get("links") or []),
+                            len((cleaned.get("links") or [])),
                         )
                 except Exception:
                     logger.info("Playwright GET+parse: %s", safe_url)
+
                 return cleaned
 
             # regex-фолбэк: ищем pbs.twimg.com в html/логе

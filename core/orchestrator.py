@@ -308,11 +308,16 @@ async def process_partner(
 
         if status in (ADD, UPDATE):
             save_main_json(storage_path, main_data)
-            log_mainjson_status(status, app_name, domain, url)
+
+            if status == UPDATE:
+                log_mainjson_status(status, app_name, domain, url)
+
             logger.info(f"Готово - {app_name} - {url}")
+
         elif status == SKIP:
             log_mainjson_status(status, app_name, domain, url)
             logger.info(f"[skip] - {app_name} - {url}")
+
         else:
             log_mainjson_status(
                 ERROR, app_name, domain, url, error_msg="Неизвестный статус"

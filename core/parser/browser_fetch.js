@@ -68,6 +68,9 @@ function parseArgs(argv) {
     } else if (a === '--scrollPages') {
       args.scrollPages = Math.max(1, Number(argv[++i]) || 1);
     }
+    else if (a === '--twitterProfile') {
+      args.twitterProfile = String(argv[++i] || 'true').toLowerCase() !== 'false';
+    }
     // fingerprint options
     else if (a === '--fp-device') args.fpDevice = argv[++i];
     else if (a === '--fp-os') args.fpOS = argv[++i];
@@ -297,7 +300,8 @@ async function browserFetch(opts) {
     cookiesPath,
     scrollPages = 1,
     proxy,
-    profile, // пока не используем persistent-профили, но флаг оставлен для совместимости
+    profile,
+    twitterProfile = false,
   } = opts || {};
 
   if (!url) throw new Error('url is required');
@@ -525,6 +529,133 @@ async function browserFetch(opts) {
       const antiBot = await detectAntiBot(page, resp);
       const timing = { startedAt, finishedAt: Date.now(), ms: Date.now() - startedAt };
 
+      // если это X-профиль и нас явно попросили - собираем профиль прямо в браузере
+      let twitter_profile = null;
+      try {
+        if (
+          twitterProfile &&
+          /^https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/[A-Za-z0-9_]{1,15}(?:[\/?#].*)?$/i.test(finalUrl)
+        ) {
+          twitter_profile = await page.evaluate(() => {
+            const pick = (sel) =>
+              (document.querySelector(sel)?.textContent || '').trim();
+
+            const name = pick('div[data-testid="UserName"] span');
+            const bio  = pick('div[data-testid="UserDescription"]');
+
+            const verified = !!document.querySelector(
+              'div[data-testid="UserName"] svg[aria-label*="Verified"], ' +
+              'div[data-testid="UserName"] svg[aria-label*="Подтвержден"]'
+            );
+
+            // avatar
+            let avatar =
+              document
+                .querySelector('img[src*="profile_images"]')
+                ?.getAttribute('src') || '';
+            if (!avatar) {
+              const nodes = Array.from(
+                document.querySelectorAll('div[style*="background-image"]')
+              );
+              for (const n of nodes) {
+                const m = String(n.getAttribute('style') || '').match(
+                  /url\("?(https?:\/\/pbs\.twimg\.com\/profile_images\/[^")]+)"?\)/i
+                );
+                if (m && m[1]) {
+                  avatar = m[1];
+                  break;
+                }
+              }
+            }
+
+            // ссылки из bio + шапки профиля
+            const entries = [];
+            document
+              .querySelectorAll(
+                'div[data-testid="UserDescription"] a[href],' +
+                  'div[data-testid="UserProfileHeader_Items"] a[href]'
+              )
+              .forEach((a) => {
+                const href = (a.getAttribute('href') || '').trim();
+                const expanded =
+                  (a.getAttribute('data-expanded-url') ||
+                    a.getAttribute('title') ||
+                    a.getAttribute('data-url') ||
+                    '')?.trim();
+                const text = (a.textContent || '').trim();
+                if (href) entries.push({ href, expanded, text });
+              });
+
+            const abs = (h) => {
+              try {
+                return h && h.startsWith('http')
+                  ? h
+                  : new URL(h, location.href).href;
+              } catch {
+                return h;
+              }
+            };
+
+            const textToUrlMaybe = (s) => {
+              let t = (s || '').trim();
+              if (!t) return '';
+
+              // если в тексте уже есть протокол (https://...), убираем его
+              if (/^https?:\/\//i.test(t)) {
+                t = t.replace(/^https?:\/\//i, '');
+              }
+
+              // дальше ожидаем "домен[/путь]" без протокола
+              if (/^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:\/[^\s]*)?$/.test(t)) {
+                return 'https://' + t;
+              }
+              return '';
+            };
+
+            const links = Array.from(
+              new Set(
+                entries.map((e) => {
+                  // t.co -> сначала expanded, потом текст
+                  if (/^https?:\/\/t\.co\//i.test(e.href) && e.expanded) {
+                    return abs(e.expanded);
+                  }
+                  if (/^https?:\/\/t\.co\//i.test(e.href)) {
+                    const guess = textToUrlMaybe(e.text);
+                    if (guess) return abs(guess);
+                  }
+                  return abs(e.href);
+                })
+              )
+            );
+
+            // простые @handles из bio
+            const handles = [];
+            const bioNode = document.querySelector(
+              'div[data-testid="UserDescription"]'
+            );
+            if (bioNode) {
+              const textAll = bioNode.innerText || bioNode.textContent || '';
+              const m = textAll.match(/@([A-Za-z0-9_]{1,15})/g) || [];
+              for (const h of m) {
+                const clean = h.trim();
+                if (clean && !handles.includes(clean)) handles.push(clean);
+              }
+            }
+
+            return {
+              name,
+              bio,
+              verified,
+              avatar,
+              links,
+              handles,
+            };
+          });
+        }
+      } catch (e) {
+        console.error('twitter_profile evaluate failed:', e && (e.message || e));
+      }
+
       // вытаскиваем все URL, которые страница попыталась открыть (через window.open)
       let openedUrls = [];
       try {
@@ -557,6 +688,7 @@ async function browserFetch(opts) {
         timing,
         antiBot,
         website: url,
+        ...(twitter_profile ? { twitter_profile } : {}),
       };
 
       if (captureNet) {

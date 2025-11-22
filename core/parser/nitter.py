@@ -176,7 +176,9 @@ def _normalize_avatar(url: str | None) -> str:
 
     if "pbs.twimg.com/profile_images/" in u:
         u = re.sub(
-            r"(/profile_images/[^/]+/.+)_\d+x\d+(\.[a-zA-Z0-9]+)$",
+            r"(/profile_images/[^/]+/[^/_]+)"
+            r"(?:_[0-9]+x[0-9]+|_x[0-9]+|_normal|_bigger|_mini)"
+            r"(\.[a-zA-Z0-9]+)$",
             r"\1\2",
             u,
         )
@@ -282,17 +284,26 @@ def _probe_profile(
             card = c
             break
 
-    scope = card or soup
+    # берем первый .profile-card, но не падаем на весь soup
+    if not card:
+        card = soup.select_one(".profile-card")
+
+    # если карточки профиля нет вообще - возвращаем только аватар, без ссылок
+    if not card:
+        avatar_raw, avatar_norm = _pick_avatar_from_soup(soup, inst_base, handle)
+        avatar_norm = _normalize_avatar(avatar_norm or "")
+        return avatar_raw, avatar_norm, []
+
+    # ссылки ищем только внутри карточки профиля, чтобы не лезть в ленту
+    scope = card
 
     base = f"{base_root}/{handle_lc}"
     links, seen = set(), set()
 
+    # ссылки только из bio/website внутри карточки профиля
     selectors = (
-        # сначала website/bio внутри карточки
         ".profile-website a",
         ".profile-bio a",
-        ".profile-card-extra a",
-        'a[rel="me"]',
     )
 
     for sel in selectors:
@@ -304,15 +315,28 @@ def _probe_profile(
                 abs_u = urljoin(base, href)
             except Exception:
                 abs_u = href
+
             if abs_u.startswith("//"):
                 abs_u = "https:" + abs_u
             if not abs_u.startswith("http"):
                 continue
+
             u = force_https(abs_u)
+
+            # режем ссылки самого Nitter-инстанса - оставляем только внешнее
+            try:
+                host_u = urlparse(u).netloc.lower()
+                host_inst = urlparse(base_root).netloc.lower()
+                if host_u == host_inst:
+                    continue
+            except Exception:
+                pass
+
             if u not in seen:
                 seen.add(u)
                 links.add(u)
 
+    # аватар можно искать по всему soup - это безопасно
     avatar_raw, avatar_norm = _pick_avatar_from_soup(soup, inst_base, handle)
     avatar_norm = _normalize_avatar(avatar_norm or "")
 
@@ -464,11 +488,6 @@ def fetch_profile_html(handle: str, probe_log: bool = True) -> tuple[str, str]:
                     "yes" if (avatar_raw or avatar_norm) else "no",
                     len(links),
                 )
-                if avatar_raw or avatar_norm:
-                    logger.info(
-                        "Avatar URL: %s",
-                        force_https(avatar_norm or avatar_raw),
-                    )
                 if links:
                     logger.info("BIO X (Nitter): %s", list(links))
             except Exception:

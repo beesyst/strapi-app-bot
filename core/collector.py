@@ -35,7 +35,7 @@ logger = get_logger("collector")
 
 # Основная функция для сбора соцсетей и docs по проекту
 def collect_main_data(website_url: str, main_template: dict, storage_path: str) -> dict:
-    reset_verified_state(full=False)
+    reset_verified_state(full=True)
 
     main_data = copy.deepcopy(main_template)
 
