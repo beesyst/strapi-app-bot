@@ -13,12 +13,6 @@ try {
 // Разрешенные режимы ожидания навигации
 const WAIT_STATES = new Set(['load', 'domcontentloaded', 'networkidle', 'commit', 'nowait']);
 
-// Базовый User-Agent по умолчанию
-const DEFAULT_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
-  'AppleWebKit(537.36) (KHTML, like Gecko) ' +
-  'Chrome/124.0.0.0 Safari/537.36';
-
 // Паттерны для детектирования антибот-страниц (Cloudflare и пр.)
 const ANTI_BOT_PATTERNS = [
   'verifying you are human',
@@ -195,7 +189,8 @@ async function buildContextWithFingerprint(browser, {
   // fingerprint-injector сам генерирует отпечаток
   try {
     const baseOptions = {
-      ...(ua && String(ua).trim() ? { userAgent: ua } : { userAgent: DEFAULT_UA }),
+      // если ua передан из Python - используем его, иначе UA не трогаем
+      ...(ua && String(ua).trim() ? { userAgent: ua } : {}),
       javaScriptEnabled: js !== false,
       ignoreHTTPSErrors: true,
       bypassCSP: true,
@@ -205,9 +200,8 @@ async function buildContextWithFingerprint(browser, {
     return await newInjectedContext(browser, { newContextOptions: baseOptions });
   } catch (e) {
     console.error('fingerprint-injector failed, fallback to plain context:', e?.message || e);
-    // обычный Playwright-контекст
     return await browser.newContext({
-      userAgent: ua || DEFAULT_UA,
+      ...(ua && String(ua).trim() ? { userAgent: ua } : {}),
       javaScriptEnabled: js !== false,
       ignoreHTTPSErrors: true,
       bypassCSP: true,

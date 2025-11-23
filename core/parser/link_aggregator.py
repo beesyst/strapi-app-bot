@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from typing import Dict, List, Tuple
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
@@ -8,12 +7,9 @@ from urllib.parse import parse_qs, unquote, urljoin, urlparse
 from bs4 import BeautifulSoup
 from core.log_utils import get_logger
 from core.parser.web import fetch_url_html
-from core.paths import CONFIG_JSON
+from core.settings import get_settings
 
 logger = get_logger("link_aggregator")
-
-# Конфиг из core/paths.py
-CONFIG_PATH = CONFIG_JSON
 
 
 # Перевод url в https
@@ -38,8 +34,7 @@ def _host(u: str) -> str:
 
 # Загрузка списка доменов-агрегаторов из config.json
 try:
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        _cfg = json.load(f)
+    _cfg = get_settings()
     LINK_COLLECTION_DOMAINS = {
         (d or "").lower().replace("www.", "")
         for d in _cfg.get("link_collections", [])

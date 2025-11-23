@@ -23,6 +23,7 @@ from core.parser.link_aggregator import (
 )
 from core.parser.web import fetch_url_html
 from core.paths import PROJECT_ROOT
+from core.settings import get_http_ua
 
 logger = get_logger("twitter")
 
@@ -450,6 +451,7 @@ def get_links_from_x_profile(
     )
 
     def _run_once(u: str):
+        ua = get_http_ua()
         try:
             return subprocess.run(
                 [
@@ -461,6 +463,8 @@ def get_links_from_x_profile(
                     "true",
                     "--wait",
                     "domcontentloaded",
+                    "--ua",
+                    ua,
                     "--timeout",
                     "45000",
                     "--scrollPages",
@@ -1308,11 +1312,7 @@ def download_twitter_avatar(
     logger.info("Avatar URL: %s", avatar_url_raw)
 
     headers_img = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
+        "User-Agent": get_http_ua(),
         "Accept": "image/avif,image/webp,image/apng,image/*;q=0.8,*/*;q=0.5",
         "Referer": twitter_url or "https://x.com/",
         "Accept-Language": "en-US,en;q=0.9",

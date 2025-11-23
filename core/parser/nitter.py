@@ -11,10 +11,18 @@ from urllib.parse import unquote, urljoin, urlparse
 
 from bs4 import BeautifulSoup
 from core.log_utils import get_logger
-from core.paths import CONFIG_JSON, PROJECT_ROOT
+from core.paths import PROJECT_ROOT
+from core.settings import get_http_ua, get_settings
 
 # Логгер для всего, что связано с Nitter (в логах будет [nitter])
 logger = get_logger("nitter")
+
+# Глобальные настройки и секция "nitter"
+_SETTINGS = get_settings()
+_n_cfg = _SETTINGS.get("nitter") or {}
+
+# Один UA для всех запросов к Nitter в рамках процесса
+_HTTP_UA_NITTER = get_http_ua()
 
 
 # Вспомогательная функция: нормализовать URL к https и обрезать лишнее
@@ -30,15 +38,6 @@ def force_https(url: str | None) -> str:
         return "https://" + u[7:]
     return u
 
-
-# Инициализация конфигурации Nitter из config.json (секция "nitter")
-try:
-    with open(CONFIG_JSON, "r", encoding="utf-8") as f:
-        _cfg_raw = json.load(f)
-    _n_cfg = _cfg_raw.get("nitter") or {}
-except Exception:
-    logger.exception("nitter: не удалось прочитать секцию config.json:nitter")
-    _n_cfg = {}
 
 # Флаг включения/отключения Nitter
 _ENABLED: bool = bool(_n_cfg.get("enabled", True))
@@ -227,11 +226,16 @@ def _html_matches_handle(html: str, handle: str) -> bool:
 # Вспомогательная функция: запуск browser_fetch.js в режиме raw для Nitter-URL
 def _run_nitter_fetch(url: str, timeout_sec: int) -> tuple[str, int, str]:
     script_path = os.path.join(PROJECT_ROOT, "core", "parser", "browser_fetch.js")
+
     args = [
         "node",
         script_path,
         url,
         "--raw",
+        "--ua",
+        _HTTP_UA_NITTER,
+        "--wait",
+        "networkidle",
     ]
     try:
         res = subprocess.run(

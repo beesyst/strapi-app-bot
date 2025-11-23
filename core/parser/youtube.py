@@ -5,6 +5,7 @@ from urllib.parse import quote as urlquote
 import requests
 from core.log_utils import get_logger
 from core.parser.web import force_https
+from core.settings import get_http_ua
 
 # Логгер
 logger = get_logger("parser_youtube")
@@ -25,7 +26,7 @@ def youtube_to_handle(url: str) -> str:
         return u
 
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
+        headers = {"User-Agent": get_http_ua()}
         resp = requests.get(u, headers=headers, timeout=10, allow_redirects=True)
         final_url = force_https(resp.url or u)
         html = resp.text or ""
@@ -103,7 +104,7 @@ def youtube_oembed_title(url: str) -> str:
         oembed = (
             f"https://www.youtube.com/oembed?url={urlquote(url, safe='')}&format=json"
         )
-        r = requests.get(oembed, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+        r = requests.get(oembed, timeout=8, headers={"User-Agent": get_http_ua()})
         if r.status_code == 200:
             o = (r.json() or {}).get("title", "") or ""
     except Exception:
@@ -113,7 +114,7 @@ def youtube_oembed_title(url: str) -> str:
 
     # fallback: og:title
     try:
-        r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+        r = requests.get(url, timeout=8, headers={"User-Agent": get_http_ua()})
         m = re.search(
             r'property=["\']og:title["\']\s+content=["\']([^"\']+)', r.text or "", re.I
         )
@@ -127,7 +128,7 @@ def youtube_oembed_title(url: str) -> str:
 # ИзИзвлечение featured-видео с главной страницы канала (@handle / /channel/..)
 def extract_youtube_featured_videos(channel_handle_url: str) -> list[dict]:
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
+        headers = {"User-Agent": get_http_ua()}
         html = requests.get(channel_handle_url, headers=headers, timeout=10).text
 
         # ytInitialData = {...};

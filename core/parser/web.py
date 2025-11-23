@@ -10,17 +10,10 @@ import requests
 from bs4 import BeautifulSoup
 from core.log_utils import get_logger
 from core.normalize import clean_project_name, is_bad_name
-from core.paths import CONFIG_JSON
+from core.settings import get_http_ua
 
 # Логгер
 logger = get_logger("web")
-
-# Пути/конфиг
-try:
-    with open(CONFIG_JSON, "r", encoding="utf-8") as f:
-        CONFIG = json.load(f)
-except Exception:
-    CONFIG = {}
 
 # Кэш
 FETCHED_HTML_CACHE: dict[str, str] = {}
@@ -248,8 +241,13 @@ def fetch_url_html_playwright(url: str, timeout: int = 60) -> str:
 
     def _run(args, label):
         try:
+            ua = get_http_ua()
+            full_args = list(args)
+            if ua:
+                full_args.extend(["--ua", ua])
+
             result = subprocess.run(
-                ["node", script_path, *args],
+                ["node", script_path, *full_args],
                 cwd=os.path.dirname(script_path),
                 capture_output=True,
                 text=True,
@@ -303,7 +301,7 @@ def fetch_url_html(url: str, *, prefer: str = "auto", timeout: int = 30) -> str:
 
     # requests
     if prefer == "http":
-        headers = {"User-Agent": "Mozilla/5.0"}
+        headers = {"User-Agent": get_http_ua()}
         try:
             resp = requests.get(
                 url, headers=headers, timeout=timeout, allow_redirects=True
@@ -322,7 +320,7 @@ def fetch_url_html(url: str, *, prefer: str = "auto", timeout: int = 30) -> str:
         return out
 
     # auto: requests → браузер
-    headers = {"User-Agent": "Mozilla/5.0"}
+    headers = {"User-Agent": get_http_ua()}
     html = ""
     try:
         resp = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
