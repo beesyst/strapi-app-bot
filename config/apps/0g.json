@@ -1,5 +1,16 @@
 {
   "name": "0G",
   "url": "https://0g.ai/",
-  "partners": ["https://www.blockdaemon.com/"]
+  "partners": [
+    "https://www.halborn.com/",
+    "https://sentient.foundation/",
+    "https://arbitrum.io/",
+    "https://www.pingpong.build/",
+    "https://www.alchemy.com/",
+    "https://www.octane.security/",
+    "https://www.polyverse.network/",
+    "https://www.infinityg.ai/",
+    "https://www.heph.ai/",
+    "https://www.kindredlabs.ai/"
+  ]
 }

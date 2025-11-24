@@ -443,11 +443,18 @@ def get_links_from_x_profile(
         if not parsed_name:
             parsed_name = nitter_data.get("name") or parsed_name
 
-    has_any_profile = bool(parsed_links or parsed_name or parsed_avatar)
+    # Nitter считаем "успешным", только если он дал хотя бы аватар или хотя бы одну внешнюю ссылку
+    nitter_ok = isinstance(nitter_data, dict) and bool(
+        (nitter_data.get("links") or [])
+        or (nitter_data.get("avatar") or nitter_data.get("avatar_raw"))
+    )
 
-    # при необходимости - фолбек через Playwright на x.com (ОДИН заход)
-    need_playwright = TW_PLAYWRIGHT_ENABLED and (
-        (need_avatar and not parsed_avatar) or (not has_any_profile)
+    # считаем профиль "достаточным" только если уже есть ссылки или аватар
+    has_any_profile = bool(parsed_links or parsed_avatar)
+
+    # фолбек на X запускаем, если от Nitter нет ссылок/аватара
+    need_playwright = (
+        TW_PLAYWRIGHT_ENABLED and (not nitter_ok) and (not has_any_profile)
     )
 
     def _run_once(u: str):
@@ -1044,6 +1051,16 @@ def decide_home_twitter(
         _VERIFIED_AGG_URL = agg_url or ""
         return norm, (extra or {}), True, (agg_url or "")
 
+    if trust_home:
+        logger.info(
+            "X подтвержден: %s (home_twitter, доверяем ссылке с сайта без агрегатора)",
+            norm,
+        )
+        _VERIFIED_TW_URL = norm
+        _VERIFIED_ENRICHED = dict(extra or {})
+        _VERIFIED_AGG_URL = agg_url or ""
+        return norm, (extra or {}), True, (agg_url or "")
+
     return "", {}, False, ""
 
 
@@ -1265,6 +1282,29 @@ def select_verified_twitter(
         logger.info("X подтвержден (fallback, handle≈brand): %s", twitter_final)
         return twitter_final, enriched_from_agg, aggregator_url, avatar_url
     else:
+        # дополнительный фолбэк
+        home = found_socials.get("twitterURL")
+        if isinstance(home, str) and home:
+            twitter_final = normalize_twitter_url(home)
+
+            _VERIFIED_TW_URL = twitter_final
+            _VERIFIED_ENRICHED = dict(enriched_from_agg or {})
+            _VERIFIED_AGG_URL = aggregator_url or ""
+            _VERIFIED_DOMAIN = (site_domain or "").lower()
+
+            avatar_url = ""
+            try:
+                prof = get_links_from_x_profile(twitter_final, need_avatar=True)
+                avatar_url = (prof or {}).get("avatar", "") or ""
+            except Exception:
+                avatar_url = ""
+
+            logger.info(
+                "X подтвержден (fallback, только по ссылке с сайта): %s",
+                twitter_final,
+            )
+            return twitter_final, enriched_from_agg, aggregator_url, avatar_url
+
         logger.info("Фолбэк: брендоподобных X не найден — twitterURL пустой.")
 
     return twitter_final, enriched_from_agg, aggregator_url, ""
@@ -1282,19 +1322,23 @@ def download_twitter_avatar(
             "download_twitter_avatar: storage_path пуст - некуда сохранять аватар"
         )
         return None
+
     if not twitter_url:
         logger.warning(
             "download_twitter_avatar: twitterURL отсутствует - пропуск скачивания аватара"
         )
         return None
 
-    # попытка получить avatar_url из профиля
+    # попытка получить avatar_url из профиля, если не передали
     if not avatar_url:
         try:
-            prof = get_links_from_x_profile(twitter_url, need_avatar=True)
-            avatar_url = prof.get("avatar", "") if isinstance(prof, dict) else ""
-            if avatar_url:
-                logger.info("Avatar URL (подтвержден): %s", avatar_url)
+            prof = get_links_from_x_profile(twitter_url, need_avatar=True) or {}
+            if isinstance(prof, dict):
+                avatar_url = (prof.get("avatar") or "").strip()
+                if avatar_url:
+                    logger.info(
+                        "download_twitter_avatar: avatar из профиля: %s", avatar_url
+                    )
         except Exception as e:
             logger.warning(
                 "download_twitter_avatar: не удалось получить avatar из профиля: %s", e
@@ -1308,7 +1352,17 @@ def download_twitter_avatar(
         )
         return None
 
-    avatar_url_raw = normalize_twitter_avatar(force_https(avatar_url))
+    # нормализация URL (https, twitter CDN и т.п.)
+    try:
+        avatar_url_raw = normalize_twitter_avatar(force_https(avatar_url))
+    except Exception as e:
+        logger.warning(
+            "download_twitter_avatar: ошибка normalize_twitter_avatar '%s': %s",
+            avatar_url,
+            e,
+        )
+        avatar_url_raw = force_https(avatar_url)
+
     logger.info("Avatar URL: %s", avatar_url_raw)
 
     headers_img = {
@@ -1320,59 +1374,104 @@ def download_twitter_avatar(
         "Cache-Control": "no-cache",
     }
 
-    def _get_image_with_retry(url_img, headers, tries=3, timeout=25):
-        last = None
+    def _get_image_with_retry(
+        url_img: str, headers: dict, tries: int = 3, timeout: int = 25
+    ):
+        last_resp = None
         retryable = {403, 429, 500, 502, 503, 504}
         for i in range(tries):
             try:
                 r = requests.get(
-                    url_img, timeout=timeout, headers=headers, allow_redirects=True
+                    url_img,
+                    timeout=timeout,
+                    headers=headers,
+                    allow_redirects=True,
                 )
+                last_resp = r
+
+                # успешный ответ с телом
                 if r.status_code == 200 and r.content:
                     return r
-                last = r
+
+                # пробуем ещё для "временных" кодов
                 if r.status_code in retryable:
                     import time
 
                     time.sleep(1.0 + 0.5 * i)
                     continue
+
+                # остальные коды - выходим
                 break
             except Exception as e:
-                last = None
-                logger.warning("Ошибка запроса (try %s): %s", i + 1, e)
+                logger.warning(
+                    "download_twitter_avatar: ошибка запроса (try %s): %s", i + 1, e
+                )
+                last_resp = None
                 import time
 
                 time.sleep(0.8)
-        return last
+        return last_resp
 
+    # качаем аватар с ретраями
     resp_img = _get_image_with_retry(avatar_url_raw, headers_img, tries=3, timeout=25)
     if not resp_img:
-        logger.warning("Не скачан: нет ответа от сервера, url=%s", avatar_url_raw)
+        logger.warning(
+            "download_twitter_avatar: не скачан – нет ответа от сервера, url=%s",
+            avatar_url_raw,
+        )
         return None
 
-    ct = (resp_img.headers.get("Content-Type") or "").lower()
+    ct = (resp_img.headers.get("Content-Type") or "").lower().strip()
+
     if not (
         resp_img.status_code == 200
         and resp_img.content
         and ("image/" in ct or avatar_url_raw.startswith("https://pbs.twimg.com/"))
     ):
         logger.warning(
-            "Не скачан: code=%s, ct=%s, url=%s",
+            "download_twitter_avatar: не скачан – code=%s, ct=%s, url=%s",
             getattr(resp_img, "status_code", "no-response"),
             ct,
             avatar_url_raw,
         )
         return None
 
-    os.makedirs(storage_dir, exist_ok=True)
-    avatar_path = os.path.join(storage_dir, filename)
+    # определяем расширение файла (если его нет или оно "левое")
+    base_name, ext = os.path.splitext(filename)
+    ct_main = ct.split(";", 1)[0].strip()
+
+    ext_by_ct = {
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+    }
+
+    guessed_ext = ext_by_ct.get(ct_main, ext.lower() or ".jpg")
+    if not ext or ext.lower() not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+        ext = guessed_ext
+
+    final_filename = base_name + ext
+
+    # сохраняем
+    try:
+        os.makedirs(storage_dir, exist_ok=True)
+    except Exception as e:
+        logger.warning(
+            "download_twitter_avatar: не удалось создать dir %s: %s", storage_dir, e
+        )
+        return None
+
+    avatar_path = os.path.join(storage_dir, final_filename)
+
     try:
         with open(avatar_path, "wb") as imgf:
             imgf.write(resp_img.content)
         logger.info("Сохранен: %s", avatar_path)
         return os.path.abspath(avatar_path)
     except Exception as e:
-        logger.warning("Ошибка записи файла аватара: %s", e)
+        logger.warning("download_twitter_avatar: ошибка записи файла аватара: %s", e)
         return None
 
 

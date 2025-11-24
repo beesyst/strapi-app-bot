@@ -65,6 +65,10 @@ function parseArgs(argv) {
     else if (a === '--twitterProfile') {
       args.twitterProfile = String(argv[++i] || 'true').toLowerCase() !== 'false';
     }
+    // спец-режим под Nitter (можно вызывать как `--nitter true` или просто `--nitter`)
+    else if (a === '--nitter') {
+      args.nitter = String(argv[++i] || 'true').toLowerCase() !== 'false';
+    }
     // fingerprint options
     else if (a === '--fp-device') args.fpDevice = argv[++i];
     else if (a === '--fp-os') args.fpOS = argv[++i];
@@ -296,6 +300,7 @@ async function browserFetch(opts) {
     proxy,
     profile,
     twitterProfile = false,
+    nitter = false,
   } = opts || {};
 
   if (!url) throw new Error('url is required');
@@ -407,6 +412,33 @@ async function browserFetch(opts) {
 
       // скролл для ленивого контента
       await scrollPage(page, scrollPages);
+
+      // отдельный прогрев для Nitter-профилей: дождаться карточки и еще немного проскроллить
+      if (nitter) {
+        try {
+          await page.waitForSelector(
+            '.profile-card, .profile-bio, .profile-website, a.profile-card-avatar, img.avatar',
+            {
+              // таймаут подстраиваем под общий timeout, но не даем висеть бесконечно
+              timeout: Math.min(9000, Math.max(3500, timeout / 3)),
+            }
+          );
+        } catch (e) {
+          console.error('nitter selector wait failed:', e && (e.message || e));
+        }
+
+        try {
+          await page.evaluate(async () => {
+            const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+            for (let i = 0; i < 6; i++) {
+              window.scrollTo(0, document.body.scrollHeight);
+              await delay(220);
+            }
+          });
+        } catch (e) {
+          console.error('nitter scroll failed:', e && (e.message || e));
+        }
+      }
 
       // пробуем "достучаться" до соц-иконок/кнопок без href:
       try {

@@ -188,8 +188,12 @@ def _normalize_avatar(url: str | None) -> str:
 # Вспомогательная функция: эвристика - HTML похож на антибот/заглушку
 def _looks_antibot(html: str) -> bool:
     low = (html or "").lower()
+
     # если есть очевидные элементы профиля/таймлайна - это нормальная страница
     if "tweet-body" in low or "timeline-item" in low or "profile-card" in low:
+        return False
+
+    if "nitter" in low and len(low) > 200:
         return False
 
     needles = (
@@ -202,7 +206,8 @@ def _looks_antibot(html: str) -> bool:
         "just a moment",
         "checking your browser",
     )
-    return any(s in low for s in needles) or len(low) < 400
+
+    return any(s in low for s in needles) or len(low) < 200
 
 
 # Вспомогательная функция: HTML действительно про нужный @handle?
@@ -226,7 +231,6 @@ def _html_matches_handle(html: str, handle: str) -> bool:
 # Вспомогательная функция: запуск browser_fetch.js в режиме raw для Nitter-URL
 def _run_nitter_fetch(url: str, timeout_sec: int) -> tuple[str, int, str]:
     script_path = os.path.join(PROJECT_ROOT, "core", "parser", "browser_fetch.js")
-
     args = [
         "node",
         script_path,
@@ -236,14 +240,29 @@ def _run_nitter_fetch(url: str, timeout_sec: int) -> tuple[str, int, str]:
         _HTTP_UA_NITTER,
         "--wait",
         "networkidle",
+        "--retries",
+        "2",
+        "--scrollPages",
+        "4",
+        "--fp-device",
+        "desktop",
+        "--fp-os",
+        "linux",
+        "--fp-locales",
+        "en-US,ru-RU",
+        "--fp-viewport",
+        "1366x768",
+        "--nitter",
+        "true",
     ]
+
     try:
         res = subprocess.run(
             args,
             cwd=os.path.dirname(script_path),
             capture_output=True,
             text=True,
-            timeout=max(timeout_sec + 6, 20),
+            timeout=max(timeout_sec + 8, 25),
         )
     except Exception as e:
         logger.debug("nitter: ошибка запуска browser_fetch.js для %s: %s", url, e)
@@ -264,6 +283,58 @@ def _run_nitter_fetch(url: str, timeout_sec: int) -> tuple[str, int, str]:
     return html.strip(), status, kind
 
 
+# Вспомогательная функция: найти именно карточку профиля нужного handle
+def _find_profile_card(soup: BeautifulSoup, handle: str):
+    if not soup or not handle:
+        return None
+
+    handle_lc = handle.lower().lstrip("@")
+
+    cards = soup.select(".profile-card")
+    primary: list = []
+    fallback: list = []
+
+    for c in cards:
+        # не берем карточки из ленты/твитов
+        if c.find_parent(class_="tweet-body") or c.find_parent(class_="timeline-item"):
+            continue
+
+        uname = c.select_one(".profile-card-username") or c.select_one(
+            ".profile-username"
+        )
+        uname_text = (uname.get_text(strip=True) if uname else "") or ""
+        uname_href = (uname.get("href") or "") if uname else ""
+
+        # текстовый handle, например "@BuzzingApp" -> "buzzingapp"
+        text_handle = uname_text.lower().lstrip("@")
+
+        # handle из href="/BuzzingApp"
+        href_handle = ""
+        m = re.search(r"/([A-Za-z0-9_]{1,15})(?:$|[/?#])", uname_href)
+        if m:
+            href_handle = m.group(1).lower()
+
+        # жесткое совпадение по профилю
+        if text_handle == handle_lc or href_handle == handle_lc:
+            primary.append(c)
+        elif handle_lc in uname_text.lower() or handle_lc in uname_href.lower():
+            fallback.append(c)
+
+    if primary:
+        return primary[0]
+    if fallback:
+        return fallback[0]
+
+    # фолбэк: первый .profile-card, который не в ленте
+    for c in cards:
+        if not c.find_parent(class_="tweet-body") and not c.find_parent(
+            class_="timeline-item"
+        ):
+            return c
+
+    return None
+
+
 # Вспомогательная функция: легкий парс BIO/аватарки для логов
 def _probe_profile(
     html: str, inst_base: str, handle: str
@@ -273,26 +344,11 @@ def _probe_profile(
     soup = BeautifulSoup(html, "html.parser")
 
     base_root = force_https(inst_base).rstrip("/")
-    handle_lc = (handle or "").lower().lstrip("@")
 
-    # ищем именно тот .profile-card, который относится к нужному handle
-    card = None
-    for c in soup.select(".profile-card"):
-        uname = c.select_one(".profile-card-username")
-        uname_text = (uname.get_text(strip=True) if uname else "") or ""
-        uname_href = (uname.get("href") or "") if uname else ""
-        if handle_lc and (
-            handle_lc in uname_text.lower()
-            or re.search(rf"/{re.escape(handle_lc)}(?:$|[/?#])", uname_href.lower())
-        ):
-            card = c
-            break
+    # ищем карточку именно нашего handle, с фильтрацией по ленте
+    card = _find_profile_card(soup, handle)
 
-    # берем первый .profile-card, но не падаем на весь soup
-    if not card:
-        card = soup.select_one(".profile-card")
-
-    # если карточки профиля нет вообще - возвращаем только аватар, без ссылок
+    # если карточки профиля нет - ничего не берем из ленты, только попробуем аватар
     if not card:
         avatar_raw, avatar_norm = _pick_avatar_from_soup(soup, inst_base, handle)
         avatar_norm = _normalize_avatar(avatar_norm or "")
@@ -301,10 +357,9 @@ def _probe_profile(
     # ссылки ищем только внутри карточки профиля, чтобы не лезть в ленту
     scope = card
 
-    base = f"{base_root}/{handle_lc}"
+    base = f"{base_root}/{handle.lower().lstrip('@')}"
     links, seen = set(), set()
 
-    # ссылки только из bio/website внутри карточки профиля
     selectors = (
         ".profile-website a",
         ".profile-bio a",
@@ -327,7 +382,6 @@ def _probe_profile(
 
             u = force_https(abs_u)
 
-            # режем ссылки самого Nitter-инстанса - оставляем только внешнее
             try:
                 host_u = urlparse(u).netloc.lower()
                 host_inst = urlparse(base_root).netloc.lower()
@@ -340,7 +394,6 @@ def _probe_profile(
                 seen.add(u)
                 links.add(u)
 
-    # аватар можно искать по всему soup - это безопасно
     avatar_raw, avatar_norm = _pick_avatar_from_soup(soup, inst_base, handle)
     avatar_norm = _normalize_avatar(avatar_norm or "")
 
@@ -352,22 +405,15 @@ def _pick_avatar_from_soup(
     soup: BeautifulSoup, inst_base: str, handle: str
 ) -> tuple[str, str]:
     base_root = force_https(inst_base).rstrip("/")
-    handle_lc = (handle or "").lower().lstrip("@")
 
-    # ищем нужную карточку
-    card = None
-    for c in soup.select(".profile-card"):
-        uname = c.select_one(".profile-card-username")
-        uname_text = (uname.get_text(strip=True) if uname else "") or ""
-        uname_href = (uname.get("href") or "") if uname else ""
-        if handle_lc and (
-            handle_lc in uname_text.lower()
-            or re.search(rf"/{re.escape(handle_lc)}(?:$|[/?#])", uname_href.lower())
-        ):
-            card = c
-            break
+    # ищем карточку нашего handle (без чужих профилей из ленты)
+    card = _find_profile_card(soup, handle)
 
-    search_root = card or soup
+    # если профиль не нашли, лучше вернуть пусто, чем аву другого аккаунта
+    if not card:
+        return "", ""
+
+    search_root = card
 
     # <a class="profile-card-avatar" href="...">
     a = search_root.select_one(".profile-card a.profile-card-avatar[href]")
@@ -503,14 +549,23 @@ def fetch_profile_html(handle: str, probe_log: bool = True) -> tuple[str, str]:
             return html, base
 
         # если явный антибот/ошибки - баним инстанс
-        if (
-            kind
-            or status in (0, 403, 429, 503)
-            or _looks_antibot(html)
-            or (status == 200 and not _html_matches_handle(html, handle))
-            or not html
-        ):
+        ban_reason = None
+
+        if kind:
+            ban_reason = f"antiBot={kind}"
+        elif status in (403, 429, 503):
+            ban_reason = f"status={status}"
+        elif not html:
+            ban_reason = "empty_html"
+
+        if ban_reason:
             _ban_instance(base)
+            logger.debug(
+                "nitter: баним инстанс %s для handle=%s (reason=%s)",
+                base,
+                handle,
+                ban_reason,
+            )
 
     logger.debug("Nitter: все инстансы не дали HTML (last=%s)", last_err)
     return "", ""

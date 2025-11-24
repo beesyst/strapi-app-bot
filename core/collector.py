@@ -38,11 +38,9 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
     reset_verified_state(full=True)
 
     main_data = copy.deepcopy(main_template)
-
     social_keys = list((main_template.get("socialLinks") or {}).keys())
     main_data["socialLinks"] = {k: "" for k in social_keys}
     main_data["socialLinks"]["websiteURL"] = website_url
-
     main_data["videoSlider"] = []
     main_data["svgLogo"] = ""
     main_data.setdefault("name", "")
@@ -75,6 +73,7 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
         site_domain = get_domain_name(website_url)
         brand_token = site_domain.split(".")[0] if site_domain else ""
         twitter_final = ""
+        twitter_verified_url = ""
         enriched_from_agg = {}
         aggregator_url = ""
         avatar_verified = ""
@@ -103,10 +102,12 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
                 elif len(_res) >= 1:
                     twitter_final = _res[0]
 
+            # twitter_final считаем "подтвержденным" twitterURL
             if twitter_final:
+                twitter_verified_url = twitter_final
                 main_data["socialLinks"]["twitterURL"] = twitter_final
 
-            # мержим соцсети из агрегатора (не затираем уже найденные)
+            # мержим соцсети из агрегатора
             for k, v in (enriched_from_agg or {}).items():
                 if k == "websiteURL" or not v:
                     continue
@@ -119,18 +120,24 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
         # bio/аватар + возможный агрегатор из био
         try:
             bio = {}
-            avatar_url = avatar_verified or ""
-            need_bio_for_avatar = bool(
-                main_data["socialLinks"].get("twitterURL") and (not avatar_url)
-            )
 
-            # имя из X тянем всегда (need_avatar=False), независимо от аватара
+            # аватарка из подтвержденного профиля (по домену/агрегатору)
+            avatar_url = avatar_verified or ""
+
+            # twitterURL считаем "разрешенным" только если он был подтверждён
+            twitter_verified_url = twitter_verified_url or ""
+            has_verified_twitter = bool(twitter_verified_url)
+
+            # нужен ли дополнительный запрос BIO для вытаскивания аватарки
+            need_bio_for_avatar = bool(has_verified_twitter and not avatar_url)
+
+            # имя из X тянем всегда из подтвержденного профиля (need_avatar=False)
             twitter_display = ""
-            if main_data["socialLinks"].get("twitterURL"):
+            if has_verified_twitter:
                 try:
                     tw_profile = (
                         get_links_from_x_profile(
-                            main_data["socialLinks"]["twitterURL"],
+                            twitter_verified_url,
                             need_avatar=False,
                         )
                         or {}
@@ -140,11 +147,11 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
                     twitter_display = ""
 
             # если аватар не подтвержден, дергаем профиль с need_avatar=True
-            if need_bio_for_avatar:
+            if need_bio_for_avatar and has_verified_twitter:
                 try:
                     bio = (
                         get_links_from_x_profile(
-                            main_data["socialLinks"]["twitterURL"],
+                            twitter_verified_url,
                             need_avatar=True,
                         )
                         or {}
@@ -186,7 +193,8 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
                         verify_aggregator_belongs as _verify_belongs,
                     )
 
-                    tw = main_data["socialLinks"].get("twitterURL", "")
+                    # handle берем из подтвержденного twitterURL
+                    tw = twitter_verified_url
                     m = re.match(
                         r"^https?://(?:www\.)?x\.com/([A-Za-z0-9_]{1,15})/?$",
                         (tw or "") + "/",
@@ -236,18 +244,19 @@ def collect_main_data(website_url: str, main_template: dict, storage_path: str) 
                         e,
                     )
 
-            # аватар
+            # финальный выбор аватара
             real_avatar = avatar_verified or (
                 bio.get("avatar") if isinstance(bio, dict) else ""
             )
-            if real_avatar and main_data["socialLinks"].get("twitterURL"):
+
+            if real_avatar and has_verified_twitter:
                 project_slug = (
                     (site_domain.split(".")[0] or "project").replace(" ", "").lower()
                 )
                 logo_filename = f"{project_slug}.jpg"
                 saved = download_twitter_avatar(
                     avatar_url=real_avatar,
-                    twitter_url=main_data["socialLinks"]["twitterURL"],
+                    twitter_url=twitter_verified_url,
                     storage_dir=storage_path,
                     filename=logo_filename,
                 )

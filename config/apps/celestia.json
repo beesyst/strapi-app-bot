@@ -1,11 +1,5 @@
 {
-  "name": "Berachain",
-  "url": "https://www.berachain.com/",
-  "partners": [
-    "https://www.berapaw.com/",
-    "https://www.buzzing.app/",
-    "https://blocklive.io/",
-    "https://bebop.xyz/",
-    "https://celestia.org/"
-  ]
+  "name": "0G",
+  "url": "https://0g.ai/",
+  "partners": ["https://www.halborn.com/"]
 }
